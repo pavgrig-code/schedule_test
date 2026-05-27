@@ -1,0 +1,382 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--bg:#fff;--bg2:#f8f9fa;--bg3:#f1f3f5;--bd:#dee2e6;--bd2:#e9ecef;--tx:#212529;--tx2:#6c757d;--blue:#0d6efd;--blue2:#0b5ed7;--red:#E24B4A;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+.sched-wrap{display:flex;flex-direction:column;height:620px;overflow:hidden;border:1px solid var(--bd);border-radius:10px;background:var(--bg);position:relative;}
+.toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bd2);background:var(--bg2);flex-shrink:0;}
+.toolbar-title{font-size:13px;font-weight:500;color:var(--tx);}
+.date-nav{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.date-nav button{background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--tx);}
+.date-nav button:hover{background:var(--bg3);}
+.today-badge{background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500;border:none;}
+.overlap-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx2);}
+
+/* Filter bar */
+.filter-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bd2);background:var(--bg);flex-shrink:0;}
+.filter-label{font-size:11px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.04em;margin-right:2px;white-space:nowrap;}
+.filter-select{font-size:12px;padding:5px 28px 5px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236c757d'/%3E%3C/svg%3E") no-repeat right 9px center;appearance:none;-webkit-appearance:none;color:var(--tx);cursor:pointer;outline:none;min-width:160px;}
+.filter-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.12);}
+.filter-select.active{border-color:var(--blue);background-color:#e8f1ff;color:var(--blue);font-weight:600;}
+.filter-reset{font-size:11px;color:var(--tx2);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;margin-left:auto;}
+.filter-reset:hover{background:var(--bg3);color:var(--tx);}
+.filter-count{font-size:11px;color:var(--tx2);white-space:nowrap;}
+
+.main-area{display:flex;flex:1;overflow:hidden;position:relative;}
+.staff-col{width:162px;flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);}
+.staff-col-header{height:36px;border-bottom:1px solid var(--bd2);background:var(--bg2);}
+.staff-row{height:62px;padding:0 10px;display:flex;flex-direction:row;align-items:center;gap:9px;border-bottom:1px solid var(--bd2);background:var(--bg);}
+.staff-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;letter-spacing:0.02em;user-select:none;}
+.staff-info{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.staff-name{font-size:12px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.staff-hours{font-size:10px;color:var(--tx2);margin-top:1px;}
+.timeline-area{flex:1;overflow-x:auto;overflow-y:auto;position:relative;}
+.timeline-header{height:36px;display:flex;position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--bd2);}
+.hour-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx2);}
+.grid-body{position:relative;}
+.grid-row{height:62px;display:flex;border-bottom:1px solid var(--bd2);}
+.grid-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);background:var(--bg);}
+.grid-cell.alt{background:#fafafa;}
+.blocks-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;}
+
+/* Block */
+.sched-block{position:absolute;border-radius:6px;cursor:grab;user-select:none;display:flex;flex-direction:column;justify-content:center;padding:4px 22px 4px 7px;overflow:hidden;pointer-events:all;border:1.5px solid transparent;min-width:52px;transition:opacity .2s;}
+.sched-block:hover{z-index:20;box-shadow:0 2px 10px rgba(0,0,0,0.12);}
+.sched-block:hover .edit-btn{opacity:1;}
+.sched-block.dragging{cursor:grabbing;z-index:100;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.18);}
+.sched-block.resizing{z-index:100;}
+.sched-block.dimmed{opacity:.2;pointer-events:none;}
+
+.block-title{font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;position:relative;z-index:2;flex-shrink:0;}
+.block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
+.block-time-row{display:flex;align-items:center;gap:4px;position:relative;z-index:2;flex-shrink:0;margin-top:2px;overflow:hidden;}
+.block-time{font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;}
+.block-days-badge{display:flex;gap:2px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden;}
+.day-dot{font-size:7.5px;font-weight:700;padding:1px 3px;border-radius:3px;background:rgba(0,0,0,.13);line-height:1.5;white-space:nowrap;}
+.block-daterange{font-size:8px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:1px;}
+
+.overlap-zone{position:absolute;top:0;bottom:0;pointer-events:none;z-index:1;overflow:hidden;border-radius:4px;}
+.overlap-zone svg{display:block;width:100%;height:100%;}
+.overlap-zone-border-l{position:absolute;top:0;bottom:0;left:0;width:1.5px;background:rgba(226,75,74,.7);}
+.overlap-zone-border-r{position:absolute;top:0;bottom:0;right:0;width:1.5px;background:rgba(226,75,74,.7);}
+.resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:ew-resize;border-radius:0 5px 5px 0;z-index:3;}
+.resize-handle:hover{background:rgba(255,255,255,.35);}
+.edit-btn{position:absolute;top:4px;right:6px;width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.6);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;z-index:4;padding:0;color:inherit;font-size:11px;line-height:1;}
+.edit-btn:hover{background:rgba(255,255,255,.9);}
+.now-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:15;pointer-events:none;}
+.now-dot{position:absolute;top:-4px;left:-4px;width:9px;height:9px;border-radius:50%;background:var(--red);}
+.tooltip{position:fixed;background:#fff;border:1px solid var(--bd);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--tx);pointer-events:none;z-index:300;display:none;box-shadow:0 3px 14px rgba(0,0,0,.13);max-width:240px;line-height:1.6;}
+.add-btn{position:absolute;bottom:18px;left:18px;z-index:50;display:flex;align-items:center;gap:8px;padding:0 20px 0 14px;height:44px;background:var(--blue);color:#fff;border:none;border-radius:22px;cursor:pointer;box-shadow:0 4px 16px rgba(13,110,253,.35);transition:background .15s,transform .12s;font-size:14px;font-weight:600;white-space:nowrap;}
+.add-btn:hover{background:var(--blue2);transform:translateY(-1px);}
+.add-btn-icon{width:22px;height:22px;background:rgba(255,255,255,.22);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:300;line-height:1;}
+
+/* Modal */
+.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:150;display:none;align-items:center;justify-content:center;border-radius:10px;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border:1px solid var(--bd);border-radius:12px;width:352px;max-height:95%;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bd2);background:var(--bg2);border-radius:12px 12px 0 0;flex-shrink:0;}
+.modal-header-title{font-size:13px;font-weight:600;color:var(--tx);}
+.modal-close{background:none;border:none;cursor:pointer;color:var(--tx2);font-size:20px;line-height:1;padding:0;}
+.modal-body{padding:16px;overflow-y:auto;flex:1;}
+.field{margin-bottom:13px;position:relative;}
+.field>label{display:block;font-size:10.5px;font-weight:700;color:var(--tx2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.color-row{display:flex;gap:7px;flex-wrap:wrap;}
+.color-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;transition:transform .1s;}
+.color-swatch:hover{transform:scale(1.15);}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--bd2);background:var(--bg2);border-radius:0 0 12px 12px;flex-shrink:0;}
+.btn-cancel{background:none;border:1px solid var(--bd);border-radius:7px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--tx);}
+.btn-cancel:hover{background:var(--bg3);}
+.btn-save{background:var(--blue);border:none;border-radius:7px;padding:6px 16px;font-size:12px;cursor:pointer;color:#fff;font-weight:600;}
+.btn-save:hover{background:var(--blue2);}
+.btn-delete{background:none;border:1px solid var(--red);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--red);margin-right:auto;}
+.btn-delete:hover{background:#fcebeb;}
+.section-div{border:none;border-top:1px solid var(--bd2);margin:5px 0 13px;}
+.combo-wrap{position:relative;}
+.combo-input-row{display:flex;align-items:center;border:1px solid var(--bd);border-radius:7px;background:#fff;overflow:hidden;}
+.combo-input-row:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.13);}
+.combo-input{flex:1;font-size:13px;padding:7px 9px;border:none;outline:none;background:transparent;color:var(--tx);}
+.combo-chevron{padding:0 9px;color:var(--tx2);font-size:11px;user-select:none;}
+.combo-clear{padding:0 6px;color:var(--tx2);font-size:15px;cursor:pointer;line-height:1;display:none;}
+.combo-dropdown{position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--bd);border-radius:7px;box-shadow:0 4px 18px rgba(0,0,0,.13);z-index:999;max-height:155px;overflow-y:auto;display:none;}
+.combo-dropdown.open{display:block;}
+.combo-option{padding:7px 11px;font-size:13px;color:var(--tx);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.combo-option:hover,.combo-option.focused{background:#e8f1ff;color:var(--blue);}
+.combo-option.selected{font-weight:600;}
+.combo-empty{padding:8px 11px;font-size:12px;color:var(--tx2);font-style:italic;}
+.std-input{width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--bd);border-radius:7px;background:#fff;color:var(--tx);outline:none;}
+.std-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.13);}
+.dow-wrap{display:flex;gap:5px;}
+.dow-pill{flex:1;height:32px;border-radius:7px;border:1px solid var(--bd);background:#fff;color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;user-select:none;}
+.dow-pill:hover{border-color:var(--blue);color:var(--blue);}
+.dow-pill.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+#edit-error{font-size:11px;color:var(--red);min-height:15px;margin-top:-6px;}
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <pattern id="sr" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="rgba(226,75,74,0.13)"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(226,75,74,0.45)" stroke-width="3"/>
+    </pattern>
+  </defs>
+</svg>
+
+<div class="sched-wrap">
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <span class="toolbar-title">&#128197; Schedule</span>
+    <div class="overlap-legend">
+      <svg width="22" height="14" viewBox="0 0 22 14">
+        <rect width="22" height="14" rx="3" fill="#B5D4F4" stroke="#378ADD" stroke-width="0.5"/>
+        <rect x="6" width="10" height="14" fill="url(#sr)"/>
+        <line x1="6" y1="0" x2="6" y2="14" stroke="rgba(226,75,74,0.7)" stroke-width="1.5"/>
+        <line x1="16" y1="0" x2="16" y2="14" stroke="rgba(226,75,74,0.7)" stroke-width="1.5"/>
+      </svg> overlap zone
+    </div>
+    <div class="date-nav">
+      <button id="prev-btn">&#8249;</button>
+      <span id="date-label" style="font-size:13px;font-weight:500;color:#212529;min-width:130px;text-align:center;"></span>
+      <button id="next-btn">&#8250;</button>
+      <span class="today-badge">today</span>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <span class="filter-label">&#128269; Filter:</span>
+    <select class="filter-select" id="filter-school">
+      <option value="">All Schools</option>
+    </select>
+    <select class="filter-select" id="filter-prog">
+      <option value="">All Programs</option>
+    </select>
+    <span class="filter-count" id="filter-count"></span>
+    <button class="filter-reset" id="filter-reset" style="display:none">&#215; Clear filters</button>
+  </div>
+
+  <div class="main-area">
+    <div class="staff-col" id="staff-col"><div class="staff-col-header"></div></div>
+    <div class="timeline-area" id="timeline-area">
+      <div class="timeline-header" id="timeline-header"></div>
+      <div class="grid-body" id="grid-body"><div class="blocks-layer" id="blocks-layer"></div></div>
+    </div>
+    <button class="add-btn" id="add-btn"><span class="add-btn-icon">+</span>Add</button>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-header-title" id="modal-title-text"></span>
+        <button class="modal-close" id="modal-close-btn">&#215;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Program</label>
+          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="prog-input" placeholder="Search program…" autocomplete="off"/><span class="combo-clear" id="prog-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="prog-dd"></div></div></div>
+        <div class="field"><label>Coach</label>
+          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="coach-input" placeholder="Search coach…" autocomplete="off"/><span class="combo-clear" id="coach-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="coach-dd"></div></div></div>
+        <div class="field"><label>School</label>
+          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="school-input" placeholder="Search school…" autocomplete="off"/><span class="combo-clear" id="school-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="school-dd"></div></div></div>
+        <hr class="section-div"/>
+        <div class="field"><label>Days of week</label>
+          <div class="dow-wrap" id="dow-wrap">
+            <div class="dow-pill" data-d="0">Su</div><div class="dow-pill" data-d="1">Mo</div><div class="dow-pill" data-d="2">Tu</div><div class="dow-pill" data-d="3">We</div><div class="dow-pill" data-d="4">Th</div><div class="dow-pill" data-d="5">Fr</div><div class="dow-pill" data-d="6">Sa</div>
+          </div></div>
+        <div class="field two-col">
+          <div><label>Start date</label><input type="date" class="std-input" id="blk-date-start"/></div>
+          <div><label>End date</label><input type="date" class="std-input" id="blk-date-end"/></div>
+        </div>
+        <hr class="section-div"/>
+        <div class="field two-col">
+          <div><label>Start time</label><input type="text" class="std-input" id="blk-time-start" placeholder="9:00 AM"/></div>
+          <div><label>End time</label><input type="text" class="std-input" id="blk-time-end" placeholder="11:00 AM"/></div>
+        </div>
+        <div class="field"><label>Color</label><div class="color-row" id="color-row"></div></div>
+        <div id="edit-error"></div>
+      </div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script>
+$(function(){
+  const HW=90,RH=62,SH=6,NHRS=18,TW=HW*NHRS;
+  const DN=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const COLORS=[
+    {bg:'#B5D4F4',bd:'#378ADD',tx:'#0C447C'},{bg:'#9FE1CB',bd:'#1D9E75',tx:'#085041'},
+    {bg:'#F4C0D1',bd:'#D4537E',tx:'#72243E'},{bg:'#FAC775',bd:'#BA7517',tx:'#633806'},
+    {bg:'#C0DD97',bd:'#639922',tx:'#27500A'},{bg:'#CECBF6',bd:'#7F77DD',tx:'#3C3489'},
+    {bg:'#F5C4B3',bd:'#D85A30',tx:'#712B13'},{bg:'#D3D1C7',bd:'#888780',tx:'#444441'},
+  ];
+  const PROGS=['Astrophysics','Art','Athletics','Autism Program','Baseball','Biology','Chemistry','Debates','English Literature','Film Program','Gardening','Geography','Geometry','Golf','Knitting','Martial Arts','Math','Mental Health Counseling','Music','Musical','Orchestra','Piano','Physics','Programming','Robotics','Theatre','Writing','Yoga'];
+  const COACHES=['Adan Rodriguez','Alexis Navarro','Aman Khan','Ana Flores','Andrea Cornelio','Andrew Calderon','Araceli Mondrag.','Asia Lewis','Carlos Rivera','Diana Foster','James Okafor','Lina Nguyen','Maria Gutierrez','Nina Patel','Omar Shaikh','Rachel Kim'];
+  const SCHOOLS=['Beacon Park K-8 School','Crescent Elementary','Deerfield Elementary','Eastshore Elementary','Ethan B. Allen Elementary','Golden Elementary','Jack L. Weaver Elementary','Los Coyotes Elementary','Margaret Landell Elementary','Orchard Hills Elementary','Oxford Academy','Patton Elementary','Rancho San Joaquin Middle','Robert C. Fisler School','Santiago Hills Elementary','Sierra Vista Middle','Stonegate Elementary','Turtle Rock Elementary','Tustin Memorial Elementary','Vista Verde School'];
+  const STAFF=[
+    {n:'Lina Nguyen',h:''},{n:'Adan Rodriguez',h:''},{n:'Alexis Navarro',h:''},
+    {n:'Aman Khan',h:''},{n:'Ana Flores',h:''},{n:'Andrea Cornelio',h:''},
+    {n:'Andrew Calderon',h:''},{n:'Araceli Mondrag.',h:''},{n:'Asia Lewis',h:''},
+  ];
+
+  let curDate=new Date(2026,4,22),nid=10,eid=null,creating=false;
+  let sProg='',sCoach='',sSchool='',sDays=[],sDs='',sDe='',sColor=0;
+  let filterSchool='', filterProg='';
+
+  function todayIso(){return new Date().toISOString().slice(0,10);}
+  function isoOffset(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+
+  const blocks=[
+    {id:1,row:1,s:10,   e:13,   lbl:'Baseball',coach:'Aman Khan',      school:'Eastshore Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-06-30',color:0},
+    {id:2,row:2,s:14,   e:18,   lbl:'Autism Program',  coach:'Andrea Cornelio',school:'Sierra Vista Middle',  days:[1,3,5],    ds:'2026-05-01',de:'2026-07-31',color:1},
+    {id:3,row:3,s:9.98, e:13.03,lbl:'Gardening',   coach:'Aman Khan',      school:'Crescent Elementary',  days:[2,4],      ds:'2026-05-15',de:'2026-06-15',color:5},
+    {id:4,row:4,s:14,   e:17.5, lbl:'Piano',  coach:'Andrew Calderon',school:'Deerfield Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-08-31',color:2},
+    {id:5,row:5,s:7.5,  e:14.25,lbl:'Martial Arts',     coach:'Asia Lewis',     school:'Golden Elementary',    days:[1,3],      ds:'2026-04-01',de:'2026-06-30',color:3},
+    {id:6,row:6,s:11.43,e:14.33,lbl:'Orchestra',           coach:'Asia Lewis',     school:'Golden Elementary',    days:[2,4],      ds:'2026-04-01',de:'2026-06-30',color:4},
+    {id:7,row:7,s:9,    e:11,   lbl:'Team Meeting',         coach:'Adan Rodriguez', school:'Oxford Academy',       days:[5],        ds:'2026-05-22',de:'2026-05-22',color:5},
+    {id:8,row:8,s:13,   e:15.5, lbl:'Yoga',    coach:'Alexis Navarro', school:'Vista Verde School',   days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-07-15',color:6},
+    {id:9,row:4,s:11,    e:14.0, lbl:'Knitting',    coach:'Ana Flores',     school:'Patton Elementary',    days:[1,5],      ds:'2026-05-22',de:'2026-06-30',color:7},
+  ];
+
+  /* ── helpers ── */
+  function fmtD(d){return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+  function fmtT(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60),ap=hh<12?'AM':'PM',dh=hh%12||12;return dh+':'+String(mm).padStart(2,'0')+' '+ap;}
+  function hlbl(h){return(h%12||12)+' '+(h<12?'AM':'PM');}
+  function parseT(s){s=s.trim().toUpperCase();const m=s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/)||s.match(/^(\d{1,2})\s*(AM|PM)$/);if(!m)return null;let h=+m[1],min=m[3]?+m[2]:0,ap=m[3]||m[2];if(ap==='PM'&&h!==12)h+=12;if(ap==='AM'&&h===12)h=0;return h+min/60;}
+  function fmtDs(s){if(!s)return'';const d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+  function snap(v,g){return Math.round(v/g)*g;}
+  function isVisible(b){return(!filterSchool||b.school===filterSchool)&&(!filterProg||b.lbl===filterProg);}
+
+  function getSegs(b){
+    const raw=[];$.each(blocks,(_,o)=>{if(o.id===b.id||o.row!==b.row)return;const s=Math.max(b.s,o.s),e=Math.min(b.e,o.e);if(s<e)raw.push([s,e]);});
+    if(!raw.length)return[];raw.sort((a,c)=>a[0]-c[0]);
+    const m=[raw[0].slice()];for(let i=1;i<raw.length;i++){const l=m[m.length-1];if(raw[i][0]<=l[1])l[1]=Math.max(l[1],raw[i][1]);else m.push(raw[i].slice());}
+    return m;
+  }
+
+  /* ── filter dropdowns ── */
+  function buildFilterOptions(){
+    const $fs=$('#filter-school'),$fp=$('#filter-prog');
+    const schools=[...new Set(blocks.map(b=>b.school).filter(Boolean))].sort();
+    const progs=[...new Set(blocks.map(b=>b.lbl).filter(Boolean))].sort();
+    $fs.empty().append('<option value="">All Schools</option>');
+    schools.forEach(s=>$fs.append($('<option>').val(s).text(s)));
+    $fp.empty().append('<option value="">All Programs</option>');
+    progs.forEach(p=>$fp.append($('<option>').val(p).text(p)));
+    $fs.val(filterSchool);$fp.val(filterProg);
+  }
+
+  function updateFilterUI(){
+    const active=filterSchool||filterProg;
+    $('#filter-reset').toggle(!!active);
+    $('#filter-school').toggleClass('active',!!filterSchool);
+    $('#filter-prog').toggleClass('active',!!filterProg);
+    const vis=blocks.filter(isVisible).length;
+    $('#filter-count').text(active?vis+' of '+blocks.length+' blocks shown':'');
+  }
+
+  $('#filter-school').on('change',function(){filterSchool=$(this).val();updateFilterUI();rBlocks();rNow();});
+  $('#filter-prog').on('change',function(){filterProg=$(this).val();updateFilterUI();rBlocks();rNow();});
+  $('#filter-reset').on('click',function(){filterSchool='';filterProg='';$('#filter-school').val('');$('#filter-prog').val('');updateFilterUI();rBlocks();rNow();});
+
+  /* ── combobox ── */
+  function mkCombo(cfg){
+    const $i=$('#'+cfg.ii),$d=$('#'+cfg.di),$c=$('#'+cfg.ci);let fi=-1;
+    const fil=()=>{const q=$i.val().toLowerCase();return q?cfg.items.filter(x=>x.toLowerCase().includes(q)):cfg.items;};
+    const rdd=items=>{$d.empty();if(!items.length){$d.append('<div class="combo-empty">No results</div>');return;}items.forEach(v=>$('<div class="combo-option">').text(v).toggleClass('selected',v===cfg.get()).on('mousedown',e=>{e.preventDefault();pick(v);}).appendTo($d));fi=-1;};
+    const open=()=>{rdd(fil());$d.addClass('open');};const close=()=>{$d.removeClass('open');fi=-1;};
+    const pick=v=>{$i.val(v);$c.css('display',v?'block':'none');cfg.set(v);close();};
+    const mf=dir=>{const $o=$d.find('.combo-option');if(!$o.length)return;fi=Math.max(0,Math.min($o.length-1,fi+dir));$o.removeClass('focused').eq(fi).addClass('focused');};
+    $i.on('input',function(){$c.css('display',$(this).val()?'block':'none');open();}).on('focus',open)
+      .on('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();mf(1);}if(e.key==='ArrowUp'){e.preventDefault();mf(-1);}if(e.key==='Enter'){const $f=$d.find('.combo-option.focused');if($f.length){e.preventDefault();pick($f.text());}}if(e.key==='Escape')close();})
+      .on('blur',()=>setTimeout(close,150));
+    $c.on('click',()=>{$i.val('');$c.hide();cfg.set('');$i.trigger('focus');});
+    return{sv:v=>{$i.val(v);$c.css('display',v?'block':'none');cfg.set(v);}};
+  }
+
+  const pcb=mkCombo({ii:'prog-input', di:'prog-dd',   ci:'prog-clear',  items:PROGS,   set:v=>sProg=v,  get:()=>sProg});
+  const ccb=mkCombo({ii:'coach-input',di:'coach-dd',  ci:'coach-clear', items:COACHES, set:v=>sCoach=v, get:()=>sCoach});
+  const scb=mkCombo({ii:'school-input',di:'school-dd',ci:'school-clear',items:SCHOOLS, set:v=>sSchool=v,get:()=>sSchool});
+
+  $('#dow-wrap').on('click','.dow-pill',function(){const d=+$(this).data('d');if($(this).hasClass('on')){sDays=sDays.filter(x=>x!==d);$(this).removeClass('on');}else{sDays.push(d);sDays.sort();$(this).addClass('on');}});
+  function setDays(arr){sDays=arr?arr.slice():[];$('#dow-wrap .dow-pill').each(function(){$(this).toggleClass('on',sDays.includes(+$(this).data('d')));});}
+
+  /* ── render ── */
+  function render(){$('#date-label').text(fmtD(curDate));rStaff();rHeader();rGrid();buildFilterOptions();rBlocks();rNow();updateFilterUI();}
+
+  const AVATAR_COLORS=['#4f83cc','#43a87a','#c2606e','#d08a3a','#6c8f3e','#7b6fd4','#c4623a','#7a8c9e','#b05090','#3a9faa'];
+  function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
+  function rStaff(){const $c=$('#staff-col').empty().append('<div class="staff-col-header"></div>');$.each(STAFF,(i,s)=>{const av=$('<div class="staff-avatar">').text(initials(s.n)).css('background',AVATAR_COLORS[i%AVATAR_COLORS.length]);const info=$('<div class="staff-info">').append($('<div class="staff-name">').text(s.n));if(s.h)info.append($('<div class="staff-hours">').text(s.h));$c.append($('<div class="staff-row">').append(av,info));});}  function rHeader(){const $h=$('#timeline-header').empty().css('width',TW);for(let h=SH;h<SH+NHRS;h++)$h.append($('<div class="hour-cell">').text(hlbl(h)));}
+  function rGrid(){const $b=$('#grid-body').css({width:TW,height:STAFF.length*RH});$b.find('.grid-row').remove();const $l=$('#blocks-layer');$.each(STAFF,()=>{const $r=$('<div class="grid-row">').css('width',TW);for(let h=0;h<NHRS;h++)$r.append($('<div>').addClass('grid-cell'+(h%2===0?' alt':'')));$r.insertBefore($l);});}
+
+  function rBlocks(){
+    const $l=$('#blocks-layer').css({width:TW,height:STAFF.length*RH}).empty();
+    $.each(blocks,(_,b)=>{
+      const c=COLORS[b.color%COLORS.length];
+      const x=(b.s-SH)*HW,w=Math.max((b.e-b.s)*HW-4,52),y=b.row*RH+4,bh=RH-8;
+      const sg=getSegs(b);
+      const visible=isVisible(b);
+      const $el=$('<div class="sched-block">').attr('data-id',b.id)
+        .css({left:x,top:y,width:w,height:bh,background:c.bg,borderColor:c.bd,color:c.tx})
+        .toggleClass('dimmed',!visible);
+
+      $.each(sg,(_,seg)=>{const zl=(seg[0]-b.s)*HW,zw=(seg[1]-seg[0])*HW;$el.append($('<div class="overlap-zone">').css({left:zl,width:zw}).append('<svg xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="url(#sr)"/></svg>',$('<div class="overlap-zone-border-l">'),$('<div class="overlap-zone-border-r">')));});
+
+      const $eb=$('<button class="edit-btn" title="Edit">').text('✎').on('click',e=>{e.stopPropagation();openEdit(b.id);});
+
+      /* time + day badges inline */
+      const $timeRow=$('<div class="block-time-row">');
+      $timeRow.append($('<span class="block-time">').text(fmtT(b.s)+' – '+fmtT(b.e)));
+      if(b.days&&b.days.length){const $badge=$('<div class="block-days-badge">');b.days.forEach(d=>$('<span class="day-dot">').text(DN[d]).appendTo($badge));$timeRow.append($badge);}
+
+      const dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'';
+
+      $el.append(
+        $eb,
+        $('<div class="block-title">').text(b.lbl),
+        $('<div class="block-school">').text(b.school||''),   /* ← school name */
+        $timeRow,
+        $('<div class="block-daterange">').text(dr),
+        $('<div class="resize-handle">')
+      );
+      attachDrag($el,b);attachResize($el.find('.resize-handle'),b);attachTip($el,b,sg.length>0);
+      $l.append($el);
+    });
+  }
+
+  function rNow(){$('#blocks-layer .now-line').remove();const now=new Date(),h=now.getHours()+now.getMinutes()/60;if(h<SH||h>SH+NHRS)return;$('#blocks-layer').append($('<div class="now-line">').css('left',(h-SH)*HW).append('<div class="now-dot">'));}
+
+  /* ── modal ── */
+  function buildSwatches(sel){const $r=$('#color-row').empty();$.each(COLORS,(i,c)=>$('<div class="color-swatch">').css({background:c.bg,outline:i===sel?'2.5px solid '+c.bd:'2px solid transparent'}).on('click',()=>{sColor=i;buildSwatches(i);}).appendTo($r));}
+  function buildFooter(cr){const $f=$('#modal-footer').empty();if(!cr)$f.append($('<button class="btn-delete">').html('🗑 Delete').on('click',doDelete));$f.append($('<button class="btn-cancel">').text('Cancel').on('click',closeModal),$('<button class="btn-save">').text(cr?'Create block':'Save changes').on('click',doSave));}
+
+  function openEdit(id){const b=blocks.find(x=>x.id===id);if(!b)return;creating=false;eid=id;sProg=b.lbl;sCoach=b.coach||'';sSchool=b.school||'';sColor=b.color;$('#modal-title-text').text('✎  Edit schedule block');pcb.sv(b.lbl);ccb.sv(b.coach||'');scb.sv(b.school||'');setDays(b.days||[]);$('#blk-date-start').val(b.ds||'');$('#blk-date-end').val(b.de||'');$('#blk-time-start').val(fmtT(b.s));$('#blk-time-end').val(fmtT(b.e));$('#edit-error').text('');buildSwatches(b.color);buildFooter(false);$('#modal-overlay').addClass('open');setTimeout(()=>$('#prog-input').trigger('focus'),50);}
+  function openCreate(){creating=true;eid=null;sProg='';sCoach='';sSchool='';sColor=0;$('#modal-title-text').text('+ Add schedule block');pcb.sv('');ccb.sv('');scb.sv('');setDays([1,2,3,4,5]);$('#blk-date-start').val(todayIso());$('#blk-date-end').val(isoOffset(90));$('#blk-time-start').val('9:00 AM');$('#blk-time-end').val('10:00 AM');$('#edit-error').text('');buildSwatches(0);buildFooter(true);$('#modal-overlay').addClass('open');setTimeout(()=>$('#prog-input').trigger('focus'),50);}
+  function closeModal(){$('#modal-overlay').removeClass('open');eid=null;creating=false;}
+  function doSave(){
+    const ns=parseT($('#blk-time-start').val()),ne=parseT($('#blk-time-end').val()),ds=$('#blk-date-start').val(),de=$('#blk-date-end').val(),$e=$('#edit-error');
+    if(!sProg){$e.text('Please select a program.');return;}if(!sCoach){$e.text('Please select a coach.');return;}if(!sSchool){$e.text('Please select a school.');return;}if(!sDays.length){$e.text('Select at least one day of the week.');return;}if(!ds){$e.text('Please set a start date.');return;}if(!de){$e.text('Please set an end date.');return;}if(de<ds){$e.text('End date must be on or after start date.');return;}if(ns===null){$e.text('Invalid start time.');return;}if(ne===null){$e.text('Invalid end time.');return;}if(ne<=ns){$e.text('End time must be after start time.');return;}
+    const row=(()=>{const i=STAFF.findIndex(s=>s.n===sCoach);return i>-1?i:0;})();
+    const data={lbl:sProg,coach:sCoach,school:sSchool,days:sDays.slice(),ds,de,s:ns,e:ne,row,color:sColor};
+    if(creating){blocks.push({id:nid++,...data});}else{const b=blocks.find(x=>x.id===eid);if(b)Object.assign(b,data);}
+    buildFilterOptions();updateFilterUI();closeModal();rBlocks();rNow();
+  }
+  function doDelete(){const i=blocks.findIndex(x=>x.id===eid);if(i>-1)blocks.splice(i,1);buildFilterOptions();updateFilterUI();closeModal();rBlocks();rNow();}
+
+  /* ── drag / resize ── */
+  function attachDrag($el,b){$el.on('mousedown',e=>{if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;e.preventDefault();$el.addClass('dragging');const sx=e.clientX,sy=e.clientY,os=b.s,or=b.row,dur=b.e-b.s;$(document).on('mousemove.drag',e2=>{let ns=os+snap((e2.clientX-sx)/HW,.25);ns=Math.max(SH,Math.min(SH+NHRS-dur,ns));b.s=ns;b.e=ns+dur;b.row=Math.max(0,Math.min(STAFF.length-1,or+Math.round((e2.clientY-sy)/RH)));rBlocks();rNow();});$(document).one('mouseup.drag',()=>{$el.removeClass('dragging');$(document).off('mousemove.drag');});});}
+  function attachResize($h,b){$h.on('mousedown',e=>{e.preventDefault();e.stopPropagation();const $el=$h.closest('.sched-block').addClass('resizing'),sx=e.clientX,oe=b.e;$(document).on('mousemove.resize',e2=>{b.e=Math.max(b.s+.25,Math.min(SH+NHRS,oe+snap((e2.clientX-sx)/HW,.25)));rBlocks();rNow();});$(document).one('mouseup.resize',()=>{$el.removeClass('resizing');$(document).off('mousemove.resize');});});}
+  function attachTip($el,b,hasOv){const $t=$('#tooltip');$el.on('mouseenter',()=>{const dl=b.days&&b.days.length?b.days.map(d=>DFULL[d]).join(', '):'—',dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'—';$t.html('<strong>'+b.lbl+'</strong>'+(hasOv?' <span style="color:#E24B4A;font-size:10px">⚠ overlap</span>':'')+(b.school?'<br><span style="opacity:.7">&#127eb; '+b.school+'</span>':'')+'<br>'+fmtT(b.s)+' – '+fmtT(b.e)+(b.coach?'<br><span style="opacity:.7">'+b.coach+'</span>':'')+'<br><span style="opacity:.7">'+dl+'</span><br><span style="opacity:.7">'+dr+'</span>').show();}).on('mousemove',e=>$t.css({left:e.clientX+14,top:e.clientY-10})).on('mouseleave',()=>$t.hide());}
+
+  $('#add-btn').on('click',openCreate);
+  $('#modal-close-btn').on('click',closeModal);
+  $('#modal-overlay').on('click',e=>{if($(e.target).is('#modal-overlay'))closeModal();});
+  $('#prev-btn').on('click',()=>{curDate=new Date(curDate);curDate.setDate(curDate.getDate()-1);render();});
+  $('#next-btn').on('click',()=>{curDate=new Date(curDate);curDate.setDate(curDate.getDate()+1);render();});
+  $('#timeline-area').on('scroll',function(){$('#staff-col').scrollTop($(this).scrollTop());});
+  render();
+});
+</script>
