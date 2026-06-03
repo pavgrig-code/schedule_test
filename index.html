@@ -2209,18 +2209,34 @@ $(function(){
   function rPeople(){ render(); }
 
 
+  var SPECIALTIES_DATA = {"Team Sports": ["Basketball", "Soccer", "Volleyball", "Flag Football", "Baseball", "Softball", "Lacrosse", "Hockey \u2014 field/ice", "Rugby", "Cricket"], "Individual Sports": ["Tennis", "Pickleball", "Golf", "Track & Field", "Cross Country", "Wrestling", "Martial Arts", "Boxing", "Fencing", "Archery"], "Fitness & Wellness": ["General Fitness", "Strength & Conditioning", "Yoga", "Pilates", "Running Club", "Sports Performance", "Physical Education"], "Aquatics": ["Swimming", "Water Polo", "Diving"], "Music \u2014 Instrumental": ["Piano", "Keyboard", "Guitar", "Bass Guitar", "Ukulele", "Violin", "Viola", "Cello", "Double Bass", "Drums/Percussion", "Flute", "Clarinet", "Saxophone", "Trumpet", "Trombone", "French Horn", "Tuba"], "Music \u2014 Vocal": ["Voice", "Choir", "Musical Theater"], "Music Production": ["Music Theory", "Songwriting", "Composition", "Recording Technology", "DJing", "Digital Music Production"], "Performing Arts \u2014 Dance": ["Ballet", "Jazz", "Hip-Hop", "Tap", "Contemporary", "Ballroom", "Cultural Dance"], "Performing Arts \u2014 Theater": ["Acting", "Improvisation", "Public Speaking", "Drama", "Stage Production"], "Arts & Creativity \u2014 Visual Arts": ["Drawing", "Painting", "Watercolor", "Acrylics", "Sculpture", "Ceramics", "Pottery", "Mixed Media"], "Arts & Creativity \u2014 Digital Arts": ["Graphic Design", "Digital Illustration", "Animation", "Photography", "Video Production", "Filmmaking"], "STEM \u2014 Technology": ["Coding", "Web Development", "Game Development", "Robotics", "Artificial Intelligence", "Cybersecurity"], "STEM \u2014 Science": ["General Science", "Engineering", "Environmental Science", "Astronomy"], "STEM \u2014 Mathematics": ["Elementary Math", "Middle School Math", "Algebra", "Geometry", "Competition Math"], "Strategy & Mind Sports": ["Chess", "Esports", "Debate", "Mock Trial", "Public Speaking", "Model United Nations"], "Life Skills & Enrichment": ["Leadership", "Entrepreneurship", "Financial Literacy", "Study Skills", "College Readiness", "Career Exploration"], "Language & Cultural Programs": ["Spanish", "French", "Mandarin", "Japanese", "American Sign Language (ASL)", "Cultural Studies"], "Special Program Areas": ["Special Education Support", "Adaptive Sports", "Inclusive Recreation", "SEL \u2014 Social Emotional Learning", "Mentoring", "Tutoring"]};
+  var US_STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
+
+  function phoneMask(input){
+    $(input).on('input',function(){
+      var raw=$(this).val().replace(/\D/g,'').slice(0,10);
+      var fmt='';
+      if(raw.length>=1) fmt='('+raw.slice(0,3);
+      if(raw.length>3) fmt+=') '+raw.slice(3,6);
+      if(raw.length>6) fmt+='-'+raw.slice(6,10);
+      $(this).val(fmt);
+    });
+  }
+
   function showPeopleDetail(s){
     var det = getStaffDetail(s.id);
     var absIdx = STAFF.findIndex(function(x){return x.n===s.n;});
     var avatarBg = AVATAR_COLORS[absIdx % AVATAR_COLORS.length];
     var isEditing = false;
+    var emailError = false;
 
     function v(key){ return det[key] || ''; }
 
     function buildCard(){
+      emailError = false;
       var $wrap = $('<div>').css({maxWidth:'560px',padding:'16px'});
 
-      // ── Compact header ──
+      // ── Header ──
       var $hdr = $('<div class="d-flex align-items-center gap-3 mb-3">');
       var $av = $('<div class="staff-avatar flex-shrink-0">').css({
         width:'46px',height:'46px',fontSize:'17px',background:avatarBg,
@@ -2235,6 +2251,13 @@ $(function(){
         .text(isEditing?'✓ Save':'Edit');
       $btn.on('click',function(){
         if(isEditing){
+          // Validate email before saving
+          var emailVal = $wrap.find('[data-key="email"]').val();
+          if(emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)){
+            $wrap.find('[data-key="email"]').addClass('is-invalid').focus();
+            $wrap.find('.email-feedback').show();
+            return;
+          }
           $wrap.find('[data-key]').each(function(){setStaffDetail(s.id,$(this).attr('data-key'),$(this).val());});
           isEditing=false;
         } else { isEditing=true; }
@@ -2244,51 +2267,184 @@ $(function(){
       $hdr.append($av,$info,$btn);
       $wrap.append($hdr);
 
-      // ── Field list helper ──
-      function row(label,key,readOnly){
-        var rawVal=readOnly?(det[key]||s[key]||''):v(key);
-        var $label=$('<dt class="text-uppercase text-muted fw-semibold" style="font-size:9.5px;letter-spacing:.06em;padding-top:1px;">').text(label);
-        var $value;
-        if(readOnly||!isEditing){
-          $value=$('<dd class="mb-0" style="font-size:12.5px;color:'+(rawVal?'#212529':'#adb5bd')+';">').text(rawVal||'');
-        } else {
-          $value=$('<dd class="mb-0" style="padding-right:10px;">').append(
-            $('<input type="text" class="form-control form-control-sm" style="font-size:12px;">').attr('data-key',key).val(v(key)).attr('placeholder','')
-          );
-        }
-        return [$label,$value];
+      // ── Field helpers ──
+      function label(txt){
+        return $('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:3px;">').text(txt);
+      }
+      function viewVal(key){
+        var val=v(key);
+        return $('<div style="font-size:12.5px;color:'+(val?'#212529':'#adb5bd')+';min-height:20px;">').text(val||'');
+      }
+      function textInput(key,placeholder){
+        var $i=$('<input type="text" class="form-control form-control-sm" style="font-size:12px;">').attr({'data-key':key,'placeholder':placeholder||''}).val(v(key));
+        return $i;
+      }
+      function phoneInput(key){
+        var $i=textInput(key,'(###) ###-####');
+        phoneMask($i[0]);
+        return $i;
+      }
+      function stateSelect(key){
+        var $s=$('<select class="form-select form-select-sm" data-key="'+key+'" style="font-size:12px;">');
+        $s.append($('<option value="">').text('State'));
+        US_STATES.forEach(function(st){$s.append($('<option>').val(st).text(st).prop('selected',v(key)===st));});
+        return $s;
       }
 
-      function section(title,color,fields){
-        var $card=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:hidden;">');
-        var $hd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
-        $hd.append(
-          $('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:'+color+';">').text(title)
-        );
-        var $dl=$('<dl class="row g-0 mb-0 px-3 py-2" style="row-gap:'+(isEditing?'10px':'6px')+';column-gap:0;">');
-        fields.forEach(function(f){
-          var r=row(f[0],f[1],f[2]);
-          var $col=$('<div class="col-6">').append(r[0],r[1]);
-          if(f[3]) $col.removeClass('col-6').addClass('col-12');
-          $dl.append($col);
+      // ── General Card ──
+      var $card=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:hidden;">');
+      var $hd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+      $hd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#0d6efd;">').text('General'));
+      var $body=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
+
+      function cell(labelTxt,keyOrEl,readOnly,span){
+        var $c=$('<div>').css(span?{gridColumn:'1 / -1'}:{});
+        $c.append(label(labelTxt));
+        if(readOnly) $c.append(viewVal(typeof keyOrEl==='string'?keyOrEl:''));
+        else if(!isEditing) $c.append(viewVal(typeof keyOrEl==='string'?keyOrEl:''));
+        else $c.append(typeof keyOrEl==='string'?textInput(keyOrEl):keyOrEl);
+        return $c;
+      }
+
+      // Row 1: Full Name | ADP ID
+      $body.append(cell('Full Name','fullName',false), cell('ADP ID','adpId',false));
+      // Row 2: Phone | Email
+      var $phoneCell=$('<div>').append(label('Phone')).append(isEditing?phoneInput('phone'):viewVal('phone'));
+      var $emailCell=$('<div>').append(label('Email'));
+      if(isEditing){
+        var $emailInp=textInput('email','');
+        var $fb=$('<div class="invalid-feedback email-feedback" style="display:none;font-size:10px;">').text('Please enter a valid email address.');
+        $emailInp.on('input',function(){
+          var ev=$(this).val();
+          if(ev && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ev)){
+            $(this).addClass('is-invalid');$fb.show();
+          } else {
+            $(this).removeClass('is-invalid');$fb.hide();
+          }
         });
-        $card.append($hd,$dl);
-        return $card;
+        $emailCell.append($emailInp,$fb);
+      } else { $emailCell.append(viewVal('email')); }
+      $body.append($phoneCell,$emailCell);
+      // Row 3: Address (full width)
+      $body.append(cell('Address','address',false,true));
+      // Row 4: City | State | Zip
+      var $cityCell=$('<div>').append(label('City')).append(isEditing?textInput('city'):viewVal('city'));
+      var $stateCell=$('<div>').append(label('State')).append(isEditing?stateSelect('state'):viewVal('state'));
+      var $zipCell=$('<div>').append(label('Zip Code')).append(isEditing?textInput('zip','#####'):viewVal('zip'));
+      // City/State/Zip row as a sub-grid (3 cols)
+      var $addrRow=$('<div style="grid-column:1 / -1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px 12px;">').append($cityCell,$stateCell,$zipCell);
+      $body.append($addrRow);
+
+      $card.append($hd,$body);
+      $wrap.append($card);
+
+      // ── Emergency Card ──
+      var $emg=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:hidden;">');
+      var $emgHd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+      $emgHd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#dc3545;">').text('Emergency'));
+      var $emgBody=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
+      var $enCell=$('<div>').append(label('Contact Name')).append(isEditing?textInput('emergencyName'):viewVal('emergencyName'));
+      var $epCell=$('<div>').append(label('Contact Phone')).append(isEditing?phoneInput('emergencyPhone'):viewVal('emergencyPhone'));
+      $emgBody.append($enCell,$epCell);
+      $emg.append($emgHd,$emgBody);
+      $wrap.append($emg);
+
+      // ── Qualifications & Skills Card ──
+      var $qual=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:hidden;">');
+      var $qualHd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+      $qualHd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#198754;">').text('Qualifications & Skills'));
+      var $qualBody=$('<div class="px-3 py-2">');
+      $qualBody.append($('<div class="text-uppercase fw-semibold text-muted mb-2" style="font-size:9.5px;letter-spacing:.06em;">').text('Coaching Specialties'));
+      // Multi-select specialty widget
+      var selectedSpecs = (v('specialties') ? JSON.parse(v('specialties')) : []);
+      var $specWrap=$('<div class="spec-wrap">');
+
+      // Tags always visible — show × only in edit mode
+      var $tags=$('<div class="spec-tags d-flex flex-wrap gap-1 mb-2">');
+      function renderTags(){
+        $tags.empty();
+        if(!selectedSpecs.length && !isEditing){
+          $tags.append($('<span style="font-size:12px;color:#adb5bd;">').text('No specialties added yet'));
+        }
+        selectedSpecs.forEach(function(sp){
+          var $tag=$('<span class="badge rounded-pill d-inline-flex align-items-center gap-1" style="background:#e8f1ff;color:#0d6efd;font-size:11px;font-weight:500;padding:4px 8px;">').text(sp);
+          var $rm=$('<button type="button" style="background:none;border:none;padding:0;line-height:1;cursor:pointer;color:#0d6efd;font-size:13px;margin-left:2px;opacity:0.7;">').text('×')
+            .on('click',function(){
+              selectedSpecs=selectedSpecs.filter(function(x){return x!==sp;});
+              setStaffDetail(s.id,'specialties',JSON.stringify(selectedSpecs));
+              renderTags();
+            });
+          if(isEditing) $tag.append($rm);
+          $tags.append($tag);
+        });
+      }
+      renderTags();
+      $specWrap.append($tags);
+
+      // Search input — always visible
+      var $inp=$('<input type="text" class="form-control form-control-sm mb-1" placeholder="Search or add a specialty…" style="font-size:12px;">');
+      if(!isEditing) $inp.prop('disabled',true).css('background','#f8f9fa');
+      var $dd=$('<div class="list-group" style="max-height:200px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:999;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);">');
+      var $ddWrap=$('<div style="position:relative;">').append($inp,$dd);
+
+      function buildDropdown(query){
+        $dd.empty();
+        var q=(query||'').toLowerCase().trim();
+        var allSpecs=[];
+        Object.keys(SPECIALTIES_DATA).forEach(function(cat){
+          SPECIALTIES_DATA[cat].forEach(function(sp){
+            allSpecs.push({cat:cat,sp:sp});
+          });
+        });
+        var filtered=allSpecs.filter(function(item){
+          return (!q || item.cat.toLowerCase().includes(q) || item.sp.toLowerCase().includes(q))
+            && selectedSpecs.indexOf(item.sp)===-1;
+        });
+        // Group by category
+        var cats={};
+        filtered.forEach(function(item){
+          if(!cats[item.cat]) cats[item.cat]=[];
+          cats[item.cat].push(item.sp);
+        });
+        Object.keys(cats).forEach(function(cat){
+          $dd.append($('<div class="px-2 pt-2 pb-1 text-uppercase text-muted fw-semibold" style="font-size:9px;letter-spacing:.07em;background:#f8f9fa;border-bottom:1px solid #e9ecef;">').text(cat));
+          cats[cat].forEach(function(sp){
+            var $item=$('<button type="button" class="list-group-item list-group-item-action py-1 px-3 border-0" style="font-size:12px;border-radius:0;">').text(sp);
+            $item.on('mousedown',function(e){
+              e.preventDefault();
+              selectedSpecs.push(sp);
+              setStaffDetail(s.id,'specialties',JSON.stringify(selectedSpecs));
+              renderTags();
+              $inp.val('');
+              $dd.hide();
+            });
+            $dd.append($item);
+          });
+        });
+        // Custom add
+        if(q && filtered.filter(function(i){return i.sp.toLowerCase()===q;}).length===0
+              && selectedSpecs.map(function(x){return x.toLowerCase();}).indexOf(q)===-1){
+          var $add=$('<button type="button" class="list-group-item list-group-item-action py-1 px-3 border-0 text-success fw-semibold" style="font-size:12px;">').text('+ Add "'+query+'"');
+          $add.on('mousedown',function(e){
+            e.preventDefault();
+            selectedSpecs.push(query);
+            setStaffDetail(s.id,'specialties',JSON.stringify(selectedSpecs));
+            renderTags();
+            $inp.val('');
+            $dd.hide();
+          });
+          $dd.prepend($add);
+        }
+        $dd.toggle($dd.children().length>0);
       }
 
-      $wrap.append(
-        section('General','#0d6efd',[
-          ['Full Name','fullName',false,false],
-          ['ADP ID','adpId',false,false],
-          ['Phone','phone',false,false],
-          ['Email','email',false,false],
-          ['Address','address',false,true]
-        ]),
-        section('Emergency','#dc3545',[
-          ['Contact Name','emergencyName',false,false],
-          ['Contact Phone','emergencyPhone',false,false]
-        ])
-      );
+      $inp.on('input',function(){if(isEditing)buildDropdown($(this).val());});
+      $inp.on('focus',function(){if(isEditing)buildDropdown($(this).val()||'');});
+      $inp.on('blur',function(){setTimeout(function(){$dd.hide();},200);});
+      $specWrap.append($ddWrap);
+      $qualBody.append($specWrap);
+      $qual.append($qualHd,$qualBody);
+      $wrap.append($qual);
 
       return $wrap;
     }
