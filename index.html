@@ -1,48 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Schedule</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico"/>
+</head>
+<body>
 
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#f1f3f5;--bd:#dee2e6;--bd2:#e9ecef;--tx:#212529;--tx2:#6c757d;--blue:#0d6efd;--blue2:#0b5ed7;--red:#E24B4A;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
-.sched-wrap{display:flex;flex-direction:column;height:620px;overflow:hidden;border:1px solid var(--bd);border-radius:10px;background:var(--bg);position:relative;}
+html,body{height:100%;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow:hidden;}
+.sched-wrap{display:flex;flex-direction:column;height:100vh;overflow:hidden;border:none;border-radius:0;background:var(--bg);position:relative;}
 .toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bd2);background:var(--bg2);flex-shrink:0;}
 .toolbar-title{font-size:13px;font-weight:500;color:var(--tx);}
-.date-nav{display:flex;align-items:center;gap:6px;margin-left:auto;}
-.date-nav button{background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--tx);}
-.date-nav button:hover{background:var(--bg3);}
-.today-badge{background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500;border:none;}
-.overlap-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx2);}
+/* View toggle */
+.view-toggle{display:flex;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:2px;gap:2px;}
+.view-btn{padding:4px 14px;border-radius:6px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;}
+.view-btn.active{background:#fff;color:var(--blue);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+/* Mode toggle (Schedule / Availability) */
+.mode-toggle{display:flex;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:2px;gap:2px;margin-right:8px;}
+.mode-btn{padding:4px 13px;border-radius:6px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;}
+.mode-btn.active{background:#fff;color:var(--tx);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+/* Availability status switch */
+.avail-switch{display:flex;gap:0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-bottom:13px;}
+.avail-opt{flex:1;padding:7px 4px;border:none;font-size:11px;font-weight:500;cursor:pointer;background:var(--bg3);color:var(--tx2);text-align:center;transition:all .12s;border-right:1px solid var(--bd);}
+.avail-opt:last-child{border-right:none;}
+.avail-opt.active{color:#fff;font-weight:700;}
+.avail-opt[data-st="available"].active{background:#1a8a4a;}
+.avail-opt[data-st="unavailable"].active{background:#c0392b;}
+.avail-opt[data-st="tentative"].active{background:#1a5fa5;}
+.avail-opt[data-st="limited"].active{background:#7b3fa0;}
 
-/* Filter bar */
-.filter-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bd2);background:var(--bg);flex-shrink:0;}
-.filter-label{font-size:11px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.04em;margin-right:2px;white-space:nowrap;}
-.filter-select{font-size:12px;padding:5px 28px 5px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236c757d'/%3E%3C/svg%3E") no-repeat right 9px center;appearance:none;-webkit-appearance:none;color:var(--tx);cursor:pointer;outline:none;min-width:160px;}
-.filter-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.12);}
-.filter-select.active{border-color:var(--blue);background-color:#e8f1ff;color:var(--blue);font-weight:600;}
-.filter-reset{font-size:11px;color:var(--tx2);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;margin-left:auto;}
-.filter-reset:hover{background:var(--bg3);color:var(--tx);}
-.filter-count{font-size:11px;color:var(--tx2);white-space:nowrap;}
+/* Availability block colors */
+.avail-block-available{background:#d4edda;border-color:#1a8a4a;color:#0a3d1c;}
+.avail-block-unavailable{background:#fde8e8;border-color:#c0392b;color:#6b0f0f;}
+.avail-block-tentative{background:#d6e8f7;border-color:#1a5fa5;color:#0d2e52;}
+.avail-block-limited{background:#ecddf7;border-color:#7b3fa0;color:#3d1056;}
+/* Week view */
+.week-col-header{display:flex;background:var(--bg2);min-width:max-content;position:sticky;top:0;z-index:20;border-bottom:1px solid var(--bd2);}
+/* Unified table for Week and Month views */
+.week-table{border-collapse:collapse;table-layout:auto;}
+.week-th-staff{
+  width:162px;min-width:162px;max-width:162px;
+  background:var(--bg2);border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);
+  padding:6px 8px;position:sticky;top:0;left:0;z-index:22;vertical-align:middle;
+}
+.week-th-day{
+  min-width:80px;
+  background:var(--bg2);border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);
+  padding:0;text-align:center;cursor:pointer;position:sticky;top:0;z-index:20;
+  height:46px;vertical-align:middle;
+}
+.week-th-day:last-child{border-right:none;}
+.week-th-day.today .week-day-num{color:#fff;background:var(--blue);border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;}
+.week-th-day.today .week-day-name{color:var(--blue);}
+.week-th-day.weekend{background:#f7f7f8;}
+.week-th-day:hover{background:#eef3ff;}
+.week-th-day:hover .week-day-name{color:var(--blue);font-weight:800;}
+.week-th-day:hover .week-day-num{color:var(--blue);font-weight:900;}
+.week-th-day.today:hover .week-day-num{color:#fff;}
+.week-th-day.col-hovered{background:#eef3ff;}
+.week-th-day.col-hovered .week-day-name{color:var(--blue);font-weight:800;}
+.week-th-day.col-hovered .week-day-num{color:var(--blue);font-weight:900;}
+.week-th-day.today.col-hovered .week-day-num{color:#fff;}
+.hour-cell.col-hovered{background:#eef3ff;color:var(--blue);font-weight:700;}
+.week-th-day.col-hovered .week-day-name{color:var(--blue);font-weight:800;}
+.week-th-day.col-hovered .week-day-num{color:var(--blue);font-weight:900;}
+.week-th-day.today.col-hovered .week-day-num{color:#fff;}
+.week-td-staff{
+  width:162px;min-width:162px;max-width:162px;
+  border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);
+  padding:6px 10px;background:var(--bg);vertical-align:middle;
+  position:sticky;left:0;z-index:10;
+}
+.week-td-day{
+  min-width:80px;
+  border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);
+  padding:3px;vertical-align:top;
+}
+.week-td-day:last-child{border-right:none;}
+.week-td-day.today-col{background:#f0f6ff;}
+.week-td-day.weekend-col{background:#f7f7f8;}
+.week-td-day.drag-over{outline:2px dashed var(--blue);outline-offset:-2px;background:rgba(13,110,253,.07);}
+.week-tr:hover .week-td-staff{background:#f0f6ff;}
+.week-td-staff.hovered-cell{background:#f0f6ff !important;}
+.week-td-staff.hovered-cell .week-staff-name{font-weight:700;color:var(--blue);}
+.week-tr:hover .week-td-staff .week-staff-name{font-weight:700;color:var(--blue);}
+#week-container{flex:1;min-height:0;overflow:visible;}
+.staff-search{width:100%;font-size:12px;padding:5px 8px 5px 26px;border:1px solid var(--bd);border-radius:7px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 7px center;outline:none;color:var(--tx);}
+.staff-search:focus{border-color:var(--blue);}
 
-.main-area{display:flex;flex:1;overflow:hidden;position:relative;}
-.staff-col{width:162px;flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);}
-.staff-col-header{height:36px;border-bottom:1px solid var(--bd2);background:var(--bg2);}
-.staff-row{height:62px;padding:0 10px;display:flex;flex-direction:row;align-items:center;gap:9px;border-bottom:1px solid var(--bd2);background:var(--bg);}
+.staff-col-header{flex-shrink:0;border-bottom:1px solid var(--bd2);background:var(--bg2);}
+.staff-search-wrap{padding:6px 8px;background:var(--bg2);border-bottom:1px solid var(--bd2);flex-shrink:0;}
+.staff-search{width:100%;font-size:12px;padding:5px 8px 5px 26px;border:1px solid var(--bd);border-radius:7px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 7px center;outline:none;color:var(--tx);}
+.staff-search:focus{border-color:var(--blue);}
+.staff-list-scroll{flex:1;overflow-y:auto;overflow-x:hidden;}
+.staff-row{min-height:68px;padding:0 10px;display:flex;flex-direction:row;align-items:center;gap:9px;border-bottom:1px solid var(--bd2);background:var(--bg);}
+.staff-row.hovered .staff-name{font-weight:700;color:var(--blue);}
+.staff-row.hovered{background:#f0f6ff;}
+.staff-no-results{padding:14px 12px;font-size:11px;color:var(--tx2);font-style:italic;text-align:center;}
 .staff-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;letter-spacing:0.02em;user-select:none;}
-.staff-info{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.staff-info{display:flex;flex-direction:column;justify-content:center;min-width:0;gap:1px;}
 .staff-name{font-size:12px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.staff-hours{font-size:10px;color:var(--tx2);margin-top:1px;}
+.staff-hours{font-size:10px;color:var(--tx2);}
+.staff-day-hours{font-size:10px;font-weight:600;color:var(--tx2);white-space:nowrap;}
+.staff-day-hours.has-ot{color:#c0392b;}
+.staff-ot-badge{display:inline-block;font-size:9px;font-weight:700;background:#fde8e8;color:#c0392b;border-radius:4px;padding:0 4px;margin-left:3px;line-height:1.6;}
+.main-area{display:flex;flex:1;overflow:hidden;position:relative;}
 .timeline-area{flex:1;overflow-x:auto;overflow-y:auto;position:relative;}
 .timeline-header{height:36px;display:flex;position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--bd2);}
-.hour-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx2);}
+.hour-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx2);transition:background .1s,color .1s;}
+.hour-cell.col-hovered{background:#eef3ff;color:var(--blue);font-weight:700;}
 .grid-body{position:relative;}
-.grid-row{height:62px;display:flex;border-bottom:1px solid var(--bd2);}
+.grid-row{height:68px;display:flex;border-bottom:1px solid var(--bd2);cursor:pointer;}
+.grid-cell:hover{background:rgba(13,110,253,0.04);}
 .grid-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);background:var(--bg);}
 .grid-cell.alt{background:#fafafa;}
 .blocks-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;}
 
 /* Block */
-.sched-block{position:absolute;border-radius:6px;cursor:grab;user-select:none;display:flex;flex-direction:column;justify-content:center;padding:4px 22px 4px 7px;overflow:hidden;pointer-events:all;border:1.5px solid transparent;min-width:52px;transition:opacity .2s;}
+.sched-block{position:absolute;border-radius:6px;cursor:grab;user-select:none;display:flex;flex-direction:column;justify-content:center;padding:4px 22px 4px 7px;overflow:hidden;pointer-events:all;border:1.5px solid transparent;min-width:52px;transition:opacity .2s;z-index:3;}
 .sched-block:hover{z-index:20;box-shadow:0 2px 10px rgba(0,0,0,0.12);}
-.sched-block:hover .edit-btn{opacity:1;}
+
 .sched-block.dragging{cursor:grabbing;z-index:100;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.18);}
 .sched-block.resizing{z-index:100;}
 .sched-block.dimmed{opacity:.2;pointer-events:none;}
@@ -51,6 +134,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
 .block-time-row{display:flex;align-items:center;gap:4px;position:relative;z-index:2;flex-shrink:0;margin-top:2px;overflow:hidden;}
 .block-time{font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;}
+.block-staff-type-line{font-size:9px;font-weight:500;opacity:.65;white-space:nowrap;}
 .block-days-badge{display:flex;gap:2px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden;}
 .day-dot{font-size:7.5px;font-weight:700;padding:1px 3px;border-radius:3px;background:rgba(0,0,0,.13);line-height:1.5;white-space:nowrap;}
 .block-daterange{font-size:8px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:1px;}
@@ -61,17 +145,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .overlap-zone-border-r{position:absolute;top:0;bottom:0;right:0;width:1.5px;background:rgba(226,75,74,.7);}
 .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:ew-resize;border-radius:0 5px 5px 0;z-index:3;}
 .resize-handle:hover{background:rgba(255,255,255,.35);}
-.edit-btn{position:absolute;top:4px;right:6px;width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.6);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;z-index:4;padding:0;color:inherit;font-size:11px;line-height:1;}
+.edit-btn{display:none;}
 .edit-btn:hover{background:rgba(255,255,255,.9);}
 .now-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:15;pointer-events:none;}
 .now-dot{position:absolute;top:-4px;left:-4px;width:9px;height:9px;border-radius:50%;background:var(--red);}
-.tooltip{position:fixed;background:#fff;border:1px solid var(--bd);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--tx);pointer-events:none;z-index:300;display:none;box-shadow:0 3px 14px rgba(0,0,0,.13);max-width:240px;line-height:1.6;}
+.tooltip{position:fixed;background:#fff;border:1px solid var(--bd);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--tx);pointer-events:none;z-index:9999;display:none;box-shadow:0 3px 14px rgba(0,0,0,.13);max-width:240px;line-height:1.6;}
 .add-btn{position:absolute;bottom:18px;left:18px;z-index:50;display:flex;align-items:center;gap:8px;padding:0 20px 0 14px;height:44px;background:var(--blue);color:#fff;border:none;border-radius:22px;cursor:pointer;box-shadow:0 4px 16px rgba(13,110,253,.35);transition:background .15s,transform .12s;font-size:14px;font-weight:600;white-space:nowrap;}
 .add-btn:hover{background:var(--blue2);transform:translateY(-1px);}
 .add-btn-icon{width:22px;height:22px;background:rgba(255,255,255,.22);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:300;line-height:1;}
 
 /* Modal */
-.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:150;display:none;align-items:center;justify-content:center;border-radius:10px;}
+.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:150;display:none;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
 .modal{background:#fff;border:1px solid var(--bd);border-radius:12px;width:352px;max-height:95%;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.18);}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bd2);background:var(--bg2);border-radius:12px 12px 0 0;flex-shrink:0;}
@@ -79,8 +163,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .modal-close{background:none;border:none;cursor:pointer;color:var(--tx2);font-size:20px;line-height:1;padding:0;}
 .modal-body{padding:16px;overflow-y:auto;flex:1;}
 .field{margin-bottom:13px;position:relative;}
-.field>label{display:block;font-size:10.5px;font-weight:700;color:var(--tx2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.field label{display:block;font-size:10.5px;font-weight:700;color:var(--tx2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.two-col>div{min-width:0;}
 .color-row{display:flex;gap:7px;flex-wrap:wrap;}
 .color-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;transition:transform .1s;}
 .color-swatch:hover{transform:scale(1.15);}
@@ -91,9 +176,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .btn-save:hover{background:var(--blue2);}
 .btn-delete{background:none;border:1px solid var(--red);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--red);margin-right:auto;}
 .btn-delete:hover{background:#fcebeb;}
+/* Delete confirmation panel */
+/* Delete popup */
+.delete-popup-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.18);z-index:200;align-items:center;justify-content:center;}
+.delete-popup-overlay.open{display:flex;}
+.delete-popup{background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.22);width:290px;padding:22px 20px 16px;display:flex;flex-direction:column;gap:10px;}
+.delete-popup-title{font-size:13px;font-weight:700;color:var(--tx);text-align:center;margin-bottom:2px;}
+.delete-popup-sub{font-size:11px;color:var(--tx2);text-align:center;margin-bottom:4px;line-height:1.5;}
+.delete-opt{width:100%;padding:10px 13px;border-radius:8px;border:1px solid var(--bd);background:#fff;cursor:pointer;font-size:12px;font-weight:500;color:var(--tx);text-align:left;transition:background .12s,border-color .12s;display:flex;align-items:center;gap:10px;}
+.delete-opt:hover{border-color:var(--red);background:#fff5f5;color:var(--red);}
+.delete-opt .delete-opt-icon{font-size:16px;flex-shrink:0;}
+.delete-opt .delete-opt-desc{font-size:10px;color:var(--tx2);font-weight:400;margin-top:1px;}
+.delete-opt:hover .delete-opt-desc{color:#c0392b;}
+.delete-popup-cancel{background:none;border:none;font-size:12px;color:var(--tx2);cursor:pointer;padding:4px 10px;border-radius:6px;align-self:center;margin-top:2px;display:flex;align-items:center;gap:4px;}
+.delete-popup-cancel:hover{background:var(--bg3);color:var(--tx);}
+/* Save popup — shares same visual style as delete popup */
+.save-popup-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.18);z-index:200;align-items:center;justify-content:center;}
+.save-popup-overlay.open{display:flex;}
+.save-opt{width:100%;padding:10px 13px;border-radius:8px;border:1px solid var(--bd);background:#fff;cursor:pointer;font-size:12px;font-weight:500;color:var(--tx);text-align:left;transition:background .12s,border-color .12s;display:flex;align-items:center;gap:10px;}
+.save-opt:hover{border-color:var(--blue);background:#e8f1ff;color:var(--blue);}
+.save-opt .save-opt-icon{font-size:16px;flex-shrink:0;}
+.save-opt .save-opt-desc{font-size:10px;color:var(--tx2);font-weight:400;margin-top:1px;}
+.save-opt:hover .save-opt-desc{color:var(--blue2);}
 .section-div{border:none;border-top:1px solid var(--bd2);margin:5px 0 13px;}
-.combo-wrap{position:relative;}
-.combo-input-row{display:flex;align-items:center;border:1px solid var(--bd);border-radius:7px;background:#fff;overflow:hidden;}
+.combo-wrap{position:relative;width:100%;}
+.combo-input-row{display:flex;align-items:center;border:1px solid var(--bd);border-radius:7px;background:#fff;overflow:hidden;width:100%;box-sizing:border-box;}
 .combo-input-row:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.13);}
 .combo-input{flex:1;font-size:13px;padding:7px 9px;border:none;outline:none;background:transparent;color:var(--tx);}
 .combo-chevron{padding:0 9px;color:var(--tx2);font-size:11px;user-select:none;}
@@ -110,7 +217,80 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .dow-pill{flex:1;height:32px;border-radius:7px;border:1px solid var(--bd);background:#fff;color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;user-select:none;}
 .dow-pill:hover{border-color:var(--blue);color:var(--blue);}
 .dow-pill.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+.dow-pill.current{background:#e8f1ff;border-color:var(--blue);color:var(--blue);font-weight:700;box-shadow:0 0 0 2px rgba(13,110,253,0.3);}
+.dow-pill.on.current{background:var(--blue);border-color:var(--blue2);color:#fff;box-shadow:0 0 0 2px rgba(13,110,253,0.5),inset 0 0 0 2px rgba(255,255,255,0.5);}
 #edit-error{font-size:11px;color:var(--red);min-height:15px;margin-top:-6px;}
+.wysiwyg-wrap{border:1px solid var(--bd);border-radius:7px;overflow:hidden;background:#fff;}
+.wysiwyg-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.13);}
+.wysiwyg-toolbar{display:flex;gap:2px;padding:4px 6px;border-bottom:1px solid var(--bd);background:var(--bg3);flex-wrap:wrap;}
+.wysiwyg-btn{padding:3px 7px;border:1px solid transparent;border-radius:4px;background:none;font-size:12px;cursor:pointer;color:var(--tx);line-height:1;transition:background .1s;}
+.wysiwyg-btn:hover{background:var(--bg);border-color:var(--bd);}
+.wysiwyg-btn.active{background:#dbeafe;border-color:#93c5fd;color:var(--blue);}
+.wysiwyg-body{min-height:72px;max-height:140px;overflow-y:auto;padding:8px 10px;font-size:13px;color:var(--tx);outline:none;line-height:1.5;}
+.wysiwyg-body:empty:before{content:attr(data-placeholder);color:var(--tx2);pointer-events:none;}
+/* Staff column */
+.staff-col{width:162px;flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);display:flex;flex-direction:column;}
+/* Filter bar */
+.filter-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bd2);background:var(--bg);flex-shrink:0;}
+.filter-item{display:flex;align-items:center;gap:6px;}
+.filter-select{font-size:12px;padding:5px 28px 5px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;appearance:none;-webkit-appearance:none;color:var(--tx);outline:none;cursor:pointer;}
+.filter-select:focus{border-color:var(--blue);}
+.filter-count{font-size:11px;color:var(--tx2);white-space:nowrap;}
+.filter-reset{font-size:11px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx2);cursor:pointer;}
+.filter-reset:hover{background:var(--bg3);}
+.avail-overlay-check{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--tx2);cursor:pointer;user-select:none;padding:3px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);transition:background .12s;}
+.avail-overlay-check:hover{background:var(--bg3);}
+.avail-overlay-check input{cursor:pointer;accent-color:var(--blue);}
+.avail-overlay-check.active{border-color:var(--blue);color:var(--blue);background:#e8f1ff;}
+/* Summary bar */
+.summary-bar{display:flex;align-items:center;gap:0;padding:0 14px;border-bottom:1px solid var(--bd2);background:#f0f4ff;flex-shrink:0;height:38px;overflow:hidden;}
+.summary-item{display:flex;align-items:center;gap:6px;padding:0 16px 0 0;margin-right:16px;border-right:1px solid var(--bd2);white-space:nowrap;}
+.summary-item:last-child{border-right:none;}
+.summary-label{font-size:10.5px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;}
+.summary-value{font-size:13px;font-weight:700;color:#1a3a6e;}
+.summary-value.zero{color:var(--tx2);font-weight:400;}
+.summary-ot-value{font-size:13px;font-weight:700;color:#c0392b;}
+.summary-ot-value.zero{color:var(--tx2);font-weight:400;}
+/* Date navigation */
+.date-nav{display:flex;align-items:center;gap:6px;}
+#prev-btn,#next-btn{background:none;border:1px solid var(--bd);border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--tx2);transition:all .12s;line-height:1;padding:0;}
+#prev-btn:hover,#next-btn:hover{background:var(--bg3);border-color:var(--blue);color:var(--blue);}
+.today-badge{font-size:11px;padding:3px 10px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);color:var(--tx2);cursor:pointer;transition:all .12s;}
+.today-badge:hover{border-color:var(--blue);color:var(--blue);background:#e8f1ff;}
+.today-badge.active{border-color:var(--blue);color:#fff;background:var(--blue);font-weight:600;}
+/* Week/Month chip styles */
+.week-chip{border-radius:5px;padding:3px 6px;font-size:9.5px;font-weight:600;line-height:1.4;overflow:hidden;cursor:grab;}
+.week-chip:hover{filter:brightness(.93);}
+.week-chip.dragging{opacity:.45;cursor:grabbing;}
+.week-chip.drag-sibling{opacity:.25;}
+.week-chip-ghost-container{position:fixed;pointer-events:none;z-index:9999;display:flex;flex-direction:column;gap:2px;transform:translate(12px,-50%);filter:drop-shadow(0 6px 16px rgba(0,0,0,.35));opacity:.9;min-width:120px;}
+.week-chip-ghost-item{border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;white-space:nowrap;opacity:.9;border:1px solid rgba(0,0,0,.15);}
+.week-td-day.chip-drop-target{outline:2px dashed var(--blue);outline-offset:-2px;background:rgba(13,110,253,.08);}
+.week-chip-title{display:block;font-size:9.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.week-chip-school{display:block;font-size:8.5px;font-weight:400;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.week-chip-time{font-size:8.5px;font-weight:400;opacity:.8;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.week-day-name{font-size:10px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.04em;}
+.week-day-num{font-size:15px;font-weight:700;color:var(--tx);line-height:1.2;}
+/* Week staff embedded cells */
+.week-staff-head{flex:0 0 162px;width:162px;min-width:162px;background:var(--bg2);border-right:1px solid var(--bd2);height:46px;display:flex;align-items:center;padding:0 6px;box-sizing:border-box;}
+.week-staff-cell{flex:0 0 162px;width:162px;min-width:162px;border-right:1px solid var(--bd2);background:var(--bg);padding:0 10px;display:flex;align-items:center;box-sizing:border-box;}
+.week-staff-name{font-size:12px;font-weight:500;color:var(--tx);}
+.week-td-staff .staff-day-hours{font-size:10px;font-weight:600;color:var(--tx2);white-space:nowrap;margin-top:1px;}
+.week-td-staff .staff-day-hours.has-ot{color:#c0392b;}
+.week-td-staff .staff-ot-badge{font-size:9px;font-weight:700;color:#c0392b;margin-left:4px;}
+/* Availability overlay */
+.avail-overlay-block{position:absolute;pointer-events:none;z-index:1;border-radius:0;}
+.ao-available{background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(26,138,74,0.3) 4px,rgba(26,138,74,0.3) 6px);}
+.ao-unavailable{background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(192,57,43,0.3) 4px,rgba(192,57,43,0.3) 6px);}
+.ao-tentative{background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(26,95,165,0.3) 4px,rgba(26,95,165,0.3) 6px);}
+.ao-limited{background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(123,63,160,0.3) 4px,rgba(123,63,160,0.3) 6px);}
+.avail-overlay-stripe{position:absolute;top:0;left:0;right:0;bottom:0;border-radius:5px;pointer-events:none;z-index:1;}
+
+body.people-mode .staff-row{cursor:pointer;transition:background .12s;}
+body.people-mode .staff-row:hover{background:#f0f6ff;}
+body.people-mode .staff-row:hover .staff-name{color:var(--blue);font-weight:600;}
+body.people-mode .staff-row.selected{background:#e8f1ff;}
+body.people-mode .staff-row.selected .staff-name{font-weight:700;color:var(--blue);}
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -119,49 +299,90 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
       <rect width="8" height="8" fill="rgba(226,75,74,0.13)"/>
       <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(226,75,74,0.45)" stroke-width="3"/>
     </pattern>
+    <!-- Availability overlay patterns (subtle diagonal lines) -->
+    <pattern id="ao-available" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="none"/>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#1a8a4a" stroke-width="1.5"/>
+    </pattern>
+    <pattern id="ao-unavailable" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="none"/>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#c0392b" stroke-width="1.5"/>
+    </pattern>
+    <pattern id="ao-tentative" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="none"/>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#1a5fa5" stroke-width="1.5"/>
+    </pattern>
+    <pattern id="ao-limited" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="none"/>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#7b3fa0" stroke-width="1.5"/>
+    </pattern>
   </defs>
 </svg>
 
 <div class="sched-wrap">
   <!-- Toolbar -->
   <div class="toolbar">
-    <span class="toolbar-title">&#128197; Schedule</span>
-    <div class="overlap-legend">
-      <svg width="22" height="14" viewBox="0 0 22 14">
-        <rect width="22" height="14" rx="3" fill="#B5D4F4" stroke="#378ADD" stroke-width="0.5"/>
-        <rect x="6" width="10" height="14" fill="url(#sr)"/>
-        <line x1="6" y1="0" x2="6" y2="14" stroke="rgba(226,75,74,0.7)" stroke-width="1.5"/>
-        <line x1="16" y1="0" x2="16" y2="14" stroke="rgba(226,75,74,0.7)" stroke-width="1.5"/>
-      </svg> overlap zone
+    <div class="mode-toggle">
+      <button class="mode-btn" id="btn-people">People</button>
+      <button class="mode-btn active" id="btn-schedule">Schedule</button>
+      <button class="mode-btn" id="btn-availability">Availability</button>
     </div>
-    <div class="date-nav">
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-day">Day</button>
+      <button class="view-btn" id="btn-week">Week</button>
+      <button class="view-btn" id="btn-month">Month</button>
+    </div>
+    <div class="date-nav" style="margin-left:0;">
       <button id="prev-btn">&#8249;</button>
       <span id="date-label" style="font-size:13px;font-weight:500;color:#212529;min-width:130px;text-align:center;"></span>
       <button id="next-btn">&#8250;</button>
-      <span class="today-badge">today</span>
+      <span class="today-badge" id="today-badge" style="cursor:pointer;" title="Go to today">today</span>
     </div>
+  </div>
+
+  <!-- Daily summary bar -->
+  <div class="summary-bar" id="summary-bar">
+    <div class="summary-item">
+      <span class="summary-label">Total Hours</span>
+      <span class="summary-value" id="sum-total">—</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Overtime</span>
+      <span class="summary-ot-value" id="sum-ot">—</span>
+    </div>
+
   </div>
 
   <!-- Filter bar -->
   <div class="filter-bar">
-    <span class="filter-label">&#128269; Filter:</span>
-    <select class="filter-select" id="filter-school">
+    <span class="filter-item"><select class="filter-select" id="filter-school">
       <option value="">All Schools</option>
-    </select>
-    <select class="filter-select" id="filter-prog">
-      <option value="">All Programs</option>
-    </select>
+    </select></span>
+    <span class="filter-item"><select class="filter-select" id="filter-prog">
+      <option value="">All Disciplines</option>
+    </select></span>
     <span class="filter-count" id="filter-count"></span>
     <button class="filter-reset" id="filter-reset" style="display:none">&#215; Clear filters</button>
+    <label class="avail-overlay-check" id="avail-overlay-label" title="Show availability overlay on schedule blocks">
+      <input type="checkbox" id="avail-overlay-chk"/>
+      Availability Overlay
+    </label>
   </div>
 
   <div class="main-area">
-    <div class="staff-col" id="staff-col"><div class="staff-col-header"></div></div>
+    <div class="staff-col" id="staff-col">
+      <div class="staff-col-header" id="staff-col-header"></div>
+      <div class="staff-search-wrap">
+        <input type="text" class="staff-search" id="staff-search" placeholder="Search staff…" autocomplete="off"/>
+      </div>
+      <div class="staff-list-scroll" id="staff-list-scroll"></div>
+    </div>
     <div class="timeline-area" id="timeline-area">
       <div class="timeline-header" id="timeline-header"></div>
       <div class="grid-body" id="grid-body"><div class="blocks-layer" id="blocks-layer"></div></div>
     </div>
-    <button class="add-btn" id="add-btn"><span class="add-btn-icon">+</span>Add</button>
+    <div id="people-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
+    
   </div>
 
   <!-- Modal -->
@@ -172,39 +393,166 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
         <button class="modal-close" id="modal-close-btn">&#215;</button>
       </div>
       <div class="modal-body">
-        <div class="field"><label>Program</label>
-          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="prog-input" placeholder="Search program…" autocomplete="off"/><span class="combo-clear" id="prog-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="prog-dd"></div></div></div>
-        <div class="field"><label>Coach</label>
-          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="coach-input" placeholder="Search coach…" autocomplete="off"/><span class="combo-clear" id="coach-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="coach-dd"></div></div></div>
         <div class="field"><label>School</label>
           <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="school-input" placeholder="Search school…" autocomplete="off"/><span class="combo-clear" id="school-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="school-dd"></div></div></div>
+        <div class="field"><label>Discipline</label>
+          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="prog-input" placeholder="Search discipline…" autocomplete="off"/><span class="combo-clear" id="prog-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="prog-dd"></div></div></div>
+        <div class="field two-col">
+          <div><label>Staff</label>
+            <div class="combo-wrap" style="width:100%;"><div class="combo-input-row"><input type="text" class="combo-input" id="coach-input" placeholder="Search staff…" autocomplete="off"/><span class="combo-clear" id="coach-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="coach-dd"></div></div>
+          </div>
+          <div><label>Staff type</label>
+            <div class="combo-input-row" style="width:100%;">
+              <select id="staff-type-select" style="width:100%;flex:1;font-size:13px;padding:7px 9px;border:none;outline:none;background:transparent;color:var(--tx);cursor:pointer;-webkit-appearance:auto;appearance:auto;">
+                <option value="Coach" selected>Coach</option>
+                <option value="Site Manager">Site Manager</option>
+                <option value="Attendance Coordinator">Attendance Coordinator</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <hr class="section-div"/>
         <div class="field"><label>Days of week</label>
           <div class="dow-wrap" id="dow-wrap">
             <div class="dow-pill" data-d="0">Su</div><div class="dow-pill" data-d="1">Mo</div><div class="dow-pill" data-d="2">Tu</div><div class="dow-pill" data-d="3">We</div><div class="dow-pill" data-d="4">Th</div><div class="dow-pill" data-d="5">Fr</div><div class="dow-pill" data-d="6">Sa</div>
           </div></div>
-        <div class="field two-col">
-          <div><label>Start date</label><input type="date" class="std-input" id="blk-date-start"/></div>
-          <div><label>End date</label><input type="date" class="std-input" id="blk-date-end"/></div>
-        </div>
         <hr class="section-div"/>
         <div class="field two-col">
           <div><label>Start time</label><input type="text" class="std-input" id="blk-time-start" placeholder="9:00 AM"/></div>
           <div><label>End time</label><input type="text" class="std-input" id="blk-time-end" placeholder="11:00 AM"/></div>
         </div>
+        <div class="field two-col">
+          <div><label>Start date</label><input type="date" class="std-input" id="blk-date-start"/></div>
+          <div><label>End date</label><input type="date" class="std-input" id="blk-date-end"/></div>
+        </div>
+        <hr class="section-div"/>
         <div class="field"><label>Color</label><div class="color-row" id="color-row"></div></div>
+        <div class="field" style="margin-top:2px;">
+          <label>Description</label>
+          <div class="wysiwyg-wrap" id="sched-wysiwyg-wrap">
+            <div class="wysiwyg-toolbar">
+              <button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>
+              <button type="button" class="wysiwyg-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+              <button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>
+            </div>
+            <div class="wysiwyg-body" id="sched-desc" contenteditable="true" data-placeholder="Add a description…"></div>
+          </div>
+        </div>
         <div id="edit-error"></div>
       </div>
       <div class="modal-footer" id="modal-footer"></div>
+
+    </div>
+  </div>
+
+  <!-- Availability edit modal -->
+  <div class="modal-overlay" id="avail-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-header-title" id="avail-modal-title"></span>
+        <button class="modal-close" id="avail-modal-close">&#215;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Staff</label>
+          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="avail-coach-input" placeholder="Search staff…" autocomplete="off"/><span class="combo-clear" id="avail-coach-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="avail-coach-dd"></div></div>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <div class="avail-switch">
+            <button class="avail-opt active" data-st="available">Available</button>
+            <button class="avail-opt" data-st="unavailable">Unavailable</button>
+            <button class="avail-opt" data-st="tentative">Tentative</button>
+            <button class="avail-opt" data-st="limited">Limited</button>
+          </div>
+        </div>
+        <hr class="section-div"/>
+        <div class="field"><label>Days of week</label>
+          <div class="dow-wrap" id="avail-dow-wrap">
+            <div class="dow-pill" data-d="0">Su</div><div class="dow-pill" data-d="1">Mo</div><div class="dow-pill" data-d="2">Tu</div><div class="dow-pill" data-d="3">We</div><div class="dow-pill" data-d="4">Th</div><div class="dow-pill" data-d="5">Fr</div><div class="dow-pill" data-d="6">Sa</div>
+          </div>
+        </div>
+        <div class="field two-col">
+          <div><label>Start time</label><input type="text" class="std-input" id="avail-time-start" placeholder="9:00 AM"/></div>
+          <div><label>End time</label><input type="text" class="std-input" id="avail-time-end" placeholder="5:00 PM"/></div>
+        </div>
+        <div class="field two-col">
+          <div><label>Start date</label><input type="date" class="std-input" id="avail-date-start"/></div>
+          <div><label>End date</label><input type="date" class="std-input" id="avail-date-end"/></div>
+        </div>
+        <div class="field" style="margin-top:2px;">
+          <label>Description</label>
+          <div class="wysiwyg-wrap" id="avail-wysiwyg-wrap">
+            <div class="wysiwyg-toolbar">
+              <button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+              <button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>
+              <button type="button" class="wysiwyg-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+              <button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>
+            </div>
+            <div class="wysiwyg-body" id="avail-desc" contenteditable="true" data-placeholder="Add a description…"></div>
+          </div>
+        </div>
+        <div id="avail-error" style="font-size:11px;color:var(--red);min-height:15px;"></div>
+      </div>
+      <div class="modal-footer" id="avail-modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Delete confirmation popup (appears above the edit modal) -->
+  <div class="delete-popup-overlay" id="delete-popup-overlay">
+    <div class="delete-popup" id="delete-popup">
+      <div class="delete-popup-title">🗑 Delete schedule block?</div>
+      <div class="delete-popup-sub">Choose which meetings to remove:</div>
+      <button class="delete-opt" id="del-this">
+        <span class="delete-opt-icon">📅</span>
+        <div><div>Delete this meeting</div><div class="delete-opt-desc">Removes only this single occurrence</div></div>
+      </button>
+      <button class="delete-opt" id="del-future">
+        <span class="delete-opt-icon">⏩</span>
+        <div><div>Delete future meetings</div><div class="delete-opt-desc">Removes this and all upcoming occurrences</div></div>
+      </button>
+      <button class="delete-opt" id="del-all">
+        <span class="delete-opt-icon">🗑</span>
+        <div><div>Delete all meetings</div><div class="delete-opt-desc">Permanently removes the entire schedule block</div></div>
+      </button>
+      <button class="delete-popup-cancel" id="del-cancel">&#8592; Back</button>
+    </div>
+  </div>
+
+  <!-- Save / Update confirmation popup -->
+  <div class="save-popup-overlay" id="save-popup-overlay">
+    <div class="delete-popup" id="save-popup">
+      <div class="delete-popup-title">&#128190; Save changes?</div>
+      <div class="delete-popup-sub">Choose which meetings to update:</div>
+      <button class="save-opt" id="save-this">
+        <span class="save-opt-icon">&#128197;</span>
+        <div><div>Update this meeting</div><div class="save-opt-desc">Only updates this single occurrence</div></div>
+      </button>
+      <button class="save-opt" id="save-future">
+        <span class="save-opt-icon">&#9193;</span>
+        <div><div>Update future meetings</div><div class="save-opt-desc">Updates this and all upcoming occurrences</div></div>
+      </button>
+      <button class="save-opt" id="save-all">
+        <span class="save-opt-icon">&#128204;</span>
+        <div><div>Update all meetings</div><div class="save-opt-desc">Updates the entire schedule block</div></div>
+      </button>
+      <button class="delete-popup-cancel" id="save-cancel">&#8592; Back</button>
     </div>
   </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
 <script>
+
 $(function(){
-  const HW=90,RH=62,SH=6,NHRS=18,TW=HW*NHRS;
+  const HW=90,RH=68,SH=6,NHRS=18,TW=HW*NHRS;
   const DN=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const COLORS=[
@@ -213,45 +561,390 @@ $(function(){
     {bg:'#C0DD97',bd:'#639922',tx:'#27500A'},{bg:'#CECBF6',bd:'#7F77DD',tx:'#3C3489'},
     {bg:'#F5C4B3',bd:'#D85A30',tx:'#712B13'},{bg:'#D3D1C7',bd:'#888780',tx:'#444441'},
   ];
-  const PROGS=['Astrophysics','Art','Athletics','Autism Program','Baseball','Biology','Chemistry','Debates','English Literature','Film Program','Gardening','Geography','Geometry','Golf','Knitting','Martial Arts','Math','Mental Health Counseling','Music','Musical','Orchestra','Piano','Physics','Programming','Robotics','Theatre','Writing','Yoga'];
-  const COACHES=['Adan Rodriguez','Alexis Navarro','Aman Khan','Ana Flores','Andrea Cornelio','Andrew Calderon','Araceli Mondrag.','Asia Lewis','Carlos Rivera','Diana Foster','James Okafor','Lina Nguyen','Maria Gutierrez','Nina Patel','Omar Shaikh','Rachel Kim'];
-  const SCHOOLS=['Beacon Park K-8 School','Crescent Elementary','Deerfield Elementary','Eastshore Elementary','Ethan B. Allen Elementary','Golden Elementary','Jack L. Weaver Elementary','Los Coyotes Elementary','Margaret Landell Elementary','Orchard Hills Elementary','Oxford Academy','Patton Elementary','Rancho San Joaquin Middle','Robert C. Fisler School','Santiago Hills Elementary','Sierra Vista Middle','Stonegate Elementary','Turtle Rock Elementary','Tustin Memorial Elementary','Vista Verde School'];
+  // Each entity has a numeric id (for database use) and a display name
+  const PROGS=[
+    {id:101,name:'Art'},{id:102,name:'Astrophysics'},{id:103,name:'Athletics'},
+    {id:104,name:'Autism Program'},{id:105,name:'Baseball'},{id:106,name:'Biology'},
+    {id:107,name:'Chemistry'},{id:108,name:'Debates'},{id:109,name:'English Literature'},
+    {id:110,name:'Film Program'},{id:111,name:'Gardening'},{id:112,name:'Geography'},
+    {id:113,name:'Geometry'},{id:114,name:'Golf'},{id:115,name:'Knitting'},
+    {id:116,name:'Martial Arts'},{id:117,name:'Math'},{id:118,name:'Mental Health Counseling'},
+    {id:119,name:'Music'},{id:120,name:'Musical'},{id:121,name:'Orchestra'},
+    {id:122,name:'Piano'},{id:123,name:'Physics'},{id:124,name:'Programming'},
+    {id:125,name:'Robotics'},{id:126,name:'Theatre'},{id:127,name:'Writing'},{id:128,name:'Yoga'},
+  ];
+  // COACHES derived from STAFF — same source of truth
+  const SCHOOLS=[
+    {id:301,name:'Beacon Park K-8 School'},{id:302,name:'Crescent Elementary'},
+    {id:303,name:'Deerfield Elementary'},{id:304,name:'Eastshore Elementary'},
+    {id:305,name:'Ethan B. Allen Elementary'},{id:306,name:'Golden Elementary'},
+    {id:307,name:'Jack L. Weaver Elementary'},{id:308,name:'Los Coyotes Elementary'},
+    {id:309,name:'Margaret Landell Elementary'},{id:310,name:'Orchard Hills Elementary'},
+    {id:311,name:'Oxford Academy'},{id:312,name:'Patton Elementary'},
+    {id:313,name:'Rancho San Joaquin Middle'},{id:314,name:'Robert C. Fisler School'},
+    {id:315,name:'Santiago Hills Elementary'},{id:316,name:'Sierra Vista Middle'},
+    {id:317,name:'Stonegate Elementary'},{id:318,name:'Turtle Rock Elementary'},
+    {id:319,name:'Tustin Memorial Elementary'},{id:320,name:'Vista Verde School'},
+  ];
+  // People mode: staff detail store (in-memory, keyed by staff id)
+  var staffDetails = {};
+  var selectedPersonId = null; // tracks currently selected staff in People mode
+  function getStaffDetail(id){ return staffDetails[String(id)] || {}; }
+  function setStaffDetail(id, key, val){ var k=String(id); if(!staffDetails[k]) staffDetails[k]={}; staffDetails[k][key]=val; }
+
   const STAFF=[
-    {n:'Lina Nguyen',h:''},{n:'Adan Rodriguez',h:''},{n:'Alexis Navarro',h:''},
-    {n:'Aman Khan',h:''},{n:'Ana Flores',h:''},{n:'Andrea Cornelio',h:''},
-    {n:'Andrew Calderon',h:''},{n:'Araceli Mondrag.',h:''},{n:'Asia Lewis',h:''},
+    {id:401,n:'Lina Nguyen',h:''},{id:402,n:'Adan Rodriguez',h:''},{id:403,n:'Alexis Navarro',h:''},
+    {id:404,n:'Aman Khan',h:''},{id:405,n:'Ana Flores',h:''},{id:406,n:'Andrea Cornelio',h:''},
+    {id:407,n:'Andrew Calderon',h:''},{id:408,n:'Araceli Mondrag.',h:''},{id:409,n:'Asia Lewis',h:''},
+    {id:410,n:'Carlos Rivera',h:''},{id:411,n:'Diana Foster',h:''},{id:412,n:'James Okafor',h:''},
+    {id:413,n:'Maria Gutierrez',h:''},{id:414,n:'Nina Patel',h:''},{id:415,n:'Omar Shaikh',h:''},
+    {id:416,n:'Rachel Kim',h:''},
   ];
 
-  let curDate=new Date(2026,4,22),nid=10,eid=null,creating=false;
-  let sProg='',sCoach='',sSchool='',sDays=[],sDs='',sDe='',sColor=0;
+  // COACHES is an alias of STAFF with a .name property for compatibility
+  var COACHES = STAFF.map(function(s){ return {id:s.id, name:s.n}; });
+
+  // Lookup helpers — return the object for a given name (or null)
+
+  function buildWeekTable(fs, days, isAvail){ if(isAvail) rAvailWeekView(); else rWeekView(); }
+  function rWeekView(){
+    var fs=getFilteredStaff();
+    var days=getViewDays();
+    var isWeek=(viewMode==='week');
+
+    // Hide day view, show/create week container
+    $('#timeline-header,#grid-body').hide();
+    var $ta=$('#timeline-area');
+    if(!$('#week-container').length) $ta.append('<div id="week-container"></div>');
+    var $wc=$('#week-container').show().empty();
+
+    // Build a real <table> — column alignment is guaranteed by the browser
+    var $tbl=$('<table class="week-table">').attr('id','week-table');
+    var $thead=$('<thead>');
+    var $tbody=$('<tbody>');
+
+    // --- HEADER ROW ---
+    var $htr=$('<tr>');
+    // Staff search cell
+    var $th0=$('<th class="week-th-staff">');
+    var $si=$('<input type="text" class="staff-search" placeholder="Search staff…" autocomplete="off">').val(staffFilter);
+    $si.on('input',function(){staffFilter=$(this).val().trim();rStaff();rGrid();refreshView(true);});
+    $th0.append($si);
+    $htr.append($th0);
+    // Day header cells
+    days.forEach(function(d, colIdx){
+      var isW=d.getDay()===0||d.getDay()===6;
+      var isToday=isTodayDate(d);
+      var $th=$('<th class="week-th-day">').toggleClass('today',isToday).toggleClass('weekend',isW);
+      var $name=$('<div class="week-day-name">').text(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]);
+      var $num=$('<div class="week-day-num">').text(d.getDate());
+      if(isToday) $num.wrap('<div style="display:flex;justify-content:center;">');
+      $th.append($name,$num);
+      (function(dd){
+        $th.on('click',function(){
+          viewYear=dd.getFullYear();viewMonth=dd.getMonth();viewDay=dd.getDate();
+          viewMode='day';
+          $('#btn-day').addClass('active');$('#btn-week,#btn-month').removeClass('active');
+          render();
+        }).on('mouseenter',function(){$(this).css('background','#eef3ff');})
+          .on('mouseleave',function(){$(this).css('background','');});
+      })(d);
+      $htr.append($th);
+    });
+    $thead.append($htr);
+
+    // --- BODY ROWS ---
+    if(!fs.length){
+      var $tr=$('<tr>');
+      $tr.append($('<td>').attr('colspan',days.length+1).css({padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--tx2)'}).text('No staff found'));
+      $tbody.append($tr);
+    } else {
+      fs.forEach(function(s){
+        var $tr=$('<tr class="week-tr">');
+        // Staff name cell
+        var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
+        var $av=$('<div class="staff-avatar" style="flex-shrink:0;">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
+        var $sn=$('<span class="week-staff-name">').text(s.n);
+        var wkH=calcWeekHours(s.n), wkOT=calcWeekOT(s.n);
+        var $hrs=$('<div class="staff-day-hours">').toggleClass('has-ot',wkOT>0).text(wkH>0?fmtHrs(wkH):'—').css(wkH===0?{opacity:.35}:{});
+        if(wkOT>0) $hrs.append($('<span class="staff-ot-badge">').text('+'+fmtHrs(wkOT)+' OT'));
+        var $td0=$('<td class="week-td-staff">').append($('<div style="display:flex;align-items:center;gap:8px;">').append($av,$('<div>').append($sn,$hrs)));
+        $tr.append($td0);
+        // Day cells
+        days.forEach(function(d, colIdx){
+          var isW=d.getDay()===0||d.getDay()===6;
+          var $td=$('<td class="week-td-day">').toggleClass('today-col',isTodayDate(d)).toggleClass('weekend-col',isW).css('cursor','pointer');
+          // Schedule chips
+          blocks.forEach(function(b){
+            if(b.coach!==s.n) return;
+            if(!isApplicableOnDate(b,d)) return;
+            if(!isVisible(b)) return;
+            var c=COLORS[b.color%COLORS.length];
+            var $chip=$('<div class="week-chip">').css({background:c.bg,color:c.tx,border:'1px solid '+c.bd}).attr({'draggable':'true','data-bid':b.id,'data-date':localDateStr(d)})
+              .append($('<span class="week-chip-title">').text(b.lbl+(b.staffType?' · '+b.staffType:'')))
+              .append(b.school?$('<span class="week-chip-school">').text(b.school):null)
+              .append($('<span class="week-chip-time">').html(fmtT(b.s)+'–'+fmtT(b.e)+' · <strong>'+fmtHrs(b.e-b.s)+'</strong>'));
+            (function(bid){$chip.on('dragstart',function(e){e.originalEvent.dataTransfer.setData('text/plain','sched:'+bid);$(this).addClass('dragging');_dragOrigDow=new Date(($(this).attr('data-date')||'')+'T00:00:00').getDay();}).on('dragend',function(){$(this).removeClass('dragging');_dragOrigDow=undefined;});})(b.id);
+            (function(bid,cd){$chip.on('click',function(e){e.stopPropagation();openEdit(bid,cd);});attachChipTip($chip,b,d);})(b.id,d);
+            $td.append($chip);
+          });
+          // Drop + click
+          (function(sn,dd,colIdx){
+            $td.on('dragover',function(e){if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){e.preventDefault();$(this).addClass('drag-over');}})
+               .on('dragleave',function(){$(this).removeClass('drag-over');})
+               .on('drop',function(e){e.preventDefault();$(this).removeClass('drag-over');var raw=e.originalEvent.dataTransfer.getData('text/plain');if(!raw)return;var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1]);if(type==='sched'){var blk=blocks.find(function(x){return x.id===id;});if(blk){moveBlockToDate(blk,sn,dd,_dragOrigDow);refreshView();}}else if(type==='avail'){var ab=availBlocks.find(function(x){return x.id===id;});if(ab){moveAvailBlockToDate(ab,sn,dd,_dragOrigDow);refreshView();}}})
+               .on('click',function(e){if($(e.target).closest('.week-chip').length)return;openCreate({coach:sn,date:localDateStr(dd),days:[dd.getDay()],startTime:'12:00 PM',endTime:'1:00 PM'});});
+            // Highlight column header on cell hover
+            $td.on('mouseenter',function(){
+              $tbl.find('thead tr th').eq(colIdx+1).addClass('col-hovered');
+            }).on('mouseleave',function(){
+              $tbl.find('thead tr th').removeClass('col-hovered');
+            });
+          })(s.n,d,colIdx);
+          $tr.append($td);
+        });
+        // Row hover → highlight staff
+        (function(fi){$tr.on('mouseenter',function(){$('#staff-list-scroll .staff-row').removeClass('hovered').eq(fi).addClass('hovered');}).on('mouseleave',function(){$('#staff-list-scroll .staff-row').removeClass('hovered');});})(fs.indexOf(s));
+        $tbody.append($tr);
+      });
+    }
+
+    $tbl.append($thead,$tbody);
+    $wc.append($tbl);
+  }
+
+  function rAvailWeekView(){
+    var fs=getFilteredStaff();
+    var days=getViewDays();
+    var isWeek=(viewMode==='week');
+    $('#timeline-header,#grid-body').hide();
+    if(!$('#week-container').length) $('#timeline-area').append('<div id="week-container"></div>');
+    $('#staff-col').hide();
+    var $wc=$('#week-container').show().empty();
+    var $tbl=$('<table class="week-table" id="week-avail-table">');
+    if(isWeek) $tbl.css('width','100%');
+    var $thead=$('<thead>');
+    var $tbody=$('<tbody>');
+    // Header
+    var $htr=$('<tr>');
+    var $th0=$('<th class="week-th-staff">');
+    var $si=$('<input type="text" class="staff-search" placeholder="Search staff..." autocomplete="off">').val(staffFilter);
+    $si.on('input',function(){staffFilter=$(this).val().trim();rStaff();rGrid();refreshView(true);});
+    $th0.append($si);
+    $htr.append($th0);
+    days.forEach(function(d){
+      var isW=d.getDay()===0||d.getDay()===6;
+      var $th=$('<th class="week-th-day">').toggleClass('today',isTodayDate(d)).toggleClass('weekend',isW);
+      $th.append($('<div class="week-day-name">').text(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]));
+      $th.append($('<div class="week-day-num">').text(d.getDate()));
+      (function(dd){
+        $th.on('click',function(){
+          viewYear=dd.getFullYear();viewMonth=dd.getMonth();viewDay=dd.getDate();
+          viewMode='day';
+          $('#btn-day').addClass('active');$('#btn-week,#btn-month').removeClass('active');
+          render();
+        }).on('mouseenter',function(){$(this).css('background','#eef3ff');})
+          .on('mouseleave',function(){$(this).css('background','');});
+      })(d);
+      $htr.append($th);
+    });
+    $thead.append($htr);
+    if(!fs.length){
+      $tbody.append($('<tr>').append($('<td>').attr('colspan',days.length+1).css({padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--tx2)'}).text('No staff found')));
+    } else {
+      fs.forEach(function(s, rowIdx){
+        var $tr=$('<tr class="week-tr">');
+        var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
+        var $av=$('<div class="staff-avatar" style="flex-shrink:0;">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
+        (function(staffName){
+          var wkH=calcWeekHours(staffName), wkOT=calcWeekOT(staffName);
+          var $nameDiv=$('<div style="display:flex;align-items:center;gap:8px;">').append($av,$('<span class="week-staff-name">').text(staffName));
+          var $info=$('<div>').append($nameDiv);
+          var _wkH = pageMode==='availability' ? calcAvailWeekHours(staffName) : wkH;
+            var _wkOT = pageMode==='availability' ? 0 : wkOT;
+            var $hrs=$('<div class="staff-day-hours">').text(_wkH>0?fmtHrs(_wkH):'—').css(_wkH===0?{opacity:.35}:{});
+            if(pageMode!=='availability') $hrs.toggleClass('has-ot',_wkOT>0);
+            if(pageMode!=='availability'&&_wkOT>0) $hrs.append($('<span class="staff-ot-badge">').text('+'+fmtHrs(_wkOT)+' OT'));
+            $info.append($hrs);
+          $tr.append($('<td class="week-td-staff">').append($info));
+        })(s.n);
+        days.forEach(function(d){
+          var isW=d.getDay()===0||d.getDay()===6;
+          var $td=$('<td class="week-td-day">').toggleClass('today-col',isTodayDate(d)).toggleClass('weekend-col',isW).attr('data-date',localDateStr(d)).css('cursor','pointer');
+          availBlocks.forEach(function(b){
+            if(b.coach!==s.n) return;
+            if(!isAvailApplicableOnDate(b,d)) return;
+            var st=AVAIL_STYLES[b.status]||AVAIL_STYLES['available'];
+            var $chip=$('<div class="week-chip">').css({background:st.bg,color:st.tx,border:'1px solid '+st.bd}).attr({'draggable':'true','data-bid':b.id,'data-date':localDateStr(d)})
+              .append($('<span class="week-chip-title">').text(st.label))
+              .append($('<span class="week-chip-time">').html(fmtT(b.s)+'–'+fmtT(b.e)+' · <strong>'+fmtHrs(b.e-b.s)+'</strong>'));
+            (function(bid,cd){
+              $chip.on('dragstart',function(e){
+                e.originalEvent.dataTransfer.setData('text/plain','avail:'+bid);
+                $(this).addClass('dragging');
+                _dragOrigDow = new Date(($(this).attr('data-date')||'')+'T00:00:00').getDay();
+                $('.week-chip[data-bid="'+bid+'"]').not(this).addClass('drag-sibling');
+              }).on('dragend',function(){$(this).removeClass('dragging');$('.week-chip').removeClass('drag-sibling');_dragOrigDow=undefined;});
+              $chip.on('click',function(e){e.stopPropagation();openAvailEdit(bid,cd);});
+              attachAvailChipTip($chip,b,d);
+            })(b.id,d);
+            $td.append($chip);
+          });
+          (function(sn,dd,colIdx){
+            $td.on('mouseenter',function(){$('#week-avail-table thead tr th').eq(colIdx+1).addClass('col-hovered');$('#staff-list-scroll .staff-row').removeClass('hovered').eq(fs.indexOf(s)).addClass('hovered');})
+               .on('mouseleave',function(){$('#week-avail-table thead tr th').eq(colIdx+1).removeClass('col-hovered');$('#staff-list-scroll .staff-row').removeClass('hovered');});
+            $td.on('dragover',function(e){if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){e.preventDefault();$(this).addClass('drag-over');}})
+               .on('dragleave',function(){$(this).removeClass('drag-over');})
+               .on('drop',function(e){e.preventDefault();$(this).removeClass('drag-over');var raw=e.originalEvent.dataTransfer.getData('text/plain');if(!raw)return;var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1]);if(type==='avail'){var ab=availBlocks.find(function(x){return x.id===id;});if(ab){moveAvailBlockToDate(ab,sn,dd);refreshView();}}})
+               .on('click',function(e){if($(e.target).closest('.week-chip').length)return;openAvailCreate({coach:sn,date:localDateStr(dd),days:[dd.getDay()]});});
+          })(s.n,d,days.indexOf(d));
+          $tr.append($td);
+        });
+        $tbody.append($tr);
+      });
+    }
+    $tbl.append($thead,$tbody);
+    $wc.append($tbl);
+  }
+
+  function progByName(name){ return PROGS.find(function(p){return p.name===name;})||null; }
+
+  function coachByName(name){ return STAFF.find(function(s){return s.n===name;})||null; }
+
+  function schoolByName(name){ return SCHOOLS.find(function(s){return s.name===name;})||null; }
+
+  function staffByName(name){ return STAFF.find(function(s){return s.n===name;})||null; }
+
+  // View date stored as plain integers to avoid Date object mutation bugs
+  var viewYear=2026, viewMonth=4, viewDay=22; // month is 0-based
+  var nid=10, eid=null, creating=false;
+  // curDate is a computed property so existing code still works
+  function getCurDate(){ return new Date(viewYear, viewMonth, viewDay); }
+  let sProg='',sCoach='',sSchool='',sDays=[],sDs='',sDe='',sColor=0,sStaffType='Coach';
+  var staffFilter='';
+  var viewMode='day';
+  var draggingId=null; // track which block is being dragged
+  var _dragOrigDow=undefined; // day-of-week of the chip being dragged
+  var pageMode='schedule'; // 'schedule' or 'availability'
+  var availOverlay=false;  // show availability stripes on schedule blocks
+
+  function syncOverlayCheckVisibility(){
+    $('#avail-overlay-label').toggle(pageMode === 'schedule');
+  }
+
+  // Availability block data
+  var availBlocks=[];
+  var availNextId=1000;
+  var availEditingId=null, availCreating=false;
+  var editedOnDow=-1, editedOnDs=''; // day-of-week and date when edit was opened
+  var deleteContext='schedule'; // 'schedule' or 'availability'
+  var sAvailCoach='', sAvailStatus='available', sAvailDays=[], sAvailDs='', sAvailDe='';
+
+  var AVAIL_STYLES={
+    'available':  {bg:'#d4edda',bd:'#1a8a4a',tx:'#0a3d1c',label:'Available'},
+    'unavailable':{bg:'#fde8e8',bd:'#c0392b',tx:'#6b0f0f',label:'Unavailable'},
+    'tentative':  {bg:'#d6e8f7',bd:'#1a5fa5',tx:'#0d2e52',label:'Tentative'},
+    'limited':    {bg:'#ecddf7',bd:'#7b3fa0',tx:'#3d1056',label:'Limited Availability'},
+  }; // 'day' or 'week'
   let filterSchool='', filterProg='';
 
-  function todayIso(){return new Date().toISOString().slice(0,10);}
-  function isoOffset(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+  function todayIso(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+  function isoOffset(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
   const blocks=[
-    {id:1,row:1,s:10,   e:13,   lbl:'Baseball',coach:'Aman Khan',      school:'Eastshore Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-06-30',color:0},
-    {id:2,row:2,s:14,   e:18,   lbl:'Autism Program',  coach:'Andrea Cornelio',school:'Sierra Vista Middle',  days:[1,3,5],    ds:'2026-05-01',de:'2026-07-31',color:1},
-    {id:3,row:3,s:9.98, e:13.03,lbl:'Gardening',   coach:'Aman Khan',      school:'Crescent Elementary',  days:[2,4],      ds:'2026-05-15',de:'2026-06-15',color:5},
-    {id:4,row:4,s:14,   e:17.5, lbl:'Piano',  coach:'Andrew Calderon',school:'Deerfield Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-08-31',color:2},
-    {id:5,row:5,s:7.5,  e:14.25,lbl:'Martial Arts',     coach:'Asia Lewis',     school:'Golden Elementary',    days:[1,3],      ds:'2026-04-01',de:'2026-06-30',color:3},
-    {id:6,row:6,s:11.43,e:14.33,lbl:'Orchestra',           coach:'Asia Lewis',     school:'Golden Elementary',    days:[2,4],      ds:'2026-04-01',de:'2026-06-30',color:4},
-    {id:7,row:7,s:9,    e:11,   lbl:'Team Meeting',         coach:'Adan Rodriguez', school:'Oxford Academy',       days:[5],        ds:'2026-05-22',de:'2026-05-22',color:5},
-    {id:8,row:8,s:13,   e:15.5, lbl:'Yoga',    coach:'Alexis Navarro', school:'Vista Verde School',   days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-07-15',color:6},
-    {id:9,row:4,s:11,    e:14.0, lbl:'Knitting',    coach:'Ana Flores',     school:'Patton Elementary',    days:[1,5],      ds:'2026-05-22',de:'2026-06-30',color:7},
+    {id:1,row:1,s:10,   e:13,   lbl:'Baseball',coach:'Aman Khan',      school:'Eastshore Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-06-30',color:0,staffType:'Coach'},
+    {id:2,row:2,s:14,   e:18,   lbl:'Autism Program',  coach:'Andrea Cornelio',school:'Sierra Vista Middle',  days:[1,3,5],    ds:'2026-05-01',de:'2026-07-31',color:1,staffType:'Coach'},
+    {id:3,row:3,s:9.98, e:13.03,lbl:'Gardening',   coach:'Aman Khan',      school:'Crescent Elementary',  days:[2,4],      ds:'2026-05-15',de:'2026-06-15',color:5,staffType:'Coach'},
+    {id:4,row:4,s:14,   e:17.5, lbl:'Piano',  coach:'Andrew Calderon',school:'Deerfield Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-08-31',color:2,staffType:'Coach'},
+    {id:5,row:5,s:7.5,  e:14.25,lbl:'Martial Arts',     coach:'Asia Lewis',     school:'Golden Elementary',    days:[1,3],      ds:'2026-04-01',de:'2026-06-30',color:3,staffType:'Coach'},
+    {id:6,row:6,s:11.43,e:14.33,lbl:'Orchestra',           coach:'Asia Lewis',     school:'Golden Elementary',    days:[2,4],      ds:'2026-04-01',de:'2026-06-30',color:4,staffType:'Site Manager'},
+    {id:7,row:7,s:9,    e:11,   lbl:'Team Meeting',         coach:'Adan Rodriguez', school:'Oxford Academy',       days:[5],        ds:'2026-05-22',de:'2026-05-22',color:5,staffType:'Attendance Coordinator'},
+    {id:8,row:8,s:13,   e:15.5, lbl:'Yoga',    coach:'Alexis Navarro', school:'Vista Verde School',   days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-07-15',color:6,staffType:'Coach'},
+    {id:9,row:4,s:11,    e:14.0, lbl:'Knitting',    coach:'Ana Flores',     school:'Patton Elementary',    days:[1,5],      ds:'2026-05-22',de:'2026-06-30',color:7,staffType:'Coach'},
   ];
 
   /* ── helpers ── */
   function fmtD(d){return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+
   function fmtT(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60),ap=hh<12?'AM':'PM',dh=hh%12||12;return dh+':'+String(mm).padStart(2,'0')+' '+ap;}
+
   function hlbl(h){return(h%12||12)+' '+(h<12?'AM':'PM');}
+
   function parseT(s){s=s.trim().toUpperCase();const m=s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/)||s.match(/^(\d{1,2})\s*(AM|PM)$/);if(!m)return null;let h=+m[1],min=m[3]?+m[2]:0,ap=m[3]||m[2];if(ap==='PM'&&h!==12)h+=12;if(ap==='AM'&&h===12)h=0;return h+min/60;}
+
   function fmtDs(s){if(!s)return'';const d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+
   function snap(v,g){return Math.round(v/g)*g;}
+
   function isVisible(b){return(!filterSchool||b.school===filterSchool)&&(!filterProg||b.lbl===filterProg);}
 
+  // Returns STAFF filtered by current search query
+  function getFilteredStaff(){
+    var result = STAFF;
+    // Filter by name search
+    if(staffFilter){
+      var q=staffFilter.toLowerCase();
+      result=result.filter(function(s){ return s.n.toLowerCase().indexOf(q) > -1; });
+    }
+    // School and program filters only apply in schedule mode
+    if(pageMode === 'schedule'){
+      if(filterSchool){
+        var coachesAtSchool=new Set(
+          blocks.filter(function(b){
+            return b.school===filterSchool && isApplicableInView(b);
+          }).map(function(b){ return b.coach; })
+        );
+        result=result.filter(function(s){ return coachesAtSchool.has(s.n); });
+      }
+      if(filterProg){
+        var coachesWithProg=new Set(
+          blocks.filter(function(b){
+            return b.lbl===filterProg && isApplicableInView(b);
+          }).map(function(b){ return b.coach; })
+        );
+        result=result.filter(function(s){ return coachesWithProg.has(s.n); });
+      }
+    }
+    return result;
+  }
+
+  // Returns the row index in the FILTERED staff list for a given absolute STAFF index
+  function filteredRowOf(absRow){
+    var fs=getFilteredStaff();
+    var name=STAFF[absRow]?STAFF[absRow].n:'';
+    for(var i=0;i<fs.length;i++){ if(fs[i].n===name) return i; }
+    return -1;
+  }
+
+  // Returns true if this block.coach is in the current filtered staff list
+  function coachIsVisible(b){
+    var fs=getFilteredStaff();
+    for(var i=0;i<fs.length;i++){ if(fs[i].n===b.coach) return true; }
+    return false;
+  }
+
+  // Returns true if this block is scheduled on the currently viewed day
+  function isApplicableToday(b){
+    var dow     = new Date(viewYear, viewMonth, viewDay).getDay();
+    var dateStr = viewDateStr();
+    if(!b.days || b.days.indexOf(dow) === -1) return false;
+    if(b.ds && dateStr < b.ds) return false;
+    if(b.de && dateStr > b.de) return false;
+    return true;
+  }
+
   function getSegs(b){
-    const raw=[];$.each(blocks,(_,o)=>{if(o.id===b.id||o.row!==b.row)return;const s=Math.max(b.s,o.s),e=Math.min(b.e,o.e);if(s<e)raw.push([s,e]);});
+    // No overlap overlay while a block is being dragged
+    if(draggingId===b.id) return [];
+    // Overlap only makes sense for blocks belonging to the same staff member (coach)
+    // AND both applicable to the currently viewed day
+    const raw=[];$.each(blocks,(_,o)=>{
+      if(o.id===b.id||!o.coach||o.coach!==b.coach||draggingId===o.id) return;
+      if(!isApplicableToday(o)) return; // skip blocks not on this day
+      const s=Math.max(b.s,o.s),e=Math.min(b.e,o.e);
+      if(s<e)raw.push([s,e]);
+    });
     if(!raw.length)return[];raw.sort((a,c)=>a[0]-c[0]);
     const m=[raw[0].slice()];for(let i=1;i<raw.length;i++){const l=m[m.length-1];if(raw[i][0]<=l[1])l[1]=Math.max(l[1],raw[i][1]);else m.push(raw[i].slice());}
     return m;
@@ -260,13 +953,24 @@ $(function(){
   /* ── filter dropdowns ── */
   function buildFilterOptions(){
     const $fs=$('#filter-school'),$fp=$('#filter-prog');
+
+    // Schools: all unique schools across all blocks
     const schools=[...new Set(blocks.map(b=>b.school).filter(Boolean))].sort();
-    const progs=[...new Set(blocks.map(b=>b.lbl).filter(Boolean))].sort();
     $fs.empty().append('<option value="">All Schools</option>');
     schools.forEach(s=>$fs.append($('<option>').val(s).text(s)));
-    $fp.empty().append('<option value="">All Programs</option>');
+    $fs.val(filterSchool);
+
+    // Disciplines: if a school is selected, only show disciplines at that school
+    const relevantBlocks = filterSchool ? blocks.filter(b=>b.school===filterSchool) : blocks;
+    const progs=[...new Set(relevantBlocks.map(b=>b.lbl).filter(Boolean))].sort();
+    $fp.empty().append('<option value="">All Disciplines</option>');
     progs.forEach(p=>$fp.append($('<option>').val(p).text(p)));
-    $fs.val(filterSchool);$fp.val(filterProg);
+
+    // If current filterProg is no longer available for this school, reset it
+    if(filterProg && !progs.includes(filterProg)){
+      filterProg='';
+    }
+    $fp.val(filterProg);
   }
 
   function updateFilterUI(){
@@ -274,13 +978,13 @@ $(function(){
     $('#filter-reset').toggle(!!active);
     $('#filter-school').toggleClass('active',!!filterSchool);
     $('#filter-prog').toggleClass('active',!!filterProg);
-    const vis=blocks.filter(isVisible).length;
+    const vis=blocks.filter(b=>isVisible(b)&&isApplicableToday(b)).length;
     $('#filter-count').text(active?vis+' of '+blocks.length+' blocks shown':'');
   }
 
-  $('#filter-school').on('change',function(){filterSchool=$(this).val();updateFilterUI();rBlocks();rNow();});
-  $('#filter-prog').on('change',function(){filterProg=$(this).val();updateFilterUI();rBlocks();rNow();});
-  $('#filter-reset').on('click',function(){filterSchool='';filterProg='';$('#filter-school').val('');$('#filter-prog').val('');updateFilterUI();rBlocks();rNow();});
+  $('#filter-school').on('change',function(){filterSchool=$(this).val();filterProg='';buildFilterOptions();refreshView();});
+  $('#filter-prog').on('change',function(){filterProg=$(this).val();refreshView();});
+  $('#filter-reset').on('click',function(){filterSchool='';filterProg='';$('#filter-school').val('');$('#filter-prog').val('');refreshView();});
 
   /* ── combobox ── */
   function mkCombo(cfg){
@@ -297,86 +1001,1478 @@ $(function(){
     return{sv:v=>{$i.val(v);$c.css('display',v?'block':'none');cfg.set(v);}};
   }
 
-  const pcb=mkCombo({ii:'prog-input', di:'prog-dd',   ci:'prog-clear',  items:PROGS,   set:v=>sProg=v,  get:()=>sProg});
-  const ccb=mkCombo({ii:'coach-input',di:'coach-dd',  ci:'coach-clear', items:COACHES, set:v=>sCoach=v, get:()=>sCoach});
-  const scb=mkCombo({ii:'school-input',di:'school-dd',ci:'school-clear',items:SCHOOLS, set:v=>sSchool=v,get:()=>sSchool});
+  const pcb=mkCombo({ii:'prog-input', di:'prog-dd',   ci:'prog-clear',  items:PROGS.map(function(p){return p.name;}),   set:v=>sProg=v,  get:()=>sProg});
+  const ccb=mkCombo({ii:'coach-input',di:'coach-dd',  ci:'coach-clear', items:STAFF.map(function(s){return s.n;}).sort(), set:v=>sCoach=v, get:()=>sCoach});
+  const scb=mkCombo({ii:'school-input',di:'school-dd',ci:'school-clear',items:SCHOOLS.map(function(s){return s.name;}), set:v=>sSchool=v,get:()=>sSchool});
+  // Availability mode staff combo
+  var allStaffNames = STAFF.map(function(s){return s.n;}).sort();
+  var acb = mkCombo({ii:'avail-coach-input', di:'avail-coach-dd', ci:'avail-coach-clear', items:allStaffNames, set:function(v){sAvailCoach=v;}, get:function(){return sAvailCoach;}});
 
   $('#dow-wrap').on('click','.dow-pill',function(){const d=+$(this).data('d');if($(this).hasClass('on')){sDays=sDays.filter(x=>x!==d);$(this).removeClass('on');}else{sDays.push(d);sDays.sort();$(this).addClass('on');}});
   function setDays(arr){sDays=arr?arr.slice():[];$('#dow-wrap .dow-pill').each(function(){$(this).toggleClass('on',sDays.includes(+$(this).data('d')));});}
 
-  /* ── render ── */
-  function render(){$('#date-label').text(fmtD(curDate));rStaff();rHeader();rGrid();buildFilterOptions();rBlocks();rNow();updateFilterUI();}
+  function markCurrentDow(wrapId, dow){
+    $('#'+wrapId+' .dow-pill').removeClass('current');
+    if(dow >= 0) $('#'+wrapId+' .dow-pill[data-d="'+dow+'"]').addClass('current');
+  }
 
+  /* ── render ── */
   const AVATAR_COLORS=['#4f83cc','#43a87a','#c2606e','#d08a3a','#6c8f3e','#7b6fd4','#c4623a','#7a8c9e','#b05090','#3a9faa'];
   function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
-  function rStaff(){const $c=$('#staff-col').empty().append('<div class="staff-col-header"></div>');$.each(STAFF,(i,s)=>{const av=$('<div class="staff-avatar">').text(initials(s.n)).css('background',AVATAR_COLORS[i%AVATAR_COLORS.length]);const info=$('<div class="staff-info">').append($('<div class="staff-name">').text(s.n));if(s.h)info.append($('<div class="staff-hours">').text(s.h));$c.append($('<div class="staff-row">').append(av,info));});}  function rHeader(){const $h=$('#timeline-header').empty().css('width',TW);for(let h=SH;h<SH+NHRS;h++)$h.append($('<div class="hour-cell">').text(hlbl(h)));}
-  function rGrid(){const $b=$('#grid-body').css({width:TW,height:STAFF.length*RH});$b.find('.grid-row').remove();const $l=$('#blocks-layer');$.each(STAFF,()=>{const $r=$('<div class="grid-row">').css('width',TW);for(let h=0;h<NHRS;h++)$r.append($('<div>').addClass('grid-cell'+(h%2===0?' alt':'')));$r.insertBefore($l);});}
+
+  // Build YYYY-MM-DD from the current view date integers — zero ambiguity
+  function viewDateStr(){
+    return viewYear+'-'+String(viewMonth+1).padStart(2,'0')+'-'+String(viewDay).padStart(2,'0');
+  }
+  // Also keep localDateStr for other uses (fmtDs etc)
+  function localDateStr(d){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  // Return daily hours for a staff member on a specific Date object
+  function calcDayHoursOnDate(staffName, d){
+    var dow = d.getDay();
+    var ds  = localDateStr(d);
+    var total = 0;
+    for(var i=0;i<blocks.length;i++){
+      var b=blocks[i];
+      if(b.coach!==staffName) continue;
+      if(!b.days||b.days.indexOf(dow)===-1) continue;
+      if(b.ds&&ds<b.ds) continue;
+      if(b.de&&ds>b.de) continue;
+      total+=(b.e-b.s);
+    }
+    return Math.round(total*60)/60;
+  }
+
+  // Return total overtime for a staff member this week — overtime = hours > 8 PER DAY
+  function calcWeekOT(staffName){
+    var days=getViewDays();
+    var totalOT=0;
+    for(var di=0;di<days.length;di++){
+      var h=calcDayHoursOnDate(staffName, days[di]);
+      if(h>8) totalOT+=Math.round((h-8)*60)/60;
+    }
+    return Math.round(totalOT*60)/60;
+  }
+
+  // Return total hours for a staff member across the whole viewed week
+  function calcWeekHours(staffName){
+    var days=getViewDays();
+    var total=0;
+    for(var di=0;di<days.length;di++){
+      var d=days[di];
+      var dow=d.getDay();
+      var ds=localDateStr(d);
+      for(var i=0;i<blocks.length;i++){
+        var b=blocks[i];
+        if(b.coach!==staffName) continue;
+        if(!b.days||b.days.indexOf(dow)===-1) continue;
+        if(b.ds&&ds<b.ds) continue;
+        if(b.de&&ds>b.de) continue;
+        total+=(b.e-b.s);
+      }
+    }
+    return Math.round(total*60)/60;
+  }
+
+  // Return total scheduled hours for a staff member on the current view date
+
+  // ── Availability hours (mirrors schedule calc functions) ──
+  function calcAvailDayHoursOnDate(staffName, d){
+    var dow=d.getDay(), ds=localDateStr(d), total=0;
+    for(var i=0;i<availBlocks.length;i++){
+      var b=availBlocks[i];
+      if(b.coach!==staffName) continue;
+      if(!b.days||b.days.indexOf(dow)===-1) continue;
+      if(b.ds&&ds<b.ds) continue;
+      if(b.de&&ds>b.de) continue;
+      total+=(b.e-b.s);
+    }
+    return Math.round(total*60)/60;
+  }
+  function calcAvailWeekHours(staffName){
+    var days=getViewDays(), total=0;
+    for(var di=0;di<days.length;di++){
+      var d=days[di], dow=d.getDay(), ds=localDateStr(d);
+      for(var i=0;i<availBlocks.length;i++){
+        var b=availBlocks[i];
+        if(b.coach!==staffName) continue;
+        if(!b.days||b.days.indexOf(dow)===-1) continue;
+        if(b.ds&&ds<b.ds) continue;
+        if(b.de&&ds>b.de) continue;
+        total+=(b.e-b.s);
+      }
+    }
+    return Math.round(total*60)/60;
+  }
+  function calcAvailWeekOT(staffName){
+    var days=getViewDays(), totalOT=0;
+    for(var di=0;di<days.length;di++){
+      var h=calcAvailDayHoursOnDate(staffName, days[di]);
+      if(h>8) totalOT+=Math.round((h-8)*60)/60;
+    }
+    return Math.round(totalOT*60)/60;
+  }
+  function calcAvailDayHours(staffName){
+    return calcAvailDayHoursOnDate(staffName, new Date(viewYear, viewMonth, viewDay));
+  }
+  function calcDayHours(staffName){
+    // Use the view date integers directly — no Date object mutation possible
+    var dow     = new Date(viewYear, viewMonth, viewDay).getDay();
+    var dateStr = viewDateStr();
+    var total   = 0;
+    var i, b;
+    for(i = 0; i < blocks.length; i++){
+      b = blocks[i];
+      if(b.coach !== staffName) continue;
+      if(!b.days || b.days.indexOf(dow) === -1) continue;
+      if(b.ds && dateStr < b.ds) continue;
+      if(b.de && dateStr > b.de) continue;
+      total += (b.e - b.s);
+    }
+    return Math.round(total * 60) / 60;
+  }
+
+  // Format decimal hours as "X hrs" or "X:MM hrs"
+  function fmtHrs(h){
+    if(!h || h <= 0) return null;
+    var totalMins = Math.round(h * 60);
+    var hrs  = Math.floor(totalMins / 60);
+    var mins = totalMins % 60;
+    if(mins === 0) return hrs + ' hr' + (hrs !== 1 ? 's' : '');
+    return hrs + ':' + String(mins).padStart(2,'0') + ' hrs';
+  }
+
+  var OT_THRESHOLD = 8;
+
+  // Recalculate and display total daily hours + overtime in the summary bar
+  function updateSummary(){
+    // Hide entire summary bar in availability mode
+    if(pageMode === 'availability'){
+      $('#summary-bar').hide();
+      return;
+    }
+    $('#summary-bar').show();
+    var grandTotal = 0, grandOT = 0;
+    var i, s, h, ot;
+    var fs=getFilteredStaff();
+    for(i = 0; i < fs.length; i++){
+      s = fs[i];
+      h = (viewMode==='week'||viewMode==='month') ? calcWeekHours(s.n) : calcDayHours(s.n);
+      if(h <= 0) continue;
+      grandTotal += h;
+      // OT is always per-day (>8 hrs/day), not per total hours
+      if(viewMode==='week'||viewMode==='month'){
+        ot = calcWeekOT(s.n);
+      } else {
+        ot = Math.max(0, Math.round((h - OT_THRESHOLD) * 60) / 60);
+      }
+      grandOT += ot;
+    }
+    grandTotal = Math.round(grandTotal * 60) / 60;
+    grandOT    = Math.round(grandOT    * 60) / 60;
+
+    var $tot = $('#sum-total');
+    if(grandTotal > 0){ $tot.text(fmtHrs(grandTotal)).removeClass('zero'); }
+    else               { $tot.text('—').addClass('zero'); }
+
+    var $ot = $('#sum-ot');
+    if(grandOT > 0){ $ot.text(fmtHrs(grandOT)).removeClass('zero'); }
+    else            { $ot.text('None').addClass('zero'); }
+    $('#sum-label').text(viewMode==='month' ? 'Total hours (month)' : viewMode==='week' ? 'Total hours (week)' : 'Total hours');
+
+    // Debug: show exactly what date and dow are being used
+    var debugDow = new Date(viewYear, viewMonth, viewDay).getDay();
+    var debugDowName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][debugDow];
+    $('#sum-debug').text('date: '+viewDateStr()+' ('+debugDowName+') | blocks checked: '+blocks.length);
+  }
+
+
+  function getAvailStatusForBlock(n,s,e){var dow=new Date(viewYear,viewMonth,viewDay).getDay(),ds=viewDateStr(),fm=null;for(var i=0;i<availBlocks.length;i++){var a=availBlocks[i];if(a.coach!==n)continue;if(!a.days||a.days.indexOf(dow)===-1)continue;if(a.ds&&ds<a.ds)continue;if(a.de&&ds>a.de)continue;if(!fm)fm=a.status;if(a.s<e&&a.e>s)return a.status;}return fm;}
+
+  function buildBlockTooltipHtml(b,hasOv,chipDow){
+    var cd=chipDow>=0?chipDow:-1;
+    var dl=b.days&&b.days.length?b.days.map(function(d){var n=DN[d];return d===cd?'<strong style="color:#000;font-weight:900;">'+n+'</strong>':n;}).join(' · '):'—';
+    var dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'—';
+    return '<strong>'+b.lbl+'</strong>'+(b.staffType?' <span style="font-weight:400;opacity:.7">· '+b.staffType+'</span>':'')+(hasOv?' <span style="color:#E24B4A;font-size:10px">! overlap</span>':'')+(b.school?'<br><span style="opacity:.7">'+b.school+'</span>':'')+(b.coach?'<br><strong>'+b.coach+'</strong>':'')+'<br><span style="opacity:.7">'+dl+'</span><br><span style="opacity:.7">'+fmtT(b.s)+' – '+fmtT(b.e)+'</span><br><strong>'+fmtHrs(b.e-b.s)+'</strong><br><span style="opacity:.7">'+dr+'</span>'+(b.description&&b.description.replace(/<[^>]*>/g,'').trim()?'<br><span style="opacity:.7;font-size:11px;font-style:italic;">'+b.description.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,120)+'</span>':'');
+  }
+
+  function buildAvailTooltipHtml(b,chipDow){
+    var cd=chipDow>=0?chipDow:-1,st=AVAIL_STYLES[b.status]||AVAIL_STYLES['available'];
+    var dl=b.days&&b.days.length?b.days.map(function(d){var n=DN[d];return d===cd?'<strong style="color:#000;font-weight:900;">'+n+'</strong>':n;}).join(' · '):'—';
+    var dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'—';
+    var desc=b.description&&b.description.replace(/<[^>]*>/g,'').trim();
+    return '<strong style="color:'+st.bd+'">'+st.label+'</strong>'+(b.coach?'<br><strong>'+b.coach+'</strong>':'')+'<br><span style="opacity:.7">'+dl+'</span><br><span style="opacity:.7">'+fmtT(b.s)+' – '+fmtT(b.e)+'</span><br><strong>'+fmtHrs(b.e-b.s)+'</strong><br><span style="opacity:.7">'+dr+'</span>'+(desc?'<br><span style="opacity:.7;font-size:11px;font-style:italic;">'+desc.slice(0,120)+(desc.length>120?'…':'')+'</span>':'');
+  }
+
+  function attachTip($el,b,hasOv){var $t=$('#tooltip');$el.on('mouseenter',function(){$t.html(buildBlockTooltipHtml(b,hasOv)).show();}).on('mousemove',function(e){$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();});}
+
+  function attachChipTip($chip,b,chipDate){var $t=$('#tooltip'),dow=chipDate?chipDate.getDay():-1;$chip.on('mouseenter',function(){if(_suppressTooltip)return;$t.html(buildBlockTooltipHtml(b,false,dow)).show();}).on('mousemove',function(e){if(!_suppressTooltip)$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();_suppressTooltip=false;});}
+
+  function attachAvailChipTip($chip,b,chipDate){var $t=$('#tooltip'),dow=chipDate?chipDate.getDay():-1;$chip.on('mouseenter',function(){if(_suppressTooltip)return;$t.html(buildAvailTooltipHtml(b,dow)).show();}).on('mousemove',function(e){if(!_suppressTooltip)$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();_suppressTooltip=false;});}
+  var _suppressTooltip=false;
+  function attachDrag($el,b){$el.on('mousedown',function(e){if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;e.preventDefault();var moved=false,sx=e.clientX,sy=e.clientY,os=b.s,dur=b.e-b.s;
+    // Capture element's current visual position — avoids jump from filtered-row mismatch
+    var elLeft=parseInt($el.css('left'))||0, elTop=parseInt($el.css('top'))||0;
+    var curNs=os,curTop=elTop,curRow=b.row;
+    $(document).on('mousemove.drag',function(e2){var dx=e2.clientX-sx,dy=e2.clientY-sy;if(!moved&&Math.sqrt(dx*dx+dy*dy)<5)return;if(!moved){moved=true;$el.addClass('dragging');draggingId=b.id;}
+      curNs=Math.max(SH,Math.min(SH+NHRS-dur,os+snap(dx/HW,.25)));
+      curTop=Math.max(0,elTop+dy);
+      // Snap top to nearest row
+      var fs=getFilteredStaff();
+      var ri=Math.min(fs.length-1,Math.max(0,Math.round((curTop)/RH)));
+      curTop=ri*RH+4;
+      curRow=ri;
+      $el.css({left:(curNs-SH)*HW,top:curTop});
+    });$(document).one('mouseup.drag',function(){$(document).off('mousemove.drag');if(moved){$el.removeClass('dragging');draggingId=null;
+      var fs=getFilteredStaff();
+      b.s=curNs;b.e=curNs+dur;
+      if(curRow<fs.length){var staffMember=fs[curRow];b.coach=staffMember.n;b.row=STAFF.findIndex(function(s){return s.n===staffMember.n;});}
+      refreshView();}else{if(pageMode==='availability'){var ab=availBlocks.find(function(x){return x.id===b.id;});if(ab)openAvailEdit(b.id);}else openEdit(b.id);}});});}
+
+  function attachResize($h,b){$h.on('mousedown',function(e){e.preventDefault();e.stopPropagation();var $el=$h.closest('.sched-block').addClass('resizing'),sx=e.clientX,oe=b.e,curE=oe;$(document).on('mousemove.resize',function(e2){curE=Math.max(b.s+.25,Math.min(SH+NHRS,oe+snap((e2.clientX-sx)/HW,.25)));$el.css('width',Math.max((curE-b.s)*HW-4,52));});$(document).one('mouseup.resize',function(){$el.removeClass('resizing');$(document).off('mousemove.resize');b.e=curE;refreshView();});});}
+
+  // Call after any data change — re-renders whichever view is active
+  function syncRowHeights(){
+    if(viewMode !== 'week' && viewMode !== 'month') return;
+    var $gridRows = $('#week-container .week-grid-row');
+    var $staffRows = $('#staff-list-scroll .staff-row');
+    $gridRows.each(function(i){
+      var gridH = $(this).outerHeight();
+      var minH = Math.max(gridH, 68);
+      $staffRows.eq(i).css('min-height', minH + 'px').css('height', minH + 'px');
+      $(this).css('min-height', minH + 'px');
+    });
+  }
+
+  function refreshView(replace){
+    if(pageMode==='people'){ render(replace); return; }
+    buildFilterOptions();
+    updateFilterUI();
+    if(viewMode==='week'||viewMode==='month'){ $('#staff-col').hide(); } else { rStaff(); $('#staff-col').show(); }
+    updateSummary();
+    if(pageMode==='people'){
+      rPeople();
+    } else if(pageMode==='availability'){
+      if(viewMode==='week'||viewMode==='month'){
+        rAvailWeekView();
+      } else {
+        rAvailBlocks();
+      }
+    } else {
+      if(viewMode==='week'||viewMode==='month'){
+        rWeekView();
+      } else {
+        rBlocks();rNow();
+      }
+    }
+    updateURL(replace);
+    // Sync staff row heights with grid row heights after render
+    setTimeout(syncRowHeights, 0);
+  }
+
+  /* ── URL state sync ── */
+  function buildURLParams(){
+    var params = new URLSearchParams();
+    params.set('section', pageMode==='people' ? 'people' : 'schedule');
+    if(pageMode==='people'){
+      if(selectedPersonId) params.set('person_id', selectedPersonId);
+    } else {
+      params.set('schedule', pageMode==='availability' ? 'availability' : 'regular');
+      params.set('view',   viewMode);
+      params.set('date',   viewDateStr());
+      if(pageMode==='schedule'){
+        if(filterSchool)  params.set('school',      filterSchool);
+        if(filterProg)    params.set('discipline',   filterProg);
+      }
+      if(staffFilter)     params.set('search',      staffFilter);
+      params.set('avail_overlay', availOverlay ? 'true' : 'false');
+    }
+    return window.location.pathname + '?' + params.toString();
+  }
+
+  function updateURL(replace){
+    try {
+      var newURL = buildURLParams();
+      var state = {view:viewMode,date:viewDateStr(),school:filterSchool,discipline:filterProg,search:staffFilter};
+      if(replace){
+        history.replaceState(state, '', newURL);
+      } else {
+        history.pushState(state, '', newURL);
+      }
+    } catch(e){
+      // history API not available (e.g. srcdoc iframe) — silently ignore
+    }
+  }
+
+  // Restore state from a history entry
+    window.addEventListener('popstate', function(){
+    loadFromURL();   // restores all state + syncs all UI
+    render(true);   // re-renders using replaceState (don't add new history entry)
+  });
+
+
+  /* ── Read URL params on load ── */
+  function loadFromURL(){
+    var params = new URLSearchParams(window.location.search);
+
+    // Reset all state to defaults first — critical for back/forward to work correctly
+    viewMode     = 'day';
+    filterSchool = '';
+    filterProg   = '';
+    staffFilter  = '';
+
+    // View mode
+    var v = params.get('view');
+    if(v==='week'||v==='month'||v==='day') viewMode=v;
+
+    // Date
+    var dt = params.get('date');
+    if(dt){
+      var parts = dt.split('-');
+      if(parts.length===3){
+        var y=parseInt(parts[0]), m=parseInt(parts[1])-1, d=parseInt(parts[2]);
+        if(!isNaN(y)&&!isNaN(m)&&!isNaN(d)){
+          viewYear=y; viewMonth=m; viewDay=d;
+        }
+      }
+    }
+
+    // Filters — always assign so missing params correctly clear previous values
+    filterSchool = params.get('school') || '';
+    var di = params.get('discipline');
+    filterProg   = (di && di!=='all') ? di : '';
+    staffFilter  = params.get('search') || '';
+
+    // Availability overlay
+    var ao = params.get('avail_overlay');
+    availOverlay = (ao === 'true');
+    $('#avail-overlay-chk').prop('checked', availOverlay);
+    $('#avail-overlay-label').toggleClass('active', availOverlay);
+
+    // Section (always 'schedule' for now; reserved for future sections)
+    // var section = params.get('section') || 'schedule';
+
+    // Mode (new param: schedule=regular|availability; also support legacy mode=)
+    var mo = params.get('schedule') || params.get('mode');
+    if(mo==='availability') pageMode='availability';
+    else pageMode='schedule';
+    // Section: section=people sets people mode
+    var sec=params.get('section')||'schedule';
+    if(sec==='people'){
+      pageMode='people';
+      selectedPersonId=null; // will be set from person_id below
+    }
+    // person_id
+    var pidParam=params.get('person_id');
+    if(pidParam && pageMode==='people'){
+      var _fp=STAFF.find(function(x){return String(x.id)===String(pidParam);});
+      if(_fp) selectedPersonId=_fp.id;
+    }
+    // If availability mode clear school/discipline
+    if(pageMode==='availability'){filterSchool='';filterProg='';}
+    // Sync all UI state
+    $('#staff-search').val(staffFilter);
+    $('#filter-school').val(filterSchool);
+    $('#filter-prog').val(filterProg);
+    $('#btn-day,#btn-week,#btn-month').removeClass('active');
+    $('#btn-'+viewMode).addClass('active');
+    $('body').toggleClass('people-mode', pageMode==='people');
+    $('#btn-people').toggleClass('active',     pageMode==='people');
+    $('#btn-schedule').toggleClass('active',    pageMode==='schedule');
+    $('#btn-availability').toggleClass('active',pageMode==='availability');
+    $('.view-toggle,.date-nav').toggle(pageMode!=='people');
+    $('#summary-bar').toggle(pageMode==='schedule');
+    // Sync panels
+    if(pageMode!=='people'){
+      selectedPersonId=null;
+      $('#people-panel').hide().css('display','none');
+      $('#timeline-area').show();
+      $('#timeline-header,#grid-body').show();
+      $('#week-container').remove();
+    }
+    setTimeout(function(){
+      $('.filter-item').toggle(pageMode==='schedule');
+      syncOverlayCheckVisibility();
+    },0);
+  }
+
+  function render(replace){
+    // People mode: completely separate rendering path
+    if(pageMode==='people'){
+      // Hide schedule UI
+      $('#timeline-header,#grid-body,#week-container').hide();
+      $('#timeline-area').hide();
+      $('#summary-bar').hide();
+      // Show staff column
+      rStaff();
+      $('#staff-col').show();
+      // Show people panel
+      $('#people-panel').css({'display':'flex','flex-direction':'column'});
+      updateURL(replace);
+      // Wire clicks (re-attach in case staff list was re-rendered)
+      setTimeout(function(){
+        $('#staff-list-scroll .staff-row').off('click.ppl').on('click.ppl',function(){
+          var name=$(this).find('.staff-name').text();
+          var s=STAFF.find(function(x){return x.n===name;});
+          if(!s) return;
+          $('#staff-list-scroll .staff-row').removeClass('selected');
+          $(this).addClass('selected');
+          selectedPersonId=s.id; updateURL(false); showPeopleDetail(s);
+        });
+      },0);
+      return;
+    }
+    if(viewMode==='week'||viewMode==='month'){
+      $('#date-label').text(viewMode==='month' ? monthRangeLabel() : weekRangeLabel());
+      $('#today-badge').removeClass('active');
+      if(viewMode==='week'||viewMode==='month'){ $('#staff-col').hide(); } else { $('#staff-col').show(); rStaff(); }
+      if(pageMode==='availability'){ rAvailWeekView(); } else { rWeekView(); }
+      buildFilterOptions();
+      updateFilterUI();
+      updateSummary();
+      updateURL(replace);
+      setTimeout(syncRowHeights, 0);
+    } else {
+      $('#date-label').text(fmtD(getCurDate()));
+      // Highlight today badge when viewing today in day mode
+      var _now=new Date();
+      var _isToday=(viewYear===_now.getFullYear()&&viewMonth===_now.getMonth()&&viewDay===_now.getDate());
+      $('#today-badge').toggleClass('active', _isToday);
+      // Availability day — delegate entirely to rAvailBlocks which handles DOM setup
+      if(pageMode==='availability'){
+        $('#staff-col').show();
+        rStaff();
+        rAvailBlocks();
+        updateSummary();
+        updateURL(replace);
+        return;
+      }
+      // Make sure day-view DOM elements exist and week container is hidden
+      if(!$('#timeline-header').length){
+        $('#timeline-area').prepend('<div class="timeline-header" id="timeline-header"></div>');
+      }
+      if(!$('#grid-body').length){
+        var $gb=$('<div class="grid-body" id="grid-body">').append('<div class="blocks-layer" id="blocks-layer"></div>');
+        $('#timeline-area').append($gb);
+      }
+      if(!$('#blocks-layer').length){
+        $('#grid-body').append('<div class="blocks-layer" id="blocks-layer"></div>');
+      }
+      $('#timeline-header,#grid-body').show();
+      $('#week-container').hide();
+      $('#staff-col').show();
+      rStaff();
+      rHeader();
+      rGrid();
+      buildFilterOptions();
+      rBlocks();
+      rNow();
+      updateFilterUI();
+      updateSummary();
+      updateURL(replace);
+    }
+  }
+
+  /* ── Week view helpers ── */
+  function getWeekDays(){
+    // Return array of 7 Date objects Sun–Sat for the week containing the view date
+    var d=new Date(viewYear, viewMonth, viewDay);
+    var dow=d.getDay(); // 0=Sun
+    var sunday=new Date(viewYear, viewMonth, viewDay - dow);
+    var days=[];
+    for(var i=0;i<7;i++){
+      var dd=new Date(sunday.getFullYear(),sunday.getMonth(),sunday.getDate()+i);
+      days.push(dd);
+    }
+    return days;
+  }
+
+  function weekRangeLabel(){
+    var days=getWeekDays();
+    var s=days[0], e=days[6];
+    var fmt={month:'short',day:'numeric'};
+    return s.toLocaleDateString('en-US',fmt)+' – '+e.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+
+  function getMonthDays(){
+    // All days of the month containing the view date
+    var days=[];
+    var first=new Date(viewYear, viewMonth, 1);
+    var last=new Date(viewYear, viewMonth+1, 0); // last day of month
+    for(var d=new Date(first); d<=last; d.setDate(d.getDate()+1)){
+      days.push(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+    }
+    return days;
+  }
+
+  function monthRangeLabel(){
+    return new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  }
+
+  // Returns the days array for whichever multi-day view is active
+  function getViewDays(){
+    if(viewMode==='month') return getMonthDays();
+    return getWeekDays();
+  }
+
+  function isTodayDate(d){
+    var now=new Date();
+    return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate();
+  }
+
+  // Returns true if block b is applicable on at least one day in the current view period
+  function isApplicableInView(b){
+    if(viewMode==='day'){
+      return isApplicableToday(b);
+    }
+    var days = getViewDays();
+    for(var i=0;i<days.length;i++){
+      if(isApplicableOnDate(b, days[i])) return true;
+    }
+    return false;
+  }
+
+  function isApplicableOnDate(b, d){
+    var dow=d.getDay();
+    var ds=localDateStr(d);
+    if(!b.days||b.days.indexOf(dow)===-1) return false;
+    if(b.ds&&ds<b.ds) return false;
+    if(b.de&&ds>b.de) return false;
+    return true;
+  }
+
+  function closeModal(){$('#modal-overlay').removeClass('open');$('#delete-popup-overlay').removeClass('open');$('#save-popup-overlay').removeClass('open');pendingSaveData=null;eid=null;creating=false;}
+
+  function buildSwatches(sel){const $w=$('#color-swatches').empty();COLORS.forEach((c,i)=>{const $s=$('<div class="swatch">').css({background:c.bg,borderColor:c.bd,outline:i===sel?'2px solid #000':'none'}).on('click',function(){sColor=i;buildSwatches(i);});$w.append($s);});}
+
+  function buildFooter(cr){const $f=$('#modal-footer').empty();if(!cr)$f.append($('<button class="btn-delete">').html('🗑 Delete').on('click',showDeletePopup));$f.append($('<button class="btn-cancel">').text('Cancel').on('click',closeModal),$('<button class="btn-save">').text(cr?'Create block':'Save changes').on('click',doSave));}
+
+  function openEdit(id, onDate){
+    const b=blocks.find(x=>x.id===id);if(!b)return;creating=false;eid=id;
+    var d = onDate || new Date(viewYear,viewMonth,viewDay);
+    editedOnDow = d.getDay();
+    editedOnDs  = localDateStr(d);
+    sProg=b.lbl;sCoach=b.coach||'';sSchool=b.school||'';sColor=b.color;sStaffType=b.staffType||'Coach';
+    $('#modal-title-text').text('✎  Edit schedule block');
+    pcb.sv(b.lbl);ccb.sv(b.coach||'');scb.sv(b.school||'');
+    $('#staff-type-select').val(sStaffType);
+    setDays(b.days||[]);markCurrentDow('dow-wrap',editedOnDow);
+    $('#blk-date-start').val(b.ds||'');$('#blk-date-end').val(b.de||'');
+    $('#blk-time-start').val(fmtT(b.s));$('#blk-time-end').val(fmtT(b.e));
+    $('#sched-desc').html(b.description||'');$('#edit-error').text('');
+    buildSwatches(b.color);buildFooter(false);
+    $('#modal-overlay').addClass('open');markCurrentDow('dow-wrap',editedOnDow);
+  }
+
+  function openCreate(opts){
+    opts = opts || {};
+    creating=true; eid=null; sProg=''; sCoach=''; sSchool=''; sColor=0; sStaffType='Coach';
+    $('#modal-title-text').text('+ Add schedule block');
+    pcb.sv(''); ccb.sv(''); scb.sv('');
+    $('#staff-type-select').val('Coach');
+    var baseD = opts.date
+      ? (function(){ var p=opts.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })()
+      : new Date(viewYear, viewMonth, viewDay);
+    var weekSun = new Date(baseD.getFullYear(), baseD.getMonth(), baseD.getDate() - baseD.getDay());
+    var weekSat = new Date(baseD.getFullYear(), baseD.getMonth(), baseD.getDate() - baseD.getDay() + 6);
+    var dateStr   = localDateStr(weekSun);
+    var endDate   = localDateStr(weekSat);
+    var startTime = opts.startTime || '9:00 AM';
+    var endTime   = opts.endTime   || '10:00 AM';
+    var days      = opts.days      || [1,2,3,4,5];
+    setDays(days);
+    markCurrentDow('dow-wrap', -1);
+    $('#blk-date-start').val(dateStr);$('#blk-date-end').val(endDate);
+    $('#blk-time-start').val(startTime);$('#blk-time-end').val(endTime);
+    if(opts.coach){ ccb.sv(opts.coach); sCoach = opts.coach; }
+    $('#sched-desc').html('');$('#edit-error').text('');
+    buildSwatches(0);buildFooter(true);$('#modal-overlay').addClass('open');
+  }
+
+  var pendingSaveData=null;
+
+  function isMultiMeeting(ds,de,days){
+    if(!ds||!de||!days||!days.length)return false;
+    return!(days.length===1&&ds===de);
+  }
+
+  function doSave(){
+    const ns=parseT($('#blk-time-start').val()),ne=parseT($('#blk-time-end').val()),ds=$('#blk-date-start').val(),de=$('#blk-date-end').val(),$e=$('#edit-error');
+    if(!sProg){$e.text('Please select a discipline.');return;}if(!sCoach){$e.text('Please select a coach.');return;}if(!sSchool){$e.text('Please select a school.');return;}if(!sDays.length){$e.text('Select at least one day of the week.');return;}if(!ds){$e.text('Please set a start date.');return;}if(!de){$e.text('Please set an end date.');return;}if(de<ds){$e.text('End date must be on or after start date.');return;}if(ns===null){$e.text('Invalid start time.');return;}if(ne===null){$e.text('Invalid end time.');return;}if(ne<=ns){$e.text('End time must be after start time.');return;}
+    var _prog=progByName(sProg), _coach=coachByName(sCoach)||staffByName(sCoach), _school=schoolByName(sSchool);
+    const row=(()=>{const i=STAFF.findIndex(s=>s.n===sCoach);return i>-1?i:0;})();
+    const data={lbl:sProg,progId:_prog?_prog.id:null,coach:sCoach,coachId:_coach?_coach.id:null,school:sSchool,schoolId:_school?_school.id:null,days:sDays.slice(),ds,de,s:ns,e:ne,row,color:sColor,staffType:$('#staff-type-select').val()||'Coach',description:$('#sched-desc').html()||''};
+    if(creating){
+      blocks.push({id:nid++,...data});
+      closeModal();refreshView();
+    } else if(!isMultiMeeting(ds,de,sDays)){
+      const b=blocks.find(x=>x.id===eid);
+      const onlyDescChanged = b && (b.lbl===data.lbl && b.coach===data.coach && b.school===data.school && b.s===data.s && b.e===data.e && b.color===data.color && b.staffType===data.staffType && b.ds===data.ds && b.de===data.de && JSON.stringify((b.days||[]).slice().sort())===JSON.stringify((data.days||[]).slice().sort()));
+      if(onlyDescChanged){ b.description=data.description; closeModal();refreshView(); }
+      else { if(b)Object.assign(b,data); closeModal();refreshView(); }
+    } else {
+      const b=blocks.find(x=>x.id===eid);
+      const onlyDescChanged = b && (b.lbl===data.lbl && b.coach===data.coach && b.school===data.school && b.s===data.s && b.e===data.e && b.color===data.color && b.staffType===data.staffType && b.ds===data.ds && b.de===data.de && JSON.stringify((b.days||[]).slice().sort())===JSON.stringify((data.days||[]).slice().sort()));
+      if(onlyDescChanged){ b.description=data.description; closeModal();refreshView(); }
+      else { pendingSaveData=data; $('#save-popup-overlay').addClass('open'); }
+    }
+  }
+
+  function applySave(scope){
+    if(!pendingSaveData)return;
+    const b=blocks.find(x=>x.id===eid);
+    if(b){
+      if(scope==='this'){
+        b.days=b.days.filter(function(d){return d!==editedOnDow;});
+        if(!b.days.length)blocks.splice(blocks.findIndex(x=>x.id===eid),1);
+        else { var nb={...pendingSaveData,id:nid++,days:[editedOnDow],ds:editedOnDs,de:editedOnDs}; blocks.push(nb); }
+      } else if(scope==='future'){
+        const today=new Date(); today.setDate(today.getDate()-1); b.de=today.toISOString().slice(0,10);
+        blocks.push({id:nid++,...pendingSaveData,ds:editedOnDs});
+      } else {
+        Object.assign(b,pendingSaveData);
+      }
+    }
+    pendingSaveData=null;$('#save-popup-overlay').removeClass('open');
+    closeModal();refreshView();
+  }
+
+  $('#save-cancel').on('click',function(){$('#save-popup-overlay').removeClass('open');});
+  $('#save-this').on('click',function(){applySave('this');});
+  $('#save-future').on('click',function(){applySave('future');});
+  $('#save-all').on('click',function(){applySave('all');});
+
+  function showDeletePopup(){ deleteContext='schedule'; editedOnDow=new Date(viewYear,viewMonth,viewDay).getDay(); editedOnDs=viewDateStr(); $('#delete-popup-overlay').addClass('open'); }
+
+  function hideDeletePopup(){ $('#delete-popup-overlay').removeClass('open'); }
+
+  function rNow(){$('#blocks-layer .now-line').remove();const now=new Date(),h=now.getHours()+now.getMinutes()/60;if(h<SH||h>SH+NHRS)return;$('#blocks-layer').append($('<div class="now-line">').css('left',(h-SH)*HW).append('<div class="now-dot">'));}
+
+  function rHeader(){const $h=$('#timeline-header').empty().css('width',TW);for(let h=SH;h<SH+NHRS;h++)$h.append($('<div class="hour-cell">').text(hlbl(h)));}
+
+  function rGrid(){
+    var fs=getFilteredStaff();
+    var $b=$('#grid-body').css({width:TW,height:fs.length*RH});
+    $b.find('.grid-row').remove();
+    var $l=$('#blocks-layer');
+    $.each(fs,function(fi){
+      var $r=$('<div class="grid-row">').css('width',TW).attr('data-row-idx',fi);
+      for(var h=0;h<NHRS;h++){
+        (function(hi){
+          $('<div>').addClass('grid-cell'+(h%2===0?' alt':''))
+            .on('mouseenter',function(){
+              $('.hour-cell').removeClass('col-hovered').eq(hi).addClass('col-hovered');
+            })
+            .on('mouseleave',function(){
+              $('.hour-cell').removeClass('col-hovered');
+            })
+            .appendTo($r);
+        })(h);
+      }
+      $r.on('mouseenter',function(){$('#staff-list-scroll .staff-row').removeClass('hovered').eq(fi).addClass('hovered');}).on('mouseleave',function(){$('#staff-list-scroll .staff-row').removeClass('hovered');$('.hour-cell').removeClass('col-hovered');});
+      $r.insertBefore($l);
+    });
+  }
 
   function rBlocks(){
-    const $l=$('#blocks-layer').css({width:TW,height:STAFF.length*RH}).empty();
-    $.each(blocks,(_,b)=>{
+    var fs=getFilteredStaff();
+    const $l=$('#blocks-layer').css({width:TW,height:fs.length*RH}).empty();
+    rAvailOverlay();
+    $.each(blocks,function(_,b){
+      if(!isApplicableToday(b) || !isVisible(b) || !coachIsVisible(b)) return;
+      var displayRow=fs.findIndex(function(s){return s.n===b.coach;});
+      if(displayRow===-1) return;
       const c=COLORS[b.color%COLORS.length];
-      const x=(b.s-SH)*HW,w=Math.max((b.e-b.s)*HW-4,52),y=b.row*RH+4,bh=RH-8;
       const sg=getSegs(b);
-      const visible=isVisible(b);
-      const $el=$('<div class="sched-block">').attr('data-id',b.id)
-        .css({left:x,top:y,width:w,height:bh,background:c.bg,borderColor:c.bd,color:c.tx})
-        .toggleClass('dimmed',!visible);
-
-      $.each(sg,(_,seg)=>{const zl=(seg[0]-b.s)*HW,zw=(seg[1]-seg[0])*HW;$el.append($('<div class="overlap-zone">').css({left:zl,width:zw}).append('<svg xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="url(#sr)"/></svg>',$('<div class="overlap-zone-border-l">'),$('<div class="overlap-zone-border-r">')));});
-
-      const $eb=$('<button class="edit-btn" title="Edit">').text('✎').on('click',e=>{e.stopPropagation();openEdit(b.id);});
-
-      /* time + day badges inline */
+      const x=(b.s-SH)*HW, w=Math.max((b.e-b.s)*HW-4,52), bh=RH-8;
+      var y=displayRow*RH+4;
+      const $el=$('<div class="sched-block">').attr('data-id',b.id).css({left:x,top:y,width:w,height:bh,background:c.bg,borderColor:c.bd,color:c.tx});
+      $.each(sg,function(_,seg){const zl=(seg[0]-b.s)*HW,zw=(seg[1]-seg[0])*HW;$el.append($('<div class="overlap-zone">').css({left:zl,width:zw}).append('<svg xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="url(#sr)"/></svg>',$('<div class="overlap-zone-border-l">'),$('<div class="overlap-zone-border-r">')));});
       const $timeRow=$('<div class="block-time-row">');
       $timeRow.append($('<span class="block-time">').text(fmtT(b.s)+' – '+fmtT(b.e)));
+      $timeRow.append($('<span style="opacity:.5;margin:0 3px;font-size:9px;"> · </span>'));
+      $timeRow.append($('<span class="block-time" style="font-weight:700;">').text(fmtHrs(b.e - b.s)));
       if(b.days&&b.days.length){const $badge=$('<div class="block-days-badge">');b.days.forEach(d=>$('<span class="day-dot">').text(DN[d]).appendTo($badge));$timeRow.append($badge);}
-
       const dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'';
-
       $el.append(
-        $eb,
-        $('<div class="block-title">').text(b.lbl),
-        $('<div class="block-school">').text(b.school||''),   /* ← school name */
+        $('<div class="block-title">').append($('<span>').text(b.lbl),$('<span class="block-staff-type-line">').text(' · '+(b.staffType||'Coach'))),
+        $('<div class="block-school">').text(b.school||''),
         $timeRow,
         $('<div class="block-daterange">').text(dr),
         $('<div class="resize-handle">')
       );
-      attachDrag($el,b);attachResize($el.find('.resize-handle'),b);attachTip($el,b,sg.length>0);
+      attachDrag($el,b);attachResize($el.find('.resize-handle'),b);attachDayTip($el,b,false);
       $l.append($el);
     });
   }
 
-  function rNow(){$('#blocks-layer .now-line').remove();const now=new Date(),h=now.getHours()+now.getMinutes()/60;if(h<SH||h>SH+NHRS)return;$('#blocks-layer').append($('<div class="now-line">').css('left',(h-SH)*HW).append('<div class="now-dot">'));}
-
-  /* ── modal ── */
-  function buildSwatches(sel){const $r=$('#color-row').empty();$.each(COLORS,(i,c)=>$('<div class="color-swatch">').css({background:c.bg,outline:i===sel?'2.5px solid '+c.bd:'2px solid transparent'}).on('click',()=>{sColor=i;buildSwatches(i);}).appendTo($r));}
-  function buildFooter(cr){const $f=$('#modal-footer').empty();if(!cr)$f.append($('<button class="btn-delete">').html('🗑 Delete').on('click',doDelete));$f.append($('<button class="btn-cancel">').text('Cancel').on('click',closeModal),$('<button class="btn-save">').text(cr?'Create block':'Save changes').on('click',doSave));}
-
-  function openEdit(id){const b=blocks.find(x=>x.id===id);if(!b)return;creating=false;eid=id;sProg=b.lbl;sCoach=b.coach||'';sSchool=b.school||'';sColor=b.color;$('#modal-title-text').text('✎  Edit schedule block');pcb.sv(b.lbl);ccb.sv(b.coach||'');scb.sv(b.school||'');setDays(b.days||[]);$('#blk-date-start').val(b.ds||'');$('#blk-date-end').val(b.de||'');$('#blk-time-start').val(fmtT(b.s));$('#blk-time-end').val(fmtT(b.e));$('#edit-error').text('');buildSwatches(b.color);buildFooter(false);$('#modal-overlay').addClass('open');setTimeout(()=>$('#prog-input').trigger('focus'),50);}
-  function openCreate(){creating=true;eid=null;sProg='';sCoach='';sSchool='';sColor=0;$('#modal-title-text').text('+ Add schedule block');pcb.sv('');ccb.sv('');scb.sv('');setDays([1,2,3,4,5]);$('#blk-date-start').val(todayIso());$('#blk-date-end').val(isoOffset(90));$('#blk-time-start').val('9:00 AM');$('#blk-time-end').val('10:00 AM');$('#edit-error').text('');buildSwatches(0);buildFooter(true);$('#modal-overlay').addClass('open');setTimeout(()=>$('#prog-input').trigger('focus'),50);}
-  function closeModal(){$('#modal-overlay').removeClass('open');eid=null;creating=false;}
-  function doSave(){
-    const ns=parseT($('#blk-time-start').val()),ne=parseT($('#blk-time-end').val()),ds=$('#blk-date-start').val(),de=$('#blk-date-end').val(),$e=$('#edit-error');
-    if(!sProg){$e.text('Please select a program.');return;}if(!sCoach){$e.text('Please select a coach.');return;}if(!sSchool){$e.text('Please select a school.');return;}if(!sDays.length){$e.text('Select at least one day of the week.');return;}if(!ds){$e.text('Please set a start date.');return;}if(!de){$e.text('Please set an end date.');return;}if(de<ds){$e.text('End date must be on or after start date.');return;}if(ns===null){$e.text('Invalid start time.');return;}if(ne===null){$e.text('Invalid end time.');return;}if(ne<=ns){$e.text('End time must be after start time.');return;}
-    const row=(()=>{const i=STAFF.findIndex(s=>s.n===sCoach);return i>-1?i:0;})();
-    const data={lbl:sProg,coach:sCoach,school:sSchool,days:sDays.slice(),ds,de,s:ns,e:ne,row,color:sColor};
-    if(creating){blocks.push({id:nid++,...data});}else{const b=blocks.find(x=>x.id===eid);if(b)Object.assign(b,data);}
-    buildFilterOptions();updateFilterUI();closeModal();rBlocks();rNow();
+  function rAvailBlocks(){
+    if(!$('#timeline-header').length) $('#timeline-area').prepend('<div class="timeline-header" id="timeline-header"></div>');
+    if(!$('#grid-body').length){var $gb=$('<div class="grid-body" id="grid-body">').append('<div class="blocks-layer" id="blocks-layer"></div>');$('#timeline-area').append($gb);}
+    if(!$('#blocks-layer').length) $('#grid-body').append('<div class="blocks-layer" id="blocks-layer"></div>');
+    $('#timeline-header,#grid-body').show();$('#week-container').hide();
+    rHeader();rGrid();
+    var fs=getFilteredStaff();
+    var $layer=$('#blocks-layer').css({width:TW,height:fs.length*RH}).empty();
+    availBlocks.forEach(function(b){
+      if(!isAvailApplicableToday(b)) return;
+      var row=fs.findIndex(function(s){return s.n===b.coach;});
+      if(row===-1) return;
+      var st=AVAIL_STYLES[b.status]||AVAIL_STYLES['available'];
+      var x=(b.s-SH)*HW, w=Math.max((b.e-b.s)*HW-4,52);
+      var y=row*RH+4, bh=RH-8;
+      var $el=$('<div class="sched-block">').attr('data-avail-id',b.id).css({left:x,top:y,width:w,height:bh,background:st.bg,borderColor:st.bd,color:st.tx});
+      var $timeRow2=$('<div class="block-time-row">').append($('<span class="block-time">').text(fmtT(b.s)+' – '+fmtT(b.e)),$('<span style="opacity:.5;margin:0 4px;font-size:9px;"> · </span>'),$('<span class="block-time" style="font-weight:700;">').text(fmtHrs(b.e-b.s)));
+      var $avTimeRow=$('<div class="block-time-row">').append(
+        $('<span class="block-time">').text(fmtT(b.s)+' – '+fmtT(b.e)),
+        $('<span style="opacity:.5;margin:0 4px;font-size:9px;"> · </span>'),
+        $('<span class="block-time" style="font-weight:700;">').text(fmtHrs(b.e-b.s))
+      );
+      if(b.days&&b.days.length){
+        var $badge=$('<div class="block-days-badge">');
+        b.days.forEach(function(d){$('<span class="day-dot">').text(DN[d]).appendTo($badge);});
+        $avTimeRow.append($badge);
+      }
+      $el.append($('<div class="block-title">').text(st.label),$avTimeRow,$('<div class="resize-handle">'));
+      attachAvailDrag($el,b);attachAvailResize($el.find('.resize-handle'),b);attachDayTip($el,b,true);
+      $layer.append($el);
+    });
+    rNow();
   }
-  function doDelete(){const i=blocks.findIndex(x=>x.id===eid);if(i>-1)blocks.splice(i,1);buildFilterOptions();updateFilterUI();closeModal();rBlocks();rNow();}
 
-  /* ── drag / resize ── */
-  function attachDrag($el,b){$el.on('mousedown',e=>{if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;e.preventDefault();$el.addClass('dragging');const sx=e.clientX,sy=e.clientY,os=b.s,or=b.row,dur=b.e-b.s;$(document).on('mousemove.drag',e2=>{let ns=os+snap((e2.clientX-sx)/HW,.25);ns=Math.max(SH,Math.min(SH+NHRS-dur,ns));b.s=ns;b.e=ns+dur;b.row=Math.max(0,Math.min(STAFF.length-1,or+Math.round((e2.clientY-sy)/RH)));rBlocks();rNow();});$(document).one('mouseup.drag',()=>{$el.removeClass('dragging');$(document).off('mousemove.drag');});});}
-  function attachResize($h,b){$h.on('mousedown',e=>{e.preventDefault();e.stopPropagation();const $el=$h.closest('.sched-block').addClass('resizing'),sx=e.clientX,oe=b.e;$(document).on('mousemove.resize',e2=>{b.e=Math.max(b.s+.25,Math.min(SH+NHRS,oe+snap((e2.clientX-sx)/HW,.25)));rBlocks();rNow();});$(document).one('mouseup.resize',()=>{$el.removeClass('resizing');$(document).off('mousemove.resize');});});}
-  function attachTip($el,b,hasOv){const $t=$('#tooltip');$el.on('mouseenter',()=>{const dl=b.days&&b.days.length?b.days.map(d=>DFULL[d]).join(', '):'—',dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'—';$t.html('<strong>'+b.lbl+'</strong>'+(hasOv?' <span style="color:#E24B4A;font-size:10px">⚠ overlap</span>':'')+(b.school?'<br><span style="opacity:.7">&#127eb; '+b.school+'</span>':'')+'<br>'+fmtT(b.s)+' – '+fmtT(b.e)+(b.coach?'<br><span style="opacity:.7">'+b.coach+'</span>':'')+'<br><span style="opacity:.7">'+dl+'</span><br><span style="opacity:.7">'+dr+'</span>').show();}).on('mousemove',e=>$t.css({left:e.clientX+14,top:e.clientY-10})).on('mouseleave',()=>$t.hide());}
 
-  $('#add-btn').on('click',openCreate);
+  function rStaff(){
+    var fs=getFilteredStaff();
+    var $scroll=$('#staff-list-scroll').empty();
+    if(!fs.length){
+      $scroll.append('<div class="staff-no-results">No staff found</div>');
+      return;
+    }
+    $.each(fs,function(fi,s){
+      var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
+      var av=$('<div class="staff-avatar">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
+      var info=$('<div class="staff-info">').append($('<div class="staff-name">').text(s.n));
+      if(pageMode==='people'){
+        info.append($('<div style="font-size:10px;color:var(--tx2);margin-top:1px;line-height:1;">').text('ID ' + s.id));
+      }
+      if(pageMode!=='people'){
+        var dayH, ot;
+        if(pageMode==='availability'){
+          dayH = (viewMode==='week'||viewMode==='month') ? calcAvailWeekHours(s.n) : calcAvailDayHours(s.n);
+          ot   = 0;
+        } else {
+          dayH = (viewMode==='week'||viewMode==='month') ? calcWeekHours(s.n) : calcDayHours(s.n);
+          ot   = (viewMode==='week'||viewMode==='month') ? calcWeekOT(s.n)   : Math.max(0,Math.round((dayH-8)*60)/60);
+        }
+        var $dayRow=$('<div class="staff-day-hours">');
+        if(dayH>0){
+          if(pageMode!=='availability') $dayRow.toggleClass('has-ot',ot>0);
+          $dayRow.text(fmtHrs(dayH));
+          if(pageMode!=='availability'&&ot>0) $dayRow.append($('<span class="staff-ot-badge">').text('+'+fmtHrs(ot)+' OT'));
+        } else {
+          $dayRow.text('—').css('opacity',.35);
+        }
+        info.append($dayRow);
+      }
+      var $row=$('<div class="staff-row">').append(av,info);
+      if(pageMode==='people' && selectedPersonId && s.id===selectedPersonId) $row.addClass('selected');
+      $scroll.append($row);
+    });
+  }
+
+  function moveBlockToDate(b, newCoach, newDate, origDow){
+    var oldDow = (origDow !== undefined) ? origDow : new Date(b.ds ? b.ds+'T00:00:00' : Date.now()).getDay();
+    var newDow = newDate.getDay();
+    var newDs = localDateStr(newDate);
+    b.coach = newCoach;
+    b.row = STAFF.findIndex(function(s){ return s.n === newCoach; });
+    if(b.row < 0) b.row = 0;
+    if(!b.days) b.days = [];
+    // Replace only the dragged day; leave all other recurring days intact
+    var oldIdx = b.days.indexOf(oldDow);
+    if(oldIdx !== -1) b.days.splice(oldIdx, 1);
+    if(b.days.indexOf(newDow) === -1) b.days.push(newDow);
+    b.days.sort();
+    // Check if this is a single-day, exactly-one-week block
+    var isSingleWeek = (function(){
+      if(!b.ds || !b.de) return false;
+      var ds = new Date(b.ds+'T00:00:00'), de = new Date(b.de+'T00:00:00');
+      var diffDays = Math.round((de - ds) / 86400000);
+      return diffDays === 6; // exactly Sun-Sat (7 days = 6 day difference)
+    })();
+    if(isSingleWeek){
+      // If new date falls outside current week range, shift range to contain it
+      if(newDs < b.ds || newDs > b.de){
+        // Set range to the Sun-Sat week containing newDate
+        var weekSun = new Date(newDate); weekSun.setDate(newDate.getDate() - newDate.getDay());
+        var weekSat = new Date(weekSun); weekSat.setDate(weekSun.getDate() + 6);
+        b.ds = localDateStr(weekSun);
+        b.de = localDateStr(weekSat);
+      }
+    } else {
+      // General case: extend range if new date is outside
+      if(!b.ds || newDs < b.ds) b.ds = newDs;
+      if(!b.de || newDs > b.de) b.de = newDs;
+    }
+  }
+
+  function moveAvailBlockToDate(b, newCoach, newDate, origDow){
+    var oldDow = (origDow !== undefined) ? origDow : (b.days && b.days.length ? b.days[0] : new Date().getDay());
+    var newDow = newDate.getDay();
+    var newDs = localDateStr(newDate);
+    b.coach = newCoach;
+    b.row = STAFF.findIndex(function(s){ return s.n === newCoach; });
+    if(b.row < 0) b.row = 0;
+    if(!b.days) b.days = [];
+    var oldIdx = b.days.indexOf(oldDow);
+    if(oldIdx !== -1) b.days.splice(oldIdx, 1);
+    if(b.days.indexOf(newDow) === -1) b.days.push(newDow);
+    b.days.sort();
+    var isSingleWeek = (function(){
+      if(!b.ds || !b.de) return false;
+      return Math.round((new Date(b.de+'T00:00:00') - new Date(b.ds+'T00:00:00')) / 86400000) === 6;
+    })();
+    if(isSingleWeek){
+      if(newDs < b.ds || newDs > b.de){
+        var weekSun = new Date(newDate); weekSun.setDate(newDate.getDate() - newDate.getDay());
+        var weekSat = new Date(weekSun); weekSat.setDate(weekSun.getDate() + 6);
+        b.ds = localDateStr(weekSun);
+        b.de = localDateStr(weekSat);
+      }
+    } else {
+      if(!b.ds || newDs < b.ds) b.ds = newDs;
+      if(!b.de || newDs > b.de) b.de = newDs;
+    }
+  }
+
+
+
+  // ── Custom chip drag for Week/Month view ──────────────────────────────────
+  // Shows all sibling chips moving together to the new column/row
+  function startChipDrag(e, bid, isAvail, origDateStr, openDate){
+    var moved=false;
+    var startX=e.clientX, startY=e.clientY;
+    var $tbl=$('#week-container table').first();
+    var allDates=[]; // dates of all sibling chips
+    $('[data-bid="'+bid+'"]').each(function(){
+      var ds=$(this).attr('data-date');
+      if(ds) allDates.push(ds);
+    });
+
+    var $ghost=null;
+    var $prevHighlighted=[];
+
+    function clearHighlights(){
+      $('td[data-date]').removeClass('drag-over chip-drop-target');
+      $('.chip-preview').remove();
+      if($ghost){ $ghost.remove(); $ghost=null; }
+    }
+
+    function buildGhost(x,y){
+      if($ghost){$ghost.css({left:x,top:y});return;} // just move if already built
+      $ghost=$('<div class="week-chip-ghost-container">').appendTo('body').css({left:x,top:y});
+      // Clone actual chips so they look exactly like originals
+      $('[data-bid="'+bid+'"]').each(function(){
+        var $clone=$(this).clone().removeClass('drag-sibling').css({'pointer-events':'none','margin':'0','opacity':'1'});
+        $clone.find('.week-chip-title,.week-chip-school,.week-chip-time').css('white-space','nowrap');
+        $ghost.append($clone);
+      });
+    }
+
+    function getDateDelta(baseDate, hovDate){
+      // return delta in days between two YYYY-MM-DD strings
+      var b=new Date(baseDate+'T00:00:00'), h=new Date(hovDate+'T00:00:00');
+      return Math.round((h-b)/86400000);
+    }
+
+    function addDate(dateStr, delta){
+      var d=new Date(dateStr+'T00:00:00');
+      d.setDate(d.getDate()+delta);
+      return localDateStr(d);
+    }
+
+    function highlightTargets(hovDateStr, hovStaff){
+      clearHighlights();
+      if(!hovDateStr) return;
+      var delta=getDateDelta(origDateStr, hovDateStr);
+      allDates.forEach(function(ds){
+        var targetDate=addDate(ds, delta);
+        $tbl.find('td[data-date="'+targetDate+'"]').each(function(){
+          var rowStaff=$(this).closest('tr').find('.week-td-staff .week-staff-name').text();
+          if(hovStaff && rowStaff && rowStaff!==hovStaff) return;
+          $(this).addClass('chip-drop-target');
+        });
+      });
+    }
+
+    $(document).on('mousemove.cdrag',function(e2){
+      var dx=e2.clientX-startX,dy=e2.clientY-startY;
+      if(!moved&&Math.sqrt(dx*dx+dy*dy)<5) return;
+      if(!moved){
+        moved=true;
+        $('[data-bid="'+bid+'"]').addClass('drag-sibling');
+      }
+      buildGhost(e2.clientX, e2.clientY);
+      // Find td under cursor
+      var el=document.elementFromPoint(e2.clientX,e2.clientY);
+      var $td=$(el).closest('td[data-date]');
+      var hovDate=$td.attr('data-date')||null;
+      var hovStaff=$td.closest('tr').find('.week-td-staff .week-staff-name').text()||null;
+      highlightTargets(hovDate, hovStaff);
+    });
+
+    $(document).on('mouseup.cdrag',function(e2){
+      $(document).off('mousemove.cdrag mouseup.cdrag');
+      clearHighlights();
+      $('[data-bid="'+bid+'"]').removeClass('drag-sibling');
+
+      if(!moved){
+        // Click — open edit
+        if(isAvail) openAvailEdit(bid, openDate);
+        else openEdit(bid, openDate);
+        return;
+      }
+      // Suppress tooltip immediately after drag ends
+      _suppressTooltip=true;
+      setTimeout(function(){_suppressTooltip=false;}, 400);
+
+      // Find drop target
+      $ghost && $ghost.remove();
+      var el=document.elementFromPoint(e2.clientX,e2.clientY);
+      var $td=$(el).closest('td[data-date]');
+      var hovDate=$td.attr('data-date');
+      var hovStaff=$td.closest('tr').find('.week-td-staff .week-staff-name').text();
+      if(hovDate && hovStaff){
+        var dp=hovDate.split('-');
+        var dd=new Date(+dp[0],+dp[1]-1,+dp[2]);
+        if(isAvail){
+          var ab=availBlocks.find(function(x){return x.id===bid;});
+          if(ab){ moveAvailBlockToDate(ab,hovStaff,dd,new Date(origDateStr+'T00:00:00').getDay()); refreshView(); }
+        } else {
+          var blk=blocks.find(function(x){return x.id===bid;});
+          if(blk){ moveBlockToDate(blk,hovStaff,dd,new Date(origDateStr+'T00:00:00').getDay()); refreshView(); }
+        }
+      }
+    });
+  }
+
+  // Shared helper: build a week/month table for schedule or availability mode
+
+
+
+  // WYSIWYG toolbar handler — shared by both schedule and availability editors
+  $(document).on('mousedown', '.wysiwyg-btn', function(e){
+    e.preventDefault(); // prevent blur on contenteditable
+    var cmd = $(this).data('cmd');
+    document.execCommand(cmd, false, null);
+    // Toggle active state for formatting buttons
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
+  });
+  // Update toolbar active states on cursor move
+  $(document).on('keyup mouseup', '.wysiwyg-body', function(){
+    var $tb = $(this).closest('.wysiwyg-wrap').find('.wysiwyg-toolbar');
+    $tb.find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
+    $tb.find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
+    $tb.find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
+  });
+
+  $('#avail-modal-close').on('click',closeAvailModal);
+  $('#avail-modal-overlay').on('click',function(e){if($(e.target).is('#avail-modal-overlay'))closeAvailModal();});
+
+  /* ── Mode toggle ── */
+
+  $('#avail-dow-wrap').on('click','.dow-pill',function(){
+    var d=+$(this).data('d');
+    if($(this).hasClass('on')){sAvailDays=sAvailDays.filter(function(x){return x!==d;});$(this).removeClass('on');}
+    else{sAvailDays.push(d);sAvailDays.sort();$(this).addClass('on');}
+  });
+  function setAvailDays(arr){sAvailDays=arr?arr.slice():[];$('#avail-dow-wrap .dow-pill').each(function(){$(this).toggleClass('on',sAvailDays.includes(+$(this).data('d')));});}
+
+  // Availability status switch
+  $('#avail-modal-overlay').on('click','.avail-opt',function(){
+    sAvailStatus=$(this).data('st');
+    $(this).closest('.avail-switch').find('.avail-opt').removeClass('active');
+    $(this).addClass('active');
+  });
+
+  function isAvailApplicableToday(b){
+    var dow=new Date(viewYear,viewMonth,viewDay).getDay();
+    var ds=viewDateStr();
+    if(!b.days||b.days.indexOf(dow)===-1) return false;
+    if(b.ds&&ds<b.ds) return false;
+    if(b.de&&ds>b.de) return false;
+    return true;
+  }
+
+  function isAvailApplicableOnDate(b,d){
+    var dow=d.getDay(), ds=localDateStr(d);
+    if(!b.days||b.days.indexOf(dow)===-1) return false;
+    if(b.ds&&ds<b.ds) return false;
+    if(b.de&&ds>b.de) return false;
+    return true;
+  }
+
+  // Render availability blocks as translucent diagonal-stripe overlays in the schedule grid
+  function rAvailOverlay(){
+    if(!availOverlay) return;
+    var fs = getFilteredStaff();
+    var $layer = $('#blocks-layer');
+    var dow = new Date(viewYear, viewMonth, viewDay).getDay();
+    var ds  = viewDateStr();
+
+    availBlocks.forEach(function(a){
+      if(!a.days || a.days.indexOf(dow) === -1) return;
+      if(a.ds && ds < a.ds) return;
+      if(a.de && ds > a.de) return;
+
+      var rowIdx = fs.findIndex(function(s){ return s.n === a.coach; });
+      if(rowIdx === -1) return;
+
+      var x = (a.s - SH) * HW;
+      var w = Math.max((a.e - a.s) * HW, 10);
+      var y = rowIdx * RH;
+      var h = RH;
+
+      // Build the overlay with pronounced left/right borders and inner stripe
+      var statusColors = {
+        'available':   '#1a8a4a',
+        'unavailable': '#c0392b',
+        'tentative':   '#1a5fa5',
+        'limited':     '#7b3fa0'
+      };
+      var col = statusColors[a.status] || '#888';
+
+      var $el = $('<div class="avail-overlay-block ao-' + a.status + '">')
+        .css({
+          left: x, top: y, width: w, height: h,
+          borderLeft:  '3px solid ' + col,
+          borderRight: '3px solid ' + col,
+        });
+      // Prepend so overlay sits BEHIND schedule blocks in the stacking order
+      $layer.prepend($el);
+    });
+  }
+
+  function attachDayTip($el, b, isAvail){
+    var $t = $('#tooltip');
+    $el.on('mouseenter', function(){
+      var dow = new Date(viewYear, viewMonth, viewDay).getDay();
+      var html = isAvail ? buildAvailTooltipHtml(b, dow) : buildBlockTooltipHtml(b, false, dow);
+      $t.html(html).show();
+    }).on('mousemove', function(e){
+      $t.css({left: e.clientX+14, top: e.clientY-10});
+    }).on('mouseleave', function(){
+      $t.hide();
+    });
+  }
+
+  function attachAvailDrag($el,b){
+    $el.on('mousedown',function(e){
+      if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;
+      e.preventDefault();
+      var moved=false;
+      var sx=e.clientX,sy=e.clientY,os=b.s,or2=b.row,dur=b.e-b.s;
+      var fs=getFilteredStaff();
+      $(document).on('mousemove.adrag',function(e2){
+        var dx=e2.clientX-sx, dy=e2.clientY-sy;
+        if(!moved && Math.sqrt(dx*dx+dy*dy)<5) return;
+        if(!moved){ moved=true; $el.addClass('dragging'); }
+        var ns=Math.max(SH,Math.min(SH+NHRS-dur,os+Math.round(dx/HW*4)/4));
+        b.s=ns;b.e=ns+dur;
+        var nr=Math.max(0,Math.min(fs.length-1,or2+Math.round(dy/RH)));
+        if(nr!==b.row){b.row=nr;b.coach=fs[nr].n;}
+        rAvailBlocks();
+      });
+      $(document).one('mouseup.adrag',function(){
+        $(document).off('mousemove.adrag');
+        if(moved){ $el.removeClass('dragging'); rAvailBlocks(); rStaff(); }
+        else { openAvailEdit(b.id); }
+      });
+    });
+  }
+
+  function attachAvailResize($h,b){
+    $h.on('mousedown',function(e){
+      e.preventDefault();e.stopPropagation();
+      var $el=$h.closest('.sched-block').addClass('resizing'),sx=e.clientX,oe=b.e;
+      $(document).on('mousemove.aresize',function(e2){b.e=Math.max(b.s+.25,Math.min(SH+NHRS,oe+Math.round((e2.clientX-sx)/HW*4)/4));rAvailBlocks();});
+      $(document).one('mouseup.aresize',function(){$el.removeClass('resizing');$(document).off('mousemove.aresize');rAvailBlocks();rStaff();});
+    });
+  }
+
+  // Open edit modal for availability
+  function openAvailEdit(id, onDate){
+    var b=availBlocks.find(function(x){return x.id===id;});if(!b)return;
+    availEditingId=id;availCreating=false;sAvailCoach=b.coach||'';sAvailStatus=b.status||'available';
+    var d = onDate || new Date(viewYear,viewMonth,viewDay);
+    editedOnDow = d.getDay();
+    editedOnDs  = localDateStr(d);
+    $('#avail-modal-title').text('✎  Edit availability');
+    acb.sv(b.coach||'');
+    $('#avail-modal-overlay .avail-opt').removeClass('active');
+    $('#avail-modal-overlay .avail-opt[data-st="'+sAvailStatus+'"]').addClass('active');
+    setAvailDays(b.days||[]);
+    markCurrentDow('avail-dow-wrap', editedOnDow);
+    $('#avail-time-start').val(fmtT(b.s));$('#avail-time-end').val(fmtT(b.e));
+    $('#avail-date-start').val(b.ds||'');$('#avail-date-end').val(b.de||'');
+    $('#avail-desc').html(b.description||'');$('#avail-error').text('');
+    buildAvailFooter(false);
+    $('#avail-modal-overlay').addClass('open');
+    markCurrentDow('avail-dow-wrap', editedOnDow);
+  }
+
+  function openAvailCreate(opts){
+    opts=opts||{};availEditingId=null;availCreating=true;sAvailCoach=opts.coach||'';sAvailStatus='available';
+    $('#avail-modal-title').text('+ Add availability');
+    acb.sv(sAvailCoach);
+    $('#avail-modal-overlay .avail-opt').removeClass('active');
+    $('#avail-modal-overlay .avail-opt[data-st="available"]').addClass('active');
+    var dow=opts.days?opts.days:[new Date(viewYear,viewMonth,viewDay).getDay()];
+    setAvailDays(dow);
+    markCurrentDow('avail-dow-wrap', -1);  // no highlight for new availability blocks
+    $('#avail-time-start').val(opts.startTime||'9:00 AM');$('#avail-time-end').val(opts.endTime||'5:00 PM');
+    var _baseD=opts.date
+      ?(function(){ var p=opts.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })()
+      :new Date(viewYear,viewMonth,viewDay);
+    var _wSun=new Date(_baseD.getFullYear(),_baseD.getMonth(),_baseD.getDate()-_baseD.getDay());
+    var _wSat=new Date(_baseD.getFullYear(),_baseD.getMonth(),_baseD.getDate()-_baseD.getDay()+6);
+    var _defStart=localDateStr(_wSun); // always Sunday of that week
+    var _defEnd=localDateStr(_wSat);
+    $('#avail-date-start').val(_defStart);$('#avail-date-end').val(_defEnd);
+    $('#avail-desc').html('');$('#avail-error').text('');
+    buildAvailFooter(true);
+    $('#avail-modal-overlay').addClass('open');
+  }
+
+  function closeAvailModal(){$('#avail-modal-overlay').removeClass('open');availEditingId=null;availCreating=false;}
+
+  function buildAvailFooter(cr){
+    var $f=$('#avail-modal-footer').empty();
+    if(!cr)$f.append($('<button class="btn-delete">').html('🗑 Delete').on('click',function(){showAvailDeletePopup();}));
+    $f.append($('<button class="btn-cancel">').text('Cancel').on('click',closeAvailModal),
+      $('<button class="btn-save">').text(cr?'Create':'Save changes').on('click',doAvailSave));
+  }
+
+  function doAvailSave(){
+    var ns=parseT($('#avail-time-start').val()),ne=parseT($('#avail-time-end').val());
+    var ds=$('#avail-date-start').val(),de=$('#avail-date-end').val();
+    var $e=$('#avail-error');
+    if(!sAvailCoach){$e.text('Please select a staff member.');return;}
+    if(!sAvailDays.length){$e.text('Select at least one day of the week.');return;}
+    if(!ds){$e.text('Please set a start date.');return;}
+    if(!de){$e.text('Please set an end date.');return;}
+    if(de<ds){$e.text('End date must be on or after start date.');return;}
+    if(ns===null){$e.text('Invalid start time.');return;}
+    if(ne===null){$e.text('Invalid end time.');return;}
+    if(ne<=ns){$e.text('End time must be after start time.');return;}
+    var row=(function(){var i=STAFF.findIndex(function(s){return s.n===sAvailCoach;});return i>-1?i:0;})();
+    var desc=$('#avail-desc').html()||'';
+    var data={coach:sAvailCoach,status:sAvailStatus,days:sAvailDays.slice(),ds:ds,de:de,s:ns,e:ne,row:row,description:desc};
+    if(availCreating){availBlocks.push(Object.assign({id:availNextId++},data));}
+    else{var b=availBlocks.find(function(x){return x.id===availEditingId;});if(b)Object.assign(b,data);}
+    closeAvailModal();refreshView();
+  }
+
+  function showAvailDeletePopup(){
+    deleteContext = 'availability';
+    // editedOnDow and editedOnDs are already set correctly by openAvailEdit() — don't overwrite them
+    $('#avail-modal-overlay').removeClass('open');
+    $('#delete-popup-overlay').addClass('open');
+  }
+
+  // WYSIWYG toolbar handler — shared by both schedule and availability editors
+  $(document).on('mousedown', '.wysiwyg-btn', function(e){
+    e.preventDefault(); // prevent blur on contenteditable
+    var cmd = $(this).data('cmd');
+    document.execCommand(cmd, false, null);
+    // Toggle active state for formatting buttons
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
+    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
+  });
+  // Update toolbar active states on cursor move
+  $(document).on('keyup mouseup', '.wysiwyg-body', function(){
+    var $tb = $(this).closest('.wysiwyg-wrap').find('.wysiwyg-toolbar');
+    $tb.find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
+    $tb.find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
+    $tb.find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
+  });
+
+  $('#avail-modal-close').on('click',closeAvailModal);
+  $('#avail-modal-overlay').on('click',function(e){if($(e.target).is('#avail-modal-overlay'))closeAvailModal();});
+
+  /* ── Mode toggle ── */
+  function rPeople(){ render(); }
+
+
+  function showPeopleDetail(s){
+    var det = getStaffDetail(s.id);
+    var absIdx = STAFF.findIndex(function(x){return x.n===s.n;});
+    var avatarBg = AVATAR_COLORS[absIdx % AVATAR_COLORS.length];
+    var isEditing = false;
+
+    function v(key){ return det[key] || ''; }
+
+    function buildCard(){
+      var $wrap = $('<div>').css({maxWidth:'560px',padding:'16px'});
+
+      // ── Compact header ──
+      var $hdr = $('<div class="d-flex align-items-center gap-3 mb-3">');
+      var $av = $('<div class="staff-avatar flex-shrink-0">').css({
+        width:'46px',height:'46px',fontSize:'17px',background:avatarBg,
+        borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+        color:'#fff',fontWeight:'700',boxShadow:'0 2px 8px rgba(0,0,0,.18)',flexShrink:'0'
+      }).text(initials(s.n));
+      var $info = $('<div class="flex-grow-1 min-width-0">').append(
+        $('<div class="fw-semibold text-dark lh-sm" style="font-size:14px;">').text(v('fullName')||s.n),
+        $('<div class="text-muted" style="font-size:11px;margin-top:1px;">').html('ID&nbsp;<strong>'+s.id+'</strong>')
+      );
+      var $btn = $('<button class="btn btn-sm flex-shrink-0" style="font-size:11px;padding:3px 10px;">').addClass(isEditing?'btn-success':'btn-outline-secondary')
+        .text(isEditing?'✓ Save':'Edit');
+      $btn.on('click',function(){
+        if(isEditing){
+          $wrap.find('[data-key]').each(function(){setStaffDetail(s.id,$(this).attr('data-key'),$(this).val());});
+          isEditing=false;
+        } else { isEditing=true; }
+        det=getStaffDetail(s.id);
+        $('#people-panel').empty().append(buildCard());
+      });
+      $hdr.append($av,$info,$btn);
+      $wrap.append($hdr);
+
+      // ── Field list helper ──
+      function row(label,key,readOnly){
+        var rawVal=readOnly?(det[key]||s[key]||''):v(key);
+        var $label=$('<dt class="text-uppercase text-muted fw-semibold" style="font-size:9.5px;letter-spacing:.06em;padding-top:1px;">').text(label);
+        var $value;
+        if(readOnly||!isEditing){
+          $value=$('<dd class="mb-0" style="font-size:12.5px;color:'+(rawVal?'#212529':'#adb5bd')+';">').text(rawVal||'');
+        } else {
+          $value=$('<dd class="mb-0" style="padding-right:10px;">').append(
+            $('<input type="text" class="form-control form-control-sm" style="font-size:12px;">').attr('data-key',key).val(v(key)).attr('placeholder','')
+          );
+        }
+        return [$label,$value];
+      }
+
+      function section(title,color,fields){
+        var $card=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:hidden;">');
+        var $hd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+        $hd.append(
+          $('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:'+color+';">').text(title)
+        );
+        var $dl=$('<dl class="row g-0 mb-0 px-3 py-2" style="row-gap:'+(isEditing?'10px':'6px')+';column-gap:0;">');
+        fields.forEach(function(f){
+          var r=row(f[0],f[1],f[2]);
+          var $col=$('<div class="col-6">').append(r[0],r[1]);
+          if(f[3]) $col.removeClass('col-6').addClass('col-12');
+          $dl.append($col);
+        });
+        $card.append($hd,$dl);
+        return $card;
+      }
+
+      $wrap.append(
+        section('General','#0d6efd',[
+          ['Full Name','fullName',false,false],
+          ['ADP ID','adpId',false,false],
+          ['Phone','phone',false,false],
+          ['Email','email',false,false],
+          ['Address','address',false,true]
+        ]),
+        section('Emergency','#dc3545',[
+          ['Contact Name','emergencyName',false,false],
+          ['Contact Phone','emergencyPhone',false,false]
+        ])
+      );
+
+      return $wrap;
+    }
+
+    $('#people-panel').empty().append(buildCard());
+  }
+
+
+  function setPageMode(m){
+    pageMode=m;
+    $('#btn-people').toggleClass('active',m==='people');
+    $('body').toggleClass('people-mode', m==='people');
+    $('#btn-schedule').toggleClass('active',m==='schedule');
+    $('#btn-availability').toggleClass('active',m==='availability');
+    // Show/hide view controls — hidden in people mode
+    $('.view-toggle,.date-nav').toggle(m!=='people');
+    $('#summary-bar').toggle(m!=='people');
+    // Hide people panel when leaving people mode; restore timeline when entering schedule/avail
+    if(m!=='people'){
+      $('#people-panel').hide().css('display','none');
+      selectedPersonId = null;
+      // Ensure timeline-area is visible so render() can populate it
+      $('#timeline-area').show();
+      $('#timeline-header,#grid-body').show();
+    }
+    // Show/hide school+discipline filters and overlay checkbox
+    $('.filter-item').toggle(m==='schedule');
+    syncOverlayCheckVisibility();
+    $('#filter-reset').toggle(m==='schedule' && !!(filterSchool||filterProg));
+    if(m==='availability'){
+      filterSchool=''; filterProg='';
+      $('#filter-school').val(''); $('#filter-prog').val('');
+    }
+    // Remove week container so it rebuilds cleanly for the new mode
+    $('#week-container').remove();
+    // Empty the blocks layer so no stale schedule/avail blocks linger
+    $('#blocks-layer').empty();
+    // Immediately show/hide summary bar
+    $('#summary-bar').toggle(m === 'schedule');
+    // Push a history entry for this mode change (after state is set, before render)
+    updateURL(false);
+    render(false);
+  }
+
+
+  /* ── Override refreshView and render to handle availability mode ── */
+
+  $('#btn-day').on('click',function(){
+    viewMode='day';
+    $(this).addClass('active');$('#btn-week').removeClass('active');$('#btn-month').removeClass('active');
+    render();
+  });
+
+  $('#today-badge').on('click',function(){
+    var now=new Date();
+    viewYear=now.getFullYear(); viewMonth=now.getMonth(); viewDay=now.getDate();
+    viewMode='day';
+    $('#btn-day').addClass('active');$('#btn-week').removeClass('active');$('#btn-month').removeClass('active');
+    render();
+  });
+  $('#btn-week').on('click',function(){
+    viewMode='week';
+    $(this).addClass('active');$('#btn-day').removeClass('active');$('#btn-month').removeClass('active');
+    render();
+  });
+  $('#btn-month').on('click',function(){
+    viewMode='month';
+    $(this).addClass('active');$('#btn-day').removeClass('active');$('#btn-week').removeClass('active');
+    render();
+  });
+
+  $('#staff-search').on('input',function(){
+    staffFilter=$(this).val().trim();
+    rStaff();rGrid();refreshView(true);
+  });
+
+  // Availability overlay checkbox
+  $('#avail-overlay-chk').on('change', function(){
+    availOverlay = $(this).is(':checked');
+    $('#avail-overlay-label').toggleClass('active', availOverlay);
+    refreshView(true);
+  });
+
+  // (syncOverlayCheckVisibility defined earlier)
+
+  // Click on day-view grid to create a block for that staff/time
+  $('#timeline-area').on('click', function(e){
+    if(viewMode !== 'day') return;
+    // Ignore clicks on blocks, buttons, handles
+    if($(e.target).closest('.sched-block,.edit-btn,.resize-handle').length) return;
+    // Must be clicking inside the grid body (not header)
+    if(!$(e.target).closest('#grid-body').length) return;
+
+    var $gb = $('#grid-body');
+    var gbOffset = $gb.offset();
+    var scrollLeft = $('#timeline-area').scrollLeft();
+    var scrollTop  = $('#timeline-area').scrollTop();
+
+    var x = e.pageX - gbOffset.left + scrollLeft;
+    var y = e.pageY - gbOffset.top  + scrollTop;
+
+    var fs = getFilteredStaff();
+    var rowIdx = Math.floor(y / RH);
+    if(rowIdx < 0 || rowIdx >= fs.length) return;
+    var staffMember = fs[rowIdx];
+
+    var rawHour = SH + x / HW;
+    var snapped = Math.round(rawHour * 4) / 4;
+    snapped = Math.max(SH, Math.min(SH + NHRS - 1, snapped));
+    var endSnapped = Math.min(SH + NHRS, snapped + 1);
+    var dow = new Date(viewYear, viewMonth, viewDay).getDay();
+
+    if(pageMode === 'availability'){
+      openAvailCreate({
+        coach:     staffMember.n,
+        date:      viewDateStr(),
+        days:      [dow],
+        startTime: fmtT(snapped),
+        endTime:   fmtT(endSnapped),
+      });
+    } else {
+      openCreate({
+        coach:     staffMember.n,
+        date:      viewDateStr(),
+        days:      [dow],
+        startTime: fmtT(snapped),
+        endTime:   fmtT(endSnapped),
+      });
+    }
+  });
   $('#modal-close-btn').on('click',closeModal);
   $('#modal-overlay').on('click',e=>{if($(e.target).is('#modal-overlay'))closeModal();});
-  $('#prev-btn').on('click',()=>{curDate=new Date(curDate);curDate.setDate(curDate.getDate()-1);render();});
-  $('#next-btn').on('click',()=>{curDate=new Date(curDate);curDate.setDate(curDate.getDate()+1);render();});
-  $('#timeline-area').on('scroll',function(){$('#staff-col').scrollTop($(this).scrollTop());});
-  render();
+  $('#prev-btn').on('click', function(){
+    var d;
+    if(viewMode==='month'){
+      d=new Date(viewYear, viewMonth-1, 1);
+    } else {
+      var step=viewMode==='week'?-7:-1;
+      d=new Date(viewYear,viewMonth,viewDay+step);
+    }
+    viewYear=d.getFullYear(); viewMonth=d.getMonth(); viewDay=d.getDate();
+    render();
+  });
+  $('#next-btn').on('click', function(){
+    var d;
+    if(viewMode==='month'){
+      d=new Date(viewYear, viewMonth+1, 1);
+    } else {
+      var step=viewMode==='week'?7:1;
+      d=new Date(viewYear,viewMonth,viewDay+step);
+    }
+    viewYear=d.getFullYear(); viewMonth=d.getMonth(); viewDay=d.getDate();
+    render();
+  });
+  // Two-way scroll sync: timeline ↔ staff column
+  var _syncingScroll = false;
+  $('#timeline-area').on('scroll', function(){
+    if(_syncingScroll) return;
+    _syncingScroll = true;
+    $('#staff-list-scroll').scrollTop($(this).scrollTop());
+    _syncingScroll = false;
+  });
+  $('#staff-list-scroll').on('scroll', function(){
+    if(_syncingScroll) return;
+    _syncingScroll = true;
+    $('#timeline-area').scrollTop($(this).scrollTop());
+    _syncingScroll = false;
+  });
+  // Backfill IDs on existing blocks that don't have them yet
+  blocks.forEach(function(b){
+    if(!b.progId){   var p=progByName(b.lbl);   if(p) b.progId=p.id; }
+    if(!b.coachId){  var c=coachByName(b.coach)||staffByName(b.coach); if(c) b.coachId=c.id; }
+    if(!b.schoolId){ var s=schoolByName(b.school); if(s) b.schoolId=s.id; }
+  });
+  loadFromURL();
+  render(true); // true = replace state on initial load
+
+  $('#btn-schedule').on('click',function(){if(pageMode!=='schedule') setPageMode('schedule');});
+  $('#btn-availability').on('click',function(){if(pageMode!=='availability') setPageMode('availability');});
+  $('#btn-people').on('click',function(){if(pageMode!=='people') setPageMode('people');});
+
+  
 });
 </script>
+
+</body>
+</html>
