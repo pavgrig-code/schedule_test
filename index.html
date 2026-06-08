@@ -2663,7 +2663,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Init data
     if(!guideDetails[String(g.id)]) guideDetails[String(g.id)]={};
     if(!guideDetails[String(g.id)].staffingHours) guideDetails[String(g.id)].staffingHours={};
-    var sh=guideDetails[String(g.id)].staffingHours;
+    // Init staffing options first — used throughout function
+    if(!guideDetails[String(g.id)]) guideDetails[String(g.id)]={};
+    if(!guideDetails[String(g.id)].staffingOpts) guideDetails[String(g.id)].staffingOpts={alternateWeeks:false,bySchool:false};
+    var sopts=guideDetails[String(g.id)].staffingOpts;
+
+    if(!guideDetails[String(g.id)].staffingHoursA) guideDetails[String(g.id)].staffingHoursA={};
+    if(!guideDetails[String(g.id)].staffingHoursB) guideDetails[String(g.id)].staffingHoursB={};
+    var _shMain=guideDetails[String(g.id)].staffingHours;
+    var _shA=guideDetails[String(g.id)].staffingHoursA;
+    var _shB=guideDetails[String(g.id)].staffingHoursB;
+    var sh=sopts.alternateWeeks?_shA:_shMain;
+    // Seed Week A from main if first time enabling A/B
+    if(sopts.alternateWeeks && Object.keys(_shA).length===0 && Object.keys(_shMain).length>0){
+      guideDetails[String(g.id)].staffingHoursA=JSON.parse(JSON.stringify(_shMain));
+      _shA=guideDetails[String(g.id)].staffingHoursA; sh=_shA;
+    }
+    // Grand-total suffix: 'a' when A/B, '' otherwise
+    var _sfx=sopts.alternateWeeks?'-a':'';
+
     var _pickers={}; // {roleKey: {dayKey: {start:$picker, end:$picker}}}
 
     // Shared action menu for time copy
@@ -2698,8 +2716,90 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var TOTAL_LABEL_CSS={border:BDR,background:'#f0f4f8',textAlign:'right',padding:'3px 6px',fontSize:'10px',color:'#495057',fontWeight:'700',whiteSpace:'nowrap',borderTop:'2px solid #adb5bd',verticalAlign:'middle'};
     var TOTAL_TD_CSS={border:BDR,background:'#f0f4f8',textAlign:'center',fontSize:'11px',fontWeight:'700',borderTop:'2px solid #adb5bd',verticalAlign:'middle',padding:'2px 3px'};
 
-    var $section=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;min-width:100%;">');
-    var $hd=$('<div class="px-3 py-2 fw-bold text-dark" style="font-size:12px;background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">').text('Staffing Hours');
+    var $section=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;min-width:100%;">').attr('id','staffing-section-'+g.id);
+
+    function getOptsBadgeText(){
+      var p=[];
+      if(sopts.alternateWeeks) p.push('A/B');
+      if(sopts.bySchool) p.push('By School');
+      return p.join(' ·');
+    }
+
+    var $hd=$('<div>').css({
+      fontSize:'12px',background:'#f8f9fb',borderBottom:'1px solid #e9ecef',
+      borderRadius:'calc(.375rem - 1px) calc(.375rem - 1px) 0 0',
+      padding:'6px 12px',display:'flex',alignItems:'center',gap:'8px'
+    });
+    $hd.append($('<span class="fw-bold text-dark">').text(sopts.alternateWeeks?'Staffing Hours – Week A':'Staffing Hours'));
+
+    // Options button + badge
+    var $optsBtn=$('<button type="button">').css({
+      background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
+      padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
+      display:'flex',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'4px'
+    }).html('Options <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+
+
+    // Restore button label on open
+    function updateOptsBtn(){
+      var badge=getOptsBadgeText();
+      var lbl=badge||'Options';
+      $optsBtn.html(lbl+' <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+      if(badge){ $optsBtn.css({borderColor:'#0d6efd',color:'#0d6efd'}); }
+      else { $optsBtn.css({borderColor:'#dee2e6',color:'#6c757d'}); }
+    }
+    updateOptsBtn();
+
+    // Dropdown (body-mounted for overflow escape)
+    var $optsDD=$('<div>').css({
+      position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
+      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'6px 0',
+      minWidth:'210px',display:'none',fontSize:'12px'
+    });
+    $('body').append($optsDD);
+
+    function buildOptsDD(){
+      $optsDD.empty();
+      function optRow(label,key){
+        var $lbl=$('<label>').css({display:'flex',alignItems:'center',gap:'10px',padding:'7px 16px',cursor:'pointer',color:'#212529',userSelect:'none'});
+        var $chk=$('<input type="checkbox">').css({width:'14px',height:'14px',cursor:'pointer',accentColor:'#0d6efd'}).prop('checked',sopts[key]);
+        $chk.on('change',function(){
+          sopts[key]=$(this).prop('checked');
+          updateOptsBtn();
+          // Rebuild staffing + calendar sections when A/B changes
+          if(key==='alternateWeeks'){
+            var gCur=PLANNING_GUIDES.find(function(x){return x.id===selectedGuideId;});
+            if(gCur){
+              var $newSf=buildStaffingSection(gCur);
+              $('#staffing-section-'+gCur.id).replaceWith($newSf);
+              var $newCal=buildCalendarSection(gCur);
+              $('#cal-section-'+gCur.id).replaceWith($newCal);
+              $newSf[0]._recalcAll && $newSf[0]._recalcAll();
+            }
+          }
+        });
+        $lbl.append($chk,$('<span>').text(label));
+        $lbl.on('mouseenter',function(){$(this).css('background','#f8f9fa');}).on('mouseleave',function(){$(this).css('background','');});
+        return $lbl;
+      }
+      $optsDD.append(optRow('Alternate Weeks (A/B)','alternateWeeks'),optRow('Separate by School','bySchool'));
+    }
+
+    $optsBtn.on('click',function(e){
+      e.stopPropagation();
+      if($optsDD.is(':visible')){ $optsDD.hide(); $(document).off('click._sopts'); return; }
+      buildOptsDD();
+      var r=$optsBtn[0].getBoundingClientRect();
+      $optsDD.css({top:(r.bottom+4)+'px',left:r.left+'px'}).show();
+      setTimeout(function(){
+        $(document).on('click._sopts',function(ev){
+          if(!$(ev.target).closest($optsDD).length&&!$(ev.target).is($optsBtn)){ $optsDD.hide(); $(document).off('click._sopts'); }
+        });
+      },0);
+    });
+
+    $hd.append($optsBtn);
+    $section.on('remove',function(){ $optsDD.remove(); $(document).off('click._sopts'); });
     $section.append($hd);
 
     var $scroll=$('<div style="overflow-x:auto;">');
@@ -2871,6 +2971,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     function updateAllHours($tb){
       var counts=getCounts();
+      // Show/hide conditional roles based on current counts
+      ROLES.forEach(function(role){
+        if(role.conditional){
+          var cnt=parseInt(counts[role.countKey])||0;
+          $tb.find('tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
+        }
+      });
       // Refresh count cells first
       ROLES.forEach(function(role){
         var cnt=counts[role.countKey]||0;
@@ -2897,10 +3004,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tb.find('.total-hrs-cell[data-day="'+day.k+'"]').each(function(){
           if($(this).closest('tr').is(':visible')) sum+=parseFloat($(this).text())||0;
         });
-        $tb.closest('table').find('.day-grand-total[data-day="'+day.k+'"]')
+        $tb.closest('table').find('.day-grand-total'+_sfx+'[data-day="'+day.k+'"]')
           .text(sum>0?(Math.round(sum*100)/100):'');
       });
-      // Refresh calendar hours from updated totals
       var $calSec=$('#planning-panel [id^="cal-section-"]');
       if($calSec.length && $calSec[0]._updateHours) $calSec[0]._updateHours();
     }
@@ -2922,7 +3028,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $footRow.append($('<td colspan="2">').css(Object.assign({},FOOT_CSS,{textAlign:'left',fontSize:'10px',letterSpacing:'.03em',textTransform:'uppercase',color:'#3d5a80',background:'#e8eef5'})).text('Total Hours Per Day'));
     DAYS.forEach(function(day){
       var _isWknd=day.k==='sat'||day.k==='sun';
-      $footRow.append($('<td class="day-grand-total">').attr('data-day',day.k).css(Object.assign({},FOOT_CSS,{fontSize:'11px',color:'#1a3a5c'},_isWknd?{background:'#c8dbee'}:{})).text(''));
+      $footRow.append($('<td>').addClass('day-grand-total'+_sfx).attr('data-day',day.k).css(Object.assign({},FOOT_CSS,{fontSize:'11px',color:'#1a3a5c'},_isWknd?{background:'#c8dbee'}:{})).text(''));
     });
     $tfoot.append($footRow);
     $tbl.append($tbody,$tfoot);
@@ -2931,7 +3037,157 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // Expose recalc so showGuideDetail can trigger it after DOM is ready
     $section[0]._recalcAll = function(){ updateAllHours($tbody); };
-    $section.on('remove',function(){ $stMenu.remove(); closeStMenu(); });
+
+    // ──── Week B (A/B mode) ────
+    if(sopts.alternateWeeks){
+      var shB=_shB;
+      // Ensure roles initialised in shB
+      ROLES.forEach(function(r){
+        if(!shB[r.key]) shB[r.key]={};
+        DAYS.forEach(function(d){ if(!shB[r.key][d.k]) shB[r.key][d.k]={start:'',end:''}; });
+      });
+
+      // Week B action-menu
+      var $stMenuB=$('<div>').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
+      $('body').append($stMenuB);
+      function closeStMenuB(){ $stMenuB.hide(); $(document).off('click._stmenub'); }
+
+      var _pickersB={};
+
+      // Week B heading
+      var $hdB=$('<div>').css({fontSize:'12px',background:'#f8f9fb',borderBottom:'1px solid #e9ecef',borderTop:'2px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#212529',marginTop:'6px'}).text('Staffing Hours – Week B');
+      $section.append($hdB);
+
+      var $scrollB=$('<div>').css({overflowX:'auto'});
+      var $tblB=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+
+      // Re-use header structure
+      var $theadB=$('<thead>');
+      var $hrB=$('<tr>');
+      function thB(txt,css2){ return $('<th>').css(Object.assign({},TH_CSS,css2||{})).text(txt); }
+      $hrB.append(thB('Role',{textAlign:'left',minWidth:'76px'}));
+      $hrB.append(thB('',{minWidth:'68px',background:'#f8f9fb'}));
+      DAYS.forEach(function(d){ var isW=d.k==='sat'||d.k==='sun'; $hrB.append(thB(d.l,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:isW?'#dde8f5':TH_CSS.background,color:isW?'#3d5a80':TH_CSS.color})); });
+      $theadB.append($hrB); $tblB.append($theadB);
+
+      var $tbodyB=$('<tbody class="staffing-tbody">');
+
+      ROLES.forEach(function(role){
+        var rowDefs=[{label:'Start Time',type:'start'},{label:'End Time',type:'end'},{label:'Hours',type:'hours'},{label:role.countLabel,type:'count'},{label:'Total Hours',type:'total'}];
+        rowDefs.forEach(function(row,ri){
+          var $tr=$('<tr>').attr('data-role-group',role.key);
+          var isTotal=(row.type==='total');
+          if(ri===0) $tr.append($('<td rowspan="5">').css(Object.assign({},ROLE_CSS,{padding:'6px 8px',lineHeight:'1.35'})).text(role.label));
+          $tr.append($('<td>').css(isTotal?TOTAL_LABEL_CSS:Object.assign({},LABEL_CSS,ri%2===0?{}:{background:'#fff'})).text(row.label));
+          DAYS.forEach(function(day){
+            var d2b=shB[role.key][day.k];
+            var _isW=day.k==='sat'||day.k==='sun';
+            var _baseBg=_isW?'#edf3fa':(ri%2===0?'#fafafa':'#fff');
+            var $td=$('<td>').css(isTotal?Object.assign({},TOTAL_TD_CSS,_isW?{background:'#d6e5f5'}:{}):Object.assign({},TD_CSS,{background:_baseBg}));
+
+            if(row.type==='start'||row.type==='end'){
+              (function(dRef,isE,rk,dk,dayLbl,roleLbl){
+                var $pickerB=mkTimePicker(isE?dRef.end:dRef.start,function(v){
+                  if(isE) dRef.end=v; else dRef.start=v;
+                  updateAllHoursB($tbodyB);
+                  setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                });
+                if(!_pickersB[rk]) _pickersB[rk]={};
+                if(!_pickersB[rk][dk]) _pickersB[rk][dk]={};
+                _pickersB[rk][dk][isE?'end':'start']=$pickerB;
+
+                var $dotsB=$('<div>').css({position:'absolute',top:'1px',right:'3px',fontSize:'10px',color:'#adb5bd',cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',userSelect:'none',lineHeight:'1',zIndex:'5'}).text('…');
+                $dotsB.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
+                $dotsB.on('click',function(e){
+                  e.stopPropagation(); closeStMenuB(); $stMenuB.empty();
+                  var curVal=isE?dRef.end:dRef.start; if(!curVal) return;
+                  var dispVal=window._PICKER_FMT(curVal);
+                  var WKDAYS=['mon','tue','wed','thu','fri'];
+                  function mkIt(lbl,cb){ return $('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lbl).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeStMenuB();cb();}); }
+                  function doRec(){ updateAllHoursB($tbodyB); setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
+                  $stMenuB.append(mkIt('Copy across '+dayLbl+' (vertically)',function(){ var cts=getCounts(); ROLES.forEach(function(r2){ if(!(cts[r2.countKey]>0)||!shB[r2.key]||!shB[r2.key][dk]) return; if(isE) shB[r2.key][dk].end=curVal; else shB[r2.key][dk].start=curVal; if(_pickersB[r2.key]&&_pickersB[r2.key][dk]){var $p=_pickersB[r2.key][dk][isE?'end':'start'];if($p)$p.find('input').val(dispVal);} }); doRec(); }));
+                  $stMenuB.append(mkIt('Copy to '+roleLbl+' on weekdays (horizontally)',function(){ WKDAYS.forEach(function(wdk){ if(!shB[rk]||!shB[rk][wdk]) return; if(isE) shB[rk][wdk].end=curVal; else shB[rk][wdk].start=curVal; if(_pickersB[rk]&&_pickersB[rk][wdk]){var $p=_pickersB[rk][wdk][isE?'end':'start'];if($p)$p.find('input').val(dispVal);} }); doRec(); }));
+                  $stMenuB.append(mkIt('Copy to all on weekdays',function(){ var cts2=getCounts(); ROLES.forEach(function(r2){ if(!(cts2[r2.countKey]>0)||!shB[r2.key]) return; WKDAYS.forEach(function(wdk){ if(!shB[r2.key][wdk]) return; if(isE) shB[r2.key][wdk].end=curVal; else shB[r2.key][wdk].start=curVal; if(_pickersB[r2.key]&&_pickersB[r2.key][wdk]){var $p=_pickersB[r2.key][wdk][isE?'end':'start'];if($p)$p.find('input').val(dispVal);} }); }); doRec(); }));
+                  var br=$dotsB[0].getBoundingClientRect(); $stMenuB.css({top:(br.bottom+4)+'px',left:Math.max(4,Math.min(br.right,window.innerWidth-200))+'px'}).show();
+                  setTimeout(function(){$(document).on('click._stmenub',closeStMenuB);},0);
+                });
+
+                var $inner=$('<div>').css({display:'block',width:'calc(100% - 22px)'}).append($pickerB);
+                $td.css({padding:'2px 3px',background:_isW?'#edf3fa':'#fff',position:'relative'}).append($inner,$dotsB)
+                  .on('mouseenter',function(){
+                    var cntKey=(ROLES.find(function(r2){return r2.key===rk;})||{countKey:''}).countKey;
+                    if((isE?!!dRef.end:!!dRef.start)&&(getCounts()[cntKey]||0)>0) $dotsB.show();
+                  }).on('mouseleave',function(){ $dotsB.hide(); });
+              })(d2b,row.type==='end',role.key,day.k,(DAYS.find(function(d){return d.k===day.k;})||{l:day.k}).l,role.label);
+
+            } else if(row.type==='hours'){
+              var hB=calcHours(d2b.start,d2b.end), invB=d2b.start&&d2b.end&&hB===null;
+              $td.append($('<span class="hrs-cell-b">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'600',color:invB?'#dc3545':'#212529'}).text(hB!==null?hB:(invB?'!':'')));
+            } else if(row.type==='count'){
+              $td.css({background:'#f0f4f8'});
+              $td.append($('<span class="count-cell-b">').attr('data-role',role.key).css({fontSize:'11px',color:'#495057',fontWeight:'600'}).text(getCounts()[role.countKey]||''));
+            } else {
+              var hB2=calcHours(d2b.start,d2b.end),cntB=getCounts()[role.countKey];
+              var totB=hB2!==null&&cntB?(Math.round(hB2*cntB*100)/100):'';
+              $td.append($('<span class="total-hrs-cell-b">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'700'}).text(totB));
+            }
+            $tr.append($td);
+          });
+          $tbodyB.append($tr);
+        });
+      });
+
+      // Initial hide of conditional roles in Week B where count = 0
+      (function(){
+        var counts=getCounts();
+        ROLES.forEach(function(role){
+          if(role.conditional && !(parseInt(counts[role.countKey])||0)){
+            $tbodyB.find('tr[data-role-group="'+role.key+'"]').hide();
+          }
+        });
+      })();
+
+      function updateAllHoursB($tb){
+        var counts=getCounts();
+        // Show/hide conditional roles based on count
+        ROLES.forEach(function(role){
+          if(role.conditional){
+            var cnt=parseInt(counts[role.countKey])||0;
+            $tb.find('tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
+          }
+        });
+        ROLES.forEach(function(role){ $tb.find('.count-cell-b[data-role="'+role.key+'"]').text(counts[role.countKey]||''); });
+        $tb.find('.hrs-cell-b').each(function(){
+          var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
+          var d=shB[rk]&&shB[rk][dk]?shB[rk][dk]:{start:'',end:''};
+          var h=calcHours(d.start,d.end),inv=d.start&&d.end&&h===null;
+          $(this).text(h!==null?h:(inv?'!':'')).css('color',inv?'#dc3545':'#212529');
+          var role2=ROLES.find(function(r){return r.key===rk;}),cnt=counts[role2.countKey]||0;
+          $tb.find('.total-hrs-cell-b[data-role="'+rk+'"][data-day="'+dk+'"]').text(h!==null&&cnt?(Math.round(h*cnt*100)/100):'');
+        });
+        DAYS.forEach(function(day){
+          var sum=0;
+          $tb.find('.total-hrs-cell-b[data-day="'+day.k+'"]').each(function(){ if($(this).closest('tr').is(':visible')) sum+=parseFloat($(this).text())||0; });
+          $tb.closest('table').find('.day-grand-total-b[data-day="'+day.k+'"]').text(sum>0?(Math.round(sum*100)/100):'');
+        });
+        var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours();
+      }
+
+      // Week B footer
+      var FOOT_CSSB={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',fontSize:'10px',color:'#495057',padding:'4px 6px',textAlign:'center',borderTop:'2px solid #7f9ab5'};
+      var $tfootB=$('<tfoot>'), $fRowB=$('<tr>');
+      $fRowB.append($('<td colspan="2">').css(Object.assign({},FOOT_CSSB,{textAlign:'left',textTransform:'uppercase',letterSpacing:'.03em',color:'#3d5a80',background:'#e8eef5'})).text('Total Hours Per Day'));
+      DAYS.forEach(function(day){ var _isW=day.k==='sat'||day.k==='sun'; $fRowB.append($('<td class="day-grand-total-b">').attr('data-day',day.k).css(Object.assign({},FOOT_CSSB,{fontSize:'11px',color:'#1a3a5c'},_isW?{background:'#c8dbee'}:{})).text('')); });
+      $tfootB.append($fRowB);
+      $tblB.append($tbodyB,$tfootB);
+      $scrollB.append($tblB);
+      $section.append($scrollB);
+
+      $section[0]._recalcAll=function(){ updateAllHours($tbody); updateAllHoursB($tbodyB); };
+      $section.on('remove',function(){ $stMenuB.remove(); closeStMenuB(); });
+    } else {
+      $section.on('remove',function(){ $stMenu.remove(); closeStMenu(); });
+    }
 
     return $section;
   }
@@ -3080,6 +3336,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
 
   function buildCalendarSection(g){
+    // Read guide's staffing options (needed for A/B alternation)
+    var sopts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{alternateWeeks:false,bySchool:false};
+
     var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
     var MSHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var DAY_COLS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -3168,7 +3427,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!$hrs.length) return;
       if(isHoliday||isNoSchool){ $hrs.text(''); return; }
       var srcKey=isMinDay?'min':dayKey;
-      var val=$('#planning-panel .day-grand-total[data-day="'+srcKey+'"]').text()||'';
+      var abWeek=$td.closest('tr').attr('data-ab-week')||'';
+      var cls=abWeek?'.day-grand-total-'+abWeek:'.day-grand-total';
+      var val=$('#planning-panel '+cls+'[data-day="'+srcKey+'"]').text()||'';
       $hrs.text(val?val+' hrs':'');
     }
 
@@ -3200,8 +3461,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     var $tbody=$('<tbody>');
     weeks.forEach(function(days,wi){
+      var _abWeek=sopts.alternateWeeks?(wi%2===0?'a':'b'):'';
       var $tr=$('<tr>');
-      $tr.append($('<td>').css({border:BDR,padding:'4px 6px',textAlign:'center',fontSize:'10px',fontWeight:'700',color:'#495057',background:'#f8f9fb',whiteSpace:'nowrap'}).text('Week '+(wi+1)));
+      if(_abWeek) $tr.attr('data-ab-week',_abWeek);
+      $tr.append((function(){
+        var $wc=$('<td>').css({border:BDR,padding:'4px 6px',textAlign:'center',fontSize:'10px',fontWeight:'700',color:'#495057',background:'#f8f9fb',whiteSpace:'nowrap'});
+        if(sopts.alternateWeeks){
+          var abLbl=_abWeek.toUpperCase();
+          $wc.append($('<span>').text('Week '+(wi+1)));
+          $wc.append($('<span>').css({display:'inline-block',marginLeft:'4px',fontSize:'9px',fontWeight:'700',color:_abWeek==='a'?'#1a73e8':'#e8710a',background:_abWeek==='a'?'#e8f0fe':'#fce8d5',borderRadius:'3px',padding:'0 4px',verticalAlign:'middle',lineHeight:'1.7'}).text(abLbl));
+        } else { $wc.text('Week '+(wi+1)); }
+        return $wc;
+      })());
       $tr.append($('<td>').css({border:BDR,padding:'4px 8px',fontSize:'10px',color:'#6c757d',background:'#fafafa',whiteSpace:'nowrap'}).text(fmtDate(days[0])+' – '+fmtDate(days[6])));
 
       days.forEach(function(day,di){
@@ -3329,8 +3600,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     function showCalTooltip($td, dayKey, gObj, cellDate){
       _tipAnchor=$td;
-      // Always read fresh from guide details — never rely on closure-captured values
-      var shData=(guideDetails[String(gObj.id)]&&guideDetails[String(gObj.id)].staffingHours)||{};
+      // Always read fresh — use A/B data store when appropriate
+      var abWeek=$td.closest('tr').attr('data-ab-week')||'';
+      var _gdet=guideDetails[String(gObj.id)]||{};
+      var shData=abWeek==='b'?(_gdet.staffingHoursB||{}):abWeek==='a'?(_gdet.staffingHoursA||_gdet.staffingHours||{}):(_gdet.staffingHours||{});
       var counts=(function(){
         var rows=(guideDetails[String(gObj.id)].siteRows)||[];
         var t={sm:0,ac:0,coaches_tkk:0,coaches_g13:0,coaches_g46:0,coaches_g18:0};
