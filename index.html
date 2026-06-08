@@ -2747,6 +2747,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $optsBtn.html(lbl+' <span style="font-size:8px;opacity:.7;">&#9660;</span>');
       if(badge){ $optsBtn.css({borderColor:'#0d6efd',color:'#0d6efd'}); }
       else { $optsBtn.css({borderColor:'#dee2e6',color:'#6c757d'}); }
+      // Reposition dropdown immediately after label/width change
+      if($optsDD && $optsDD.is(':visible') && $optsBtn.closest('body').length){
+        var r=$optsBtn[0].getBoundingClientRect();
+        var tx=r.left, ty=r.bottom+4;
+        if(ty+$optsDD.outerHeight()>window.innerHeight-8) ty=r.top-$optsDD.outerHeight()-4;
+        if(tx+$optsDD.outerWidth()>window.innerWidth-8) tx=window.innerWidth-$optsDD.outerWidth()-8;
+        $optsDD.css({top:Math.max(4,ty)+'px',left:Math.max(4,tx)+'px'});
+      }
     }
     updateOptsBtn();
 
@@ -2785,21 +2793,50 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $optsDD.append(optRow('Alternate Weeks (A/B)','alternateWeeks'),optRow('Separate by School','bySchool'));
     }
 
+    var _optsUid='opts-dd-'+Math.random().toString(36).slice(2);
+    $optsDD.attr('data-opts-uid',_optsUid);
+    $optsBtn.attr('data-opts-uid',_optsUid);
+
+    // rAF loop to track button position while dropdown is open
+    var _optsRaf=null;
+    function _optsPosDD(){
+      if(!$optsDD || !$optsDD.is(':visible')){ _optsRaf=null; return; }
+      // Stop if button is detached from DOM (e.g. during section rebuild)
+      if(!$optsBtn.closest('body').length){ _optsRaf=null; return; }
+      var r=$optsBtn[0].getBoundingClientRect();
+      var tx=r.left, ty=r.bottom+4;
+      if(ty+$optsDD.outerHeight()>window.innerHeight-8) ty=r.top-$optsDD.outerHeight()-4;
+      if(tx+$optsDD.outerWidth()>window.innerWidth-8) tx=window.innerWidth-$optsDD.outerWidth()-8;
+      $optsDD.css({top:Math.max(4,ty)+'px',left:Math.max(4,tx)+'px'});
+      _optsRaf=requestAnimationFrame(_optsPosDD);
+    }
+
     $optsBtn.on('click',function(e){
       e.stopPropagation();
-      if($optsDD.is(':visible')){ $optsDD.hide(); $(document).off('click._sopts'); return; }
+      if($optsDD.is(':visible')){
+        $optsDD.hide(); $(document).off('mousedown._sopts');
+        if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;}
+        return;
+      }
       buildOptsDD();
       var r=$optsBtn[0].getBoundingClientRect();
       $optsDD.css({top:(r.bottom+4)+'px',left:r.left+'px'}).show();
+      if(_optsRaf) cancelAnimationFrame(_optsRaf);
+      _optsRaf=requestAnimationFrame(_optsPosDD);
       setTimeout(function(){
-        $(document).on('click._sopts',function(ev){
-          if(!$(ev.target).closest($optsDD).length&&!$(ev.target).is($optsBtn)){ $optsDD.hide(); $(document).off('click._sopts'); }
+        $(document).on('mousedown._sopts',function(ev){
+          var uid=$optsDD.attr('data-opts-uid');
+          var insideDD=$(ev.target).closest('[data-opts-uid="'+uid+'"]').length>0;
+          if(!insideDD){
+            $optsDD.hide(); $(document).off('mousedown._sopts');
+            if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;}
+          }
         });
       },0);
     });
 
     $hd.append($optsBtn);
-    $section.on('remove',function(){ $optsDD.remove(); $(document).off('click._sopts'); });
+    $section.on('remove',function(){ $optsDD.remove(); $(document).off('mousedown._sopts'); if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;} });
     $section.append($hd);
 
     var $scroll=$('<div style="overflow-x:auto;">');
