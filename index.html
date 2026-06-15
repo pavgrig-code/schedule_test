@@ -1407,15 +1407,20 @@ $(function(){
     // Mode (new param: schedule=regular|availability; also support legacy mode=)
     var mo = params.get('schedule') || params.get('mode');
     if(mo==='availability') pageMode='availability';
-    else pageMode='schedule';
+    else if(mo) pageMode='schedule';
+    else pageMode='planning'; // default to Planning Guide when no mode specified
     // Section: section=staff sets staff mode
-    var sec=params.get('section')||'schedule';
+    var sec=params.get('section')||'';
     if(sec==='planning_guides'||sec==='planning'){
       pageMode='planning';
       try{ var _gid=params.get('planning_guide'); if(_gid) selectedGuideId=_gid; }catch(e){}
     } else if(sec==='staff'||sec==='people'){
       pageMode='people';
-      selectedPersonId=null; // will be set from staff_id below
+      selectedPersonId=null;
+    } else if(sec==='schedule'){
+      pageMode='schedule';
+    } else if(sec==='availability'){
+      pageMode='availability';
     }
     // staff_id
     var pidParam=params.get('staff_id');
