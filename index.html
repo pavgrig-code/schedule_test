@@ -3638,7 +3638,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   : [''];
 
                 // Copy srcShData → each matching target slot
-                var ALL_DAYS=['min','mon','tue','wed','thu','fri','sat','sun'];
+                var ALL_DAYS=DAYS.map(function(d){return d.k;});
                 var _fmt=window._PICKER_FMT||function(v){return v;};
                 _comboResults.forEach(function(tgt){
                   var tc=tgt.combo;
