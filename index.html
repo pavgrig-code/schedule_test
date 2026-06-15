@@ -4750,8 +4750,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       saveRoles(); refreshRolesTable(); rebuildAllFromRoles();
     });
 
-    $wrap.append($rolesSection);
-
+    var $rolesSdRow=$('<div>').css({display:'flex',flexWrap:'wrap',alignItems:'flex-start',gap:'12px',marginTop:'0'});
+    $rolesSdRow.append($rolesSection.css('marginTop','0'));
+    
     // ── Special Days section ──
     var specialDays=getSpecialDays(g.id);
     function saveSpecialDays(){ setGuideDetail(g.id,'specialDays',specialDays); }
@@ -4914,7 +4915,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       saveSpecialDays(); refreshSdTable(); rebuildFromSpecialDays();
     });
 
-    $wrap.append($sdSection);
+    $rolesSdRow.append($sdSection.css('marginTop','0'));
+    $wrap.append($rolesSdRow);
 
     // ── Calendar Setup section ──
     var $calSetupSection=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;">');
