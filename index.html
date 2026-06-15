@@ -3007,9 +3007,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function th(txt,extra){ return $('<th>').css(Object.assign({},TH_CSS,extra||{})).text(txt); }
     $hr.append(th('Role',{textAlign:'left',minWidth:'76px',padding:'4px 6px'}));
     $hr.append(th('',{minWidth:'68px',background:'#f8f9fb',padding:'4px 6px'}));
-    DAYS.forEach(function(d){
+    // Index of the last SD column (the one right before Mon) — used for the visual separator
+    var _lastSdIdx=DAYS.reduce(function(acc,d,i){ return d.isSd?i:acc; },-1);
+
+    DAYS.forEach(function(d,di){
       var isWknd=d.k==='sat'||d.k==='sun';
-      var $th=$('<th>').css(Object.assign({},TH_CSS,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:isWknd?'#dde8f5':TH_BG,color:isWknd?'#3d5a80':'#495057'}));
+      var isSep=(_lastSdIdx>=0 && di===_lastSdIdx);
+      var $th=$('<th>').css(Object.assign({},TH_CSS,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:isWknd?'#dde8f5':TH_BG,color:isWknd?'#3d5a80':'#495057'},isSep?{borderRight:'2px solid #9aafc5'}:{}));
       if(d.isSd){
         var sdColor=(getSdById(g.id,d.sdId)||{color:'#ffffff'}).color||'#ffffff';
         var $inner=$('<span>').css({display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'4px'});
@@ -3048,12 +3052,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($('<td>').css(isTotal?TOTAL_LABEL_CSS:Object.assign({},LABEL_CSS,ri%2===0?{}:{background:'#fff'})).text(row.label));
 
         // Day cells
-        DAYS.forEach(function(day){
+        DAYS.forEach(function(day,di){
           var d2=sh[role.key][day.k];
           var _isWknd=day.k==='sat'||day.k==='sun';
           var _wkndBg=_isWknd?'#edf3fa':'';
           var _baseBg=_isWknd?_wkndBg:(ri%2===0?'#fafafa':'#fff');
-          var $td=$('<td>').css(isTotal?Object.assign({},TOTAL_TD_CSS,_isWknd?{background:'#d6e5f5'}:{}):Object.assign({},TD_CSS,{background:_baseBg}));
+          var _isSep=(_lastSdIdx>=0 && di===_lastSdIdx);
+          var _sepStyle=_isSep?{borderRight:'2px solid #9aafc5'}:{};
+          var $td=$('<td>').css(Object.assign({},isTotal?Object.assign({},TOTAL_TD_CSS,_isWknd?{background:'#d6e5f5'}:{}):Object.assign({},TD_CSS,{background:_baseBg}),_sepStyle));
 
           if(row.type==='start'||row.type==='end'){
             var isEnd=row.type==='end';
@@ -3245,9 +3251,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $tfoot=$('<tfoot>');
     var $footRow=$('<tr>');
     $footRow.append($('<td colspan="2">').css(Object.assign({},FOOT_CSS,{textAlign:'left',fontSize:'10px',letterSpacing:'.03em',textTransform:'uppercase',color:'#3d5a80',background:'#e8eef5'})).text('Total Hours Per Day'));
-    DAYS.forEach(function(day){
+    DAYS.forEach(function(day,di){
       var _isWknd=day.k==='sat'||day.k==='sun';
-      $footRow.append($('<td>').addClass('day-grand-total'+_sfx).attr('data-day',day.k).css(Object.assign({},FOOT_CSS,{fontSize:'11px',color:'#1a3a5c'},_isWknd?{background:'#c8dbee'}:{})).text(''));
+      var _isSepF=(_lastSdIdx>=0 && di===_lastSdIdx);
+      $footRow.append($('<td>').addClass('day-grand-total'+_sfx).attr('data-day',day.k).css(Object.assign({},FOOT_CSS,{fontSize:'11px',color:'#1a3a5c'},_isWknd?{background:'#c8dbee'}:{},_isSepF?{borderRight:'2px solid #9aafc5'}:{})).text(''));
     });
     $tfoot.append($footRow);
     $tbl.append($tbody,$tfoot);
@@ -3331,9 +3338,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           function thU(t,cs){ return $('<th>').css(Object.assign({},TH_CSS,cs||{})).text(t); }
           $hrU.append(thU('Role',{textAlign:'left',minWidth:'76px',padding:'4px 6px'}));
           $hrU.append(thU('',{minWidth:'68px',background:'#f8f9fb',padding:'4px 6px'}));
-          DAYS.forEach(function(d){
+          var _lastSdIdxU=DAYS.reduce(function(acc,d,i){ return d.isSd?i:acc; },-1);
+          DAYS.forEach(function(d,di){
             var W=d.k==='sat'||d.k==='sun';
-            var $thU=$('<th>').css(Object.assign({},TH_CSS,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:W?'#dde8f5':TH_CSS.background,color:W?'#3d5a80':'#495057'}));
+            var _isSepU=(_lastSdIdxU>=0 && di===_lastSdIdxU);
+            var $thU=$('<th>').css(Object.assign({},TH_CSS,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:W?'#dde8f5':TH_CSS.background,color:W?'#3d5a80':'#495057'},_isSepU?{borderRight:'2px solid #9aafc5'}:{}));
             if(d.isSd){
               var sdColor2=(getSdById(g.id,d.sdId)||{color:'#ffffff'}).color||'#ffffff';
               var $inner2=$('<span>').css({display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'4px'});
@@ -3354,11 +3363,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var isT=(row.type==='total');
               if(ri===0) $tr.append($('<td rowspan="5">').css(Object.assign({},ROLE_CSS,{padding:'6px 8px',lineHeight:'1.35'})).text(role.label));
               $tr.append($('<td>').css(isT?TOTAL_LABEL_CSS:Object.assign({},LABEL_CSS,ri%2===0?{}:{background:'#fff'})).text(row.label));
-              DAYS.forEach(function(day){
+              DAYS.forEach(function(day,di){
                 var dRef=shData[role.key][day.k];
                 var W=day.k==='sat'||day.k==='sun';
                 var bBg=W?'#edf3fa':(ri%2===0?'#fafafa':'#fff');
-                var $td=$('<td>').css(isT?Object.assign({},TOTAL_TD_CSS,W?{background:'#d6e5f5'}:{}):Object.assign({},TD_CSS,{background:bBg}));
+                var _isSepUB=(_lastSdIdxU>=0 && di===_lastSdIdxU);
+                var $td=$('<td>').css(Object.assign({},isT?Object.assign({},TOTAL_TD_CSS,W?{background:'#d6e5f5'}:{}):Object.assign({},TD_CSS,{background:bBg}),_isSepUB?{borderRight:'2px solid #9aafc5'}:{}));
                 if(row.type==='start'||row.type==='end'){
                   (function(dR,isE,rk,dk,dLbl,rLbl){
                     var $pk=mkTimePicker(isE?dR.end:dR.start,function(v){
@@ -3436,7 +3446,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var FOOT_CU={border:BDR,background:'#f0f4f8',fontWeight:'700',fontSize:'10px',color:'#495057',padding:'4px 6px',textAlign:'center',borderTop:'2px solid #7f9ab5'};
           var $tfU=$('<tfoot>'), $frU=$('<tr>');
           $frU.append($('<td colspan="2">').css(Object.assign({},FOOT_CU,{textAlign:'left',textTransform:'uppercase',letterSpacing:'.03em',color:'#3d5a80',background:'#e8eef5'})).text('Total Hrs/Day'));
-          DAYS.forEach(function(day){ var W=day.k==='sat'||day.k==='sun'; $frU.append($('<td class="day-total-u">').attr({'data-day':day.k,'data-sfx':sfxClass}).css(Object.assign({},FOOT_CU,{fontSize:'11px',color:'#1a3a5c'},W?{background:'#c8dbee'}:{})).text('')); });
+          DAYS.forEach(function(day,di){ var W=day.k==='sat'||day.k==='sun'; var _isSepUF=(_lastSdIdxU>=0&&di===_lastSdIdxU); $frU.append($('<td class="day-total-u">').attr({'data-day':day.k,'data-sfx':sfxClass}).css(Object.assign({},FOOT_CU,{fontSize:'11px',color:'#1a3a5c'},W?{background:'#c8dbee'}:{},_isSepUF?{borderRight:'2px solid #9aafc5'}:{})).text('')); });
           $tfU.append($frU); $tblU.append($tbU,$tfU); $scr.append($tblU);
           return {$scroll:$scr,$tbody:$tbU,pickers:_p,recalc:function(){updU($tbU);}};
         }
@@ -5016,7 +5026,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         // Calendar Name cell — free-text combo (type custom or pick predefined)
         // Dropdown is portalled to <body> to escape overflow:hidden ancestors.
-        var CAL_NAME_PRESETS=['Fall','Winter','Spring','Summer Camp','Winter Break','Spring Break'];
+        var CAL_NAME_PRESETS=['TBD – School Day','Lunch / Recess','PLC','In Class','Full School Day','Before School','After School','Saturday School','Weekend Tournaments','Fall Intersession','Winter Intersession','Spring Intersession','Summer Program'];
         var $nameTd=$('<td>').css(Object.assign({},csTdStyle,{minWidth:'180px',padding:'2px 3px',position:'relative'}));
 
         var $cnRow=$('<div class="combo-input-row">').css({borderRadius:'4px',border:'1px solid #dde3ea',background:'#f7f9fc',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)'});
