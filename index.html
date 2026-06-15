@@ -5270,7 +5270,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       rebuildStaffingSection();
     });
 
-    $wrap.append($calSetupSection);
+    $calSetupSection.insertBefore($rolesSdRow);
 
     // ── Site Breakdown section ──
     var $section=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;min-width:100%;">');
