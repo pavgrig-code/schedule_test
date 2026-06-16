@@ -4797,7 +4797,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $thead=$('<thead>');
       var $htr=$('<tr>');
-      [['Color',{width:'44px'}],['Special Day',{minWidth:'150px',textAlign:'left'}],['No Hours',{width:'66px'}],['Del',{width:'46px'}]].forEach(function(pair){
+      [['',{width:'28px'}],['Special Day',{minWidth:'150px',textAlign:'left'}],['No Hours',{width:'66px'}],['Del',{width:'46px'}]].forEach(function(pair){
         $htr.append($('<th>').css(Object.assign({},sdThStyle,pair[1])).text(pair[0]));
       });
       $thead.append($htr); $tbl.append($thead);
@@ -4808,7 +4808,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         // Color cell
         (function(capturedRi){
-          var $colorTd=$('<td>').css(Object.assign({},sdTdStyle,{width:'44px',textAlign:'center',padding:'0 4px',verticalAlign:'middle'}));
+          var $colorTd=$('<td>').css(Object.assign({},sdTdStyle,{width:'28px',textAlign:'center',padding:'0 4px',verticalAlign:'middle'}));
           var $cirWrap=$('<div>').css({display:'flex',alignItems:'center',justifyContent:'center',height:'100%'});
           var $circle=$('<div>').css({width:'14px',height:'14px',background:specialDays[capturedRi].color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',cursor:'pointer',flexShrink:'0'});
           $cirWrap.append($circle); $colorTd.append($cirWrap);
