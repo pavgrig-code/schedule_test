@@ -9,7 +9,22 @@
 <body>
 
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
+/* Calendar cell hover — overlay via pseudo-element so SD background is never touched */
+.cal-day-cell { position: relative; }
+.cal-day-cell.cal-hovered::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 120, 220, 0.10);
+  pointer-events: none;
+}
+.cal-day-cell.cal-hovered-wknd::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 90, 180, 0.12);
+  pointer-events: none;
+}
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#f1f3f5;--bd:#dee2e6;--bd2:#e9ecef;--tx:#212529;--tx2:#6c757d;--blue:#0d6efd;--blue2:#0b5ed7;--red:#E24B4A;}
 html,body{height:100%;margin:0;padding:0;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow:hidden;}
@@ -3000,7 +3015,49 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     });
 
     $hd.append($optsBtn);
-    $section.on('remove',function(){ $optsDD.remove(); $(document).off('mousedown._sopts'); if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;} });
+
+    // View button — shown only when multiple combo tables are rendered
+    var $viewBtn=$('<button type="button">').css({
+      background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
+      padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
+      display:'none',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'0'
+    }).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+    $viewBtn.css('marginLeft','auto');
+    var $viewDD=$('<div>').css({
+      position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
+      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'6px 0',
+      minWidth:'210px',display:'none',fontSize:'12px'
+    });
+    $('body').append($viewDD);
+
+    var _viewRaf=null;
+    var _viewUid='view-dd-'+Math.random().toString(36).slice(2);
+    function _viewPosDD(){
+      if(!$viewDD.is(':visible')){ _viewRaf=null; return; }
+      if(!$viewBtn.closest('body').length){ _viewRaf=null; return; }
+      var r=$viewBtn[0].getBoundingClientRect();
+      var tx=r.left, ty=r.bottom+4;
+      if(ty+$viewDD.outerHeight()>window.innerHeight-8) ty=r.top-$viewDD.outerHeight()-4;
+      if(tx+$viewDD.outerWidth()>window.innerWidth-8) tx=window.innerWidth-$viewDD.outerWidth()-8;
+      $viewDD.css({top:Math.max(4,ty)+'px',left:Math.max(4,tx)+'px'});
+      _viewRaf=requestAnimationFrame(_viewPosDD);
+    }
+    function closeViewDD(){ $viewDD.hide(); $(document).off('mousedown.'+_viewUid); if(_viewRaf){cancelAnimationFrame(_viewRaf);_viewRaf=null;} }
+
+    $viewBtn.on('click',function(e){
+      e.stopPropagation();
+      if($viewDD.is(':visible')){ closeViewDD(); return; }
+      buildViewDD();
+      var r=$viewBtn[0].getBoundingClientRect();
+      $viewDD.css({top:(r.bottom+4)+'px',left:r.left+'px'}).show();
+      if(_viewRaf) cancelAnimationFrame(_viewRaf);
+      _viewRaf=requestAnimationFrame(_viewPosDD);
+      setTimeout(function(){ $(document).on('mousedown.'+_viewUid,function(e2){ if(!$viewDD[0].contains(e2.target)&&!$viewBtn[0].contains(e2.target)) closeViewDD(); }); },0);
+    });
+    $viewDD.on('click',function(e){ e.stopPropagation(); });
+    $hd.append($viewBtn);
+
+    $section.on('remove',function(){ $optsDD.remove(); $viewDD.remove(); closeViewDD(); $(document).off('mousedown._sopts'); if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;} });
     $section.append($hd);
 
     var $scroll=$('<div style="overflow-x:auto;">');
@@ -3072,7 +3129,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var $picker=mkTimePicker(isE?dRef.end:dRef.start,function(v){
                 if(isE) dRef.end=v; else dRef.start=v;
                 updateAllHours($tbody);
-                setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
               });
               if(!_pickers[rk]) _pickers[rk]={};
               if(!_pickers[rk][dk]) _pickers[rk][dk]={};
@@ -3103,7 +3160,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       }
                     });
                     updateAllHours($tbody);
-                    setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
                   });
                 // Option 2: Copy to {Role} on weekdays
                 var WEEKDAYS=['mon','tue','wed','thu','fri'];
@@ -3131,7 +3188,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       }
                     });
                     updateAllHours($tbody);
-                    setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
                   });
                 // Option 3: Copy to all roles — targets based on source day
                 var $item3=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
@@ -3153,7 +3210,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       });
                     });
                     updateAllHours($tbody);
-                    setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
                   });
                 $stMenu.append($item,$item2,$item3);
                 var br=$dots[0].getBoundingClientRect();
@@ -3201,43 +3258,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     function updateAllHours($tb){
       var counts=getCounts();
-      // Show/hide conditional roles based on current counts
       ROLES.forEach(function(role){
-        if(role.conditional){
-          var cnt=parseInt(counts[role.countKey])||0;
-          $tb.find('tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
-        }
+        if(role.conditional) $tb.find('tr[data-role-group="'+role.key+'"]').toggle(!!(parseInt(counts[role.countKey])||0));
+        $tb.find('.count-cell[data-role="'+role.key+'"]').text(counts[role.countKey]||'');
       });
-      // Refresh count cells first
-      ROLES.forEach(function(role){
-        var cnt=counts[role.countKey]||0;
-        $tb.find('.count-cell[data-role="'+role.key+'"]').text(cnt||'');
-      });
-      // Recalculate Hours and Total Hours
+      // Build hours map in one pass to avoid O(n²) nested finds
+      var hrsMap={};
       $tb.find('.hrs-cell').each(function(){
         var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
-        var d2=sh[rk][dk];
+        var d2=sh[rk]&&sh[rk][dk]?sh[rk][dk]:{start:'',end:''};
         var h=calcHours(d2.start,d2.end);
         var invalid=d2.start&&d2.end&&h===null;
         $(this).text(h!==null?h:(invalid?'!':'')).css('color',invalid?'#dc3545':'#212529');
+        hrsMap[rk+'|'+dk]=h;
+      });
+      $tb.find('.total-hrs-cell').each(function(){
+        var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
+        var h=hrsMap[rk+'|'+dk];
         var role2=ROLES.find(function(r){return r.key===rk;});
-        var cnt=counts[role2.countKey]||0;
-        var tot=h!==null&&cnt?(Math.round(h*cnt*100)/100):'';
-        $tb.find('.total-hrs-cell[data-role="'+rk+'"][data-day="'+dk+'"]').text(tot);
+        var cnt=role2?counts[role2.countKey]||0:0;
+        $(this).text(h!==null&&h!==undefined&&cnt?(Math.round(h*cnt*100)/100):'');
       });
       updateDayTotals($tb);
     }
 
     function updateDayTotals($tb){
+      var $tbl=$tb.closest('table');
       DAYS.forEach(function(day){
         var sum=0;
         $tb.find('.total-hrs-cell[data-day="'+day.k+'"]').each(function(){
-          if($(this).closest('tr').is(':visible')) sum+=parseFloat($(this).text())||0;
+          var $row=$(this).closest('tr');
+          if($row[0]&&$row[0].style.display!=='none') sum+=parseFloat($(this).text())||0;
         });
-        $tb.closest('table').find('.day-grand-total'+_sfx+'[data-day="'+day.k+'"]')
-          .text(sum>0?(Math.round(sum*100)/100):'');
+        $tbl.find('.day-grand-total'+_sfx+'[data-day="'+day.k+'"]').text(sum>0?(Math.round(sum*100)/100):'');
       });
-      var $calSec=$('#planning-panel [id^="cal-section-"]');
+      var $calSec=$('#cal-section-'+g.id);
       if($calSec.length && $calSec[0]._updateHours) $calSec[0]._updateHours();
     }
 
@@ -3316,6 +3371,85 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       } else {
         $scroll.hide();
 
+        // ── View button: activate only when multiple tables ─────────────────
+        if(_combos.length>1){
+          $viewBtn.css('display','inline-flex');
+
+          // Persistent selection state — null means "all" (default)
+          var _viewSel={schools:null, cals:null, wks:null};
+
+          function updateViewBtn(){
+            var parts=[];
+            if(sopts.bySchool && _schoolSlots.length>1 && _viewSel.schools && _viewSel.schools.length<_schoolSlots.length) parts.push(_viewSel.schools.length+' School'+((_viewSel.schools.length===1)?'':'s'));
+            if(sopts.byCalendar && _calSlots.length>1 && _viewSel.cals && _viewSel.cals.length<_calSlots.length) parts.push(_viewSel.cals.length+' Calendar'+((_viewSel.cals.length===1)?'':'s'));
+            if(sopts.alternateWeeks && _viewSel.wks && _viewSel.wks.length<2) parts.push(_viewSel.wks.map(function(w){return w==='a'?'Week A':'Week B';}).join(', '));
+            var badge=parts.join(' \u00b7 ');
+            $viewBtn.html((badge||'Filter')+' <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+            if(badge){ $viewBtn.css({borderColor:'#0d6efd',color:'#0d6efd'}); }
+            else { $viewBtn.css({borderColor:'#dee2e6',color:'#6c757d'}); }
+          }
+          updateViewBtn();
+
+          function buildViewDD(){
+            $viewDD.empty();
+            var state={schools:[], cals:[], wks:[]};
+
+            function mkVCb(lbl,checked){
+              var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'7px 16px',cursor:'pointer',color:'#212529',userSelect:'none'});
+              var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',width:'13px',height:'13px',accentColor:'#0d6efd',margin:'0'});
+              $row.append($cb,$('<span>').css({fontSize:'11px'}).text(lbl));
+              $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
+              return {$row:$row,$cb:$cb};
+            }
+            function mkSep(){ $viewDD.append($('<div>').css({borderTop:'1px solid #f0f0f0',margin:'3px 0'})); }
+
+            if(sopts.bySchool && _schoolSlots.length>1){
+              var _selSiSet=_viewSel.schools;
+              var allSchVCb=mkVCb('All Schools',!_selSiSet||_selSiSet.length===_schoolSlots.length); allSchVCb.$row.css({fontWeight:'600'}); $viewDD.append(allSchVCb.$row);
+              var childSchVCbs=[];
+              _schoolSlots.forEach(function(sch){ var nm='School '+(sch.si+1); var sl=(sch.sRow&&(sch.sRow.school||sch.sRow.schoolAbbr))||''; if(sl) nm+='. '+sl; var checked=!_selSiSet||_selSiSet.indexOf(sch.si)>=0; var cb=mkVCb(nm,checked); cb.$row.css({paddingLeft:'28px'}); state.schools.push({si:sch.si,$cb:cb.$cb}); childSchVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allSchVCb.$cb.prop('checked',childSchVCbs.every(function(c){return c.prop('checked');})); }); });
+              allSchVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childSchVCbs.forEach(function(c){c.prop('checked',v);}); });
+              mkSep();
+            }
+
+            if(sopts.byCalendar && _calSlots.length>1){
+              var _selCiSet=_viewSel.cals;
+              var allCalVCb=mkVCb('All Calendars',!_selCiSet||_selCiSet.length===_calSlots.length); allCalVCb.$row.css({fontWeight:'600'}); $viewDD.append(allCalVCb.$row);
+              var childCalVCbs=[];
+              _calSlots.forEach(function(cal){ var nm=(cal.calRow&&cal.calRow.name&&cal.calRow.name.trim())||('Calendar '+(cal.ci+1)); var checked=!_selCiSet||_selCiSet.indexOf(cal.ci)>=0; var cb=mkVCb(nm,checked); cb.$row.css({paddingLeft:'28px'}); state.cals.push({ci:cal.ci,$cb:cb.$cb}); childCalVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allCalVCb.$cb.prop('checked',childCalVCbs.every(function(c){return c.prop('checked');})); }); });
+              allCalVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childCalVCbs.forEach(function(c){c.prop('checked',v);}); });
+              mkSep();
+            }
+
+            if(sopts.alternateWeeks){
+              var _selWkSet=_viewSel.wks;
+              var allWkVCb=mkVCb('All Weeks',!_selWkSet||_selWkSet.length===2); allWkVCb.$row.css({fontWeight:'600'}); $viewDD.append(allWkVCb.$row);
+              var childWkVCbs=[];
+              ['a','b'].forEach(function(wk){ var checked=!_selWkSet||_selWkSet.indexOf(wk)>=0; var cb=mkVCb(wk==='a'?'Week A':'Week B',checked); cb.$row.css({paddingLeft:'28px'}); state.wks.push({wk:wk,$cb:cb.$cb}); childWkVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allWkVCb.$cb.prop('checked',childWkVCbs.every(function(c){return c.prop('checked');})); }); });
+              allWkVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childWkVCbs.forEach(function(c){c.prop('checked',v);}); });
+              mkSep();
+            }
+
+            var $btns=$('<div>').css({display:'flex',gap:'6px',padding:'6px 16px 4px'});
+            var $applyVBtn=$('<button type="button">').text('Apply').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'});
+            var $rstVBtn=$('<button type="button">').text('Reset').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+            $rstVBtn.on('click',function(e){ e.stopPropagation(); _viewSel={schools:null,cals:null,wks:null}; buildViewDD(); $viewDD.show(); });
+            $applyVBtn.on('click',function(e){
+              e.stopPropagation(); closeViewDD();
+              var selSi=state.schools.length ? state.schools.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.si;}) : _schoolSlots.map(function(s){return s.si;});
+              var selCi=state.cals.length ? state.cals.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.ci;}) : _calSlots.map(function(c){return c.ci;});
+              var selWk=state.wks.length ? state.wks.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.wk;}) : _wkSlots.slice();
+              // Save selection (null = all selected = no active filter)
+              _viewSel.schools=(sopts.bySchool&&_schoolSlots.length>1&&selSi.length<_schoolSlots.length)?selSi:null;
+              _viewSel.cals=(sopts.byCalendar&&_calSlots.length>1&&selCi.length<_calSlots.length)?selCi:null;
+              _viewSel.wks=(sopts.alternateWeeks&&selWk.length<2)?selWk:null;
+              updateViewBtn();
+              _comboResults.forEach(function(cr){ var tc=cr.combo; var vis=(selSi.indexOf(tc.si)>=0)&&(selCi.indexOf(tc.ci)>=0)&&(selWk.indexOf(tc.wk)>=0); cr.$hdr.toggle(vis); cr.res.$scroll.toggle(vis); });
+            });
+            $btns.append($rstVBtn,$applyVBtn); $viewDD.append($btns);
+          }
+        }
+
         function getSchoolCounts(sRow){
           if(!sRow){ var _t={}; ROLES.forEach(function(r){_t[r.countKey]=0;}); _allSiteRows.forEach(function(r){if(r)ROLES.forEach(function(role){_t[role.countKey]+=(parseInt(r[role.countKey])||0);});}); return _t; }
           var _t={}; ROLES.forEach(function(r){_t[r.countKey]=parseInt(sRow[r.countKey])||0;}); return _t;
@@ -3379,7 +3513,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     var $pk=mkTimePicker(isE?dR.end:dR.start,function(v){
                       if(isE) dR.end=v; else dR.start=v;
                       updU($tbU);
-                      setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                      setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
                     });
                     if(!_p[rk]) _p[rk]={}; if(!_p[rk][dk]) _p[rk][dk]={}; _p[rk][dk][isE?'end':'start']=$pk;
                     var $dt=$('<div>').css({position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#adb5bd',cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',userSelect:'none',lineHeight:'1',zIndex:'5'}).text('…');
@@ -3397,7 +3531,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                         return ['mon','tue','wed','thu','fri'];
                       })();
                       function mI(lb,cb){ return $('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
-                      function doR(){ updU($tbU); setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
+                      function doR(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
                       var _c=getCountsFn();
                       $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!(_c[r2.countKey]>0)||!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
                       $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
@@ -3432,20 +3566,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               if(role.conditional) $tb.find('tr[data-role-group="'+role.key+'"]').toggle(c[role.countKey]>0);
               $tb.find('.count-cell-u[data-role="'+role.key+'"]').text(c[role.countKey]||'');
             });
+            // Build hours map in one pass to avoid O(n²) nested finds
+            var hrsMap={};
             $tb.find('.hrs-cell-u').each(function(){
               var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
               var d=shData[rk]&&shData[rk][dk]?shData[rk][dk]:{start:'',end:''};
               var h=calcHours(d.start,d.end),inv=d.start&&d.end&&h===null;
               $(this).text(h!==null?h:(inv?'!':'')).css('color',inv?'#dc3545':'#212529');
-              var r2=ROLES.find(function(r){return r.key===rk;}),cnt=c[r2.countKey]||0;
-              $tb.find('.total-hrs-cell-u[data-role="'+rk+'"][data-day="'+dk+'"]').text(h!==null&&cnt?(Math.round(h*cnt*100)/100):'');
+              hrsMap[rk+'|'+dk]=h;
             });
+            $tb.find('.total-hrs-cell-u').each(function(){
+              var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
+              var h=hrsMap[rk+'|'+dk];
+              var r2=ROLES.find(function(r){return r.key===rk;}),cnt=r2?c[r2.countKey]||0:0;
+              $(this).text(h!==null&&h!==undefined&&cnt?(Math.round(h*cnt*100)/100):'');
+            });
+            var $tbl=$tb.closest('table');
             DAYS.forEach(function(day){
               var sum=0;
-              $tb.find('.total-hrs-cell-u[data-day="'+day.k+'"]').each(function(){ if($(this).closest('tr').is(':visible')) sum+=parseFloat($(this).text())||0; });
-              $tb.closest('table').find('.day-total-u[data-sfx="'+sfxClass+'"][data-day="'+day.k+'"]').text(sum>0?(Math.round(sum*100)/100):'');
+              // Use display:'none' check on the <tr> itself — not :visible which is affected
+              // by ancestor visibility (Filter hides the parent scroll div)
+              $tb.find('.total-hrs-cell-u[data-day="'+day.k+'"]').each(function(){
+                var $row=$(this).closest('tr');
+                if($row[0]&&$row[0].style.display!=='none') sum+=parseFloat($(this).text())||0;
+              });
+              $tbl.find('.day-total-u[data-sfx="'+sfxClass+'"][data-day="'+day.k+'"]').text(sum>0?(Math.round(sum*100)/100):'');
             });
-            setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+            setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
           }
 
           var FOOT_CU={border:BDR,background:'#f0f4f8',fontWeight:'700',fontSize:'10px',color:'#495057',padding:'4px 6px',textAlign:'center',borderTop:'2px solid #7f9ab5'};
@@ -3468,7 +3615,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $hdr=$('<div>').css({
             fontSize:'12px',background:'#f8f9fb',borderBottom:'1px solid #e9ecef',
             borderTop:'2px solid #dee2e6',padding:'6px 12px',fontWeight:'700',
-            color:'#212529',marginTop:'6px',display:'flex',alignItems:'center',gap:'0'
+            color:'#212529',marginTop:'0',display:'flex',alignItems:'center',gap:'0'
           }).attr({'data-sf-school':combo.si!==null?String(combo.si):'','data-sf-cal':combo.ci!==null?String(combo.ci):'','data-sf-wk':combo.wk||''});
 
           // Build label segments: [school] [–] [● calName] [–] [Week A/B]
@@ -3519,7 +3666,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var res=buildOneTable(shData,cFn,sfx);
           $section.append(res.$scroll);
           _allRecalcs.push(res);
-          _comboResults.push({combo:combo,shData:shData,res:res});
+          _comboResults.push({combo:combo,shData:shData,res:res,$hdr:$hdr});
 
           // ── Copy to dropdown (portalled) ────────────────────────────────
           (function(srcCombo, srcShData, $btn, comboIdx){
@@ -3678,7 +3825,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 });
 
                 // Refresh calendar section hours
-                setTimeout(function(){ var $cs=$('#planning-panel [id^="cal-section-"]'); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
               });
 
               $btns.append($rstBtn,$copyBtn);
@@ -3994,6 +4141,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var baseBg=inRange?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
       var markedBg=sd?sd.color:baseBg;
       $td.css({background:markedBg,color:inRange?'#212529':'#ccc'});
+      $td.attr('data-orig-bg',markedBg); // keep in sync so hideCalTooltip restores correctly
       $td.find('.cal-label').remove();
       if(sd){
         var sdIdx2=getSpecialDays(g.id).indexOf(sd);
@@ -4140,27 +4288,44 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // Hours display (read-only, populated by updateCalendarHours)
           if(inRange){
             $td.css('cursor','pointer');
+            $td.attr('data-orig-bg', cellBg);  // used by hideCalTooltip to restore bg
             $td.append($('<div class="cal-hours">').css({fontSize:'11px',fontWeight:'600',color:'#3c4043',lineHeight:'1.2',marginTop:'2px'}));
             var _initCellBg=cellBg;
             (function(dk, dateKey2, _baseBg2){
+              var _thisHasPopup=false;
+              var _hoverClass=isWknd?'cal-hovered-wknd':'cal-hovered';
               $td.on('mouseenter',function(){
-                var _hoverBg=isWknd?'#d4e8f8':'#e8f4fd';
+                cancelHide();
+                // Apply hover via CSS class — never touch inline background
+                $td.addClass(_hoverClass);
+                // Always read markers live
                 var _m2=markers[dateKey2];
-                if(!_m2||!_m2.sdId) $(this).css('background',_hoverBg);
                 var _sd2=_m2&&_m2.sdId?getSdById(g.id,_m2.sdId):null;
+                var _currentBg=_sd2?_sd2.color:_baseBg2;
                 if(!_sd2||!_sd2.noHours){
                   var hrsVal=parseFloat($td.find('.cal-hours').text());
                   if(hrsVal>0){
-                    // srcKey: if special day has hours, use sdId; else use weekday key
                     var _srcKey=(_sd2&&!_sd2.noHours)?_sd2.id:dk;
+                    _tipCellBg=_currentBg;
+                    $td.attr('data-orig-bg',_currentBg);
+                    _thisHasPopup=true;
                     showCalTooltip($td, _srcKey, g, day);
+                  } else {
+                    _thisHasPopup=false;
+                    hideCalTooltip();
                   }
+                } else {
+                  _thisHasPopup=false;
+                  hideCalTooltip();
                 }
               }).on('mouseleave',function(){
-                var _lm=markers[dateKey2];
-                var _lsd=_lm&&_lm.sdId?getSdById(g.id,_lm.sdId):null;
-                $(this).css('background',_lsd?_lsd.color:_baseBg2);
-                hideCalTooltip();
+                // Always remove hover class immediately — never leave it stuck
+                $td.removeClass(_hoverClass);
+                if(_thisHasPopup && _tipAnchor && _tipAnchor[0]===$td[0]){
+                  schedHide(120);
+                } else {
+                  _thisHasPopup=false;
+                }
               });
             })(_dayKey, dateKey, baseBg);
           }
@@ -4196,41 +4361,84 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $section.append($scroll);
     }); // end _calRowsWithIdx.forEach
 
-    // Populate hours once DOM is in place
-    setTimeout(function(){ updateCalendarHours(); }, 0);
+    // Debounce calendar hours refresh so multiple simultaneous triggers coalesce
+    var _calHoursRaf=null;
+    function scheduleCalendarHours(){
+      if(_calHoursRaf) cancelAnimationFrame(_calHoursRaf);
+      _calHoursRaf=requestAnimationFrame(function(){ _calHoursRaf=null; updateCalendarHours(); });
+    }
 
-    // Expose updater so external code can refresh it
-    $section[0]._updateHours = updateCalendarHours;
+    // Expose both: direct (for structural rebuilds) and scheduled (for incremental updates)
+    $section[0]._updateHours=scheduleCalendarHours;
+
+    setTimeout(function(){ updateCalendarHours(); }, 0);
 
     // ── Calendar tooltip ──
     var $calTip=$('<div>').css({
       position:'fixed',zIndex:'999998',background:'#fff',border:'1px solid #dee2e6',
-      borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,.15)',padding:'10px 12px',
-      fontSize:'11px',display:'none',pointerEvents:'none',minWidth:'300px',maxWidth:'420px'
+      borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,.15)',padding:'0',
+      fontSize:'11px',display:'none',minWidth:'300px',maxWidth:'440px',
+      // interactive so user can scroll, select text, and move mouse into it
+      pointerEvents:'auto'
     });
     $('body').append($calTip);
-    var _tipHide=null;
+    var _tipHide=null;   // delayed-hide timer
+    var _tipAnchor=null;
+    var _tipCellBg=null;   // original bg of the currently highlighted cell
+    var _rafId=null;
+
+    function cancelHide(){ if(_tipHide){clearTimeout(_tipHide);_tipHide=null;} }
+    function schedHide(delay){
+      cancelHide();
+      _tipHide=setTimeout(function(){ hideCalTooltip(); },delay||80);
+    }
 
     function hideCalTooltip(){
+      cancelHide();
+      if(_tipAnchor){
+        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd');
+        _tipCellBg=null;
+      }
       $calTip.hide(); _tipAnchor=null;
       if(_rafId){ cancelAnimationFrame(_rafId); _rafId=null; }
     }
 
-    var _tipAnchor=null; // current cell the tooltip is attached to
-    var _rafId=null;
+    // Keep popup visible while hovering over it
+    $calTip.on('mouseenter',function(){ cancelHide(); });
+    $calTip.on('mouseleave',function(){ schedHide(120); });
 
-    function posCalTip(){
-      if(!_tipAnchor||!$calTip.is(':visible')){ _rafId=null; return; }
+    function posCalTip(fromRaf){
+      if(!_tipAnchor||!$calTip[0]||$calTip[0].style.display==='none'){ _rafId=null; return; }
       var r=_tipAnchor[0].getBoundingClientRect();
-      var tx=r.left, ty=r.bottom+4;
-      // Flip above if not enough space below
-      if(ty+$calTip.outerHeight()>window.innerHeight-8) ty=r.top-$calTip.outerHeight()-4;
-      if(tx+380>window.innerWidth) tx=Math.max(4,window.innerWidth-388);
-      $calTip.css({top:Math.max(4,ty)+'px',left:tx+'px'});
-      _rafId=requestAnimationFrame(posCalTip);
+      var tw=$calTip[0].offsetWidth||360;
+      var th=$calTip[0].offsetHeight||200;
+      var vw=window.innerWidth, vh=window.innerHeight;
+      var GAP=4, MARGIN=8;
+      var tx, ty;
+
+      // ── Vertical: prefer below, then above ──
+      if(r.bottom+GAP+th <= vh-MARGIN){
+        ty=r.bottom+GAP;                          // below cell
+      } else if(r.top-GAP-th >= MARGIN){
+        ty=r.top-GAP-th;                          // above cell
+      } else {
+        ty=Math.max(MARGIN, vh-th-MARGIN);         // clamp
+      }
+
+      // ── Horizontal: align with left edge of cell, clamp to viewport ──
+      tx=r.left;
+      if(tx+tw > vw-MARGIN) tx=Math.max(MARGIN, vw-tw-MARGIN);
+
+      $calTip.css({top:ty+'px',left:tx+'px'});
+      if(fromRaf!==false) _rafId=requestAnimationFrame(function(){ posCalTip(true); });
     }
 
     function showCalTooltip($td, dayKey, gObj, cellDate){
+      // If switching from one cell to another, remove hover class from old cell
+      if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){
+        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd');
+        _tipCellBg=null;
+      }
       _tipAnchor=$td;
       var abWeek=$td.closest('tr').attr('data-ab-week')||'';
       var calOrigIdx=$td.closest('tr').attr('data-cal-orig-idx');
@@ -4301,39 +4509,56 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       $calTip.empty();
 
-      // Title
+      // Column width distribution (shared by header, body, and footer tables)
+      var colWidths=bySchool?['18%','18%','14%','14%','10%','10%','16%']:['28%','16%','16%','12%','12%','16%'];
+
+      function applyColWidths($tbl){
+        var $cg=$('<colgroup>');
+        colWidths.forEach(function(w){ $cg.append($('<col>').css('width',w)); });
+        $tbl.prepend($cg);
+        $tbl.css({'table-layout':'fixed','width':'100%'});
+      }
+
+      // ── Fixed header (title + column headers) ──
+      var $hdrPad=$('<div>').css({padding:'10px 12px 6px 12px'});
       var FULL_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
       var FULL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
-      var headerText=dayKey==='min'?('Min Day — '+dateLabel):dateLabel;
+      var _sds=getSpecialDays(gObj.id);
+      var _matchSd=_sds.find(function(s){return s.id===dayKey;})||null;
+      var headerText=_matchSd?(sdName(_matchSd,_sds.indexOf(_matchSd))+(_matchSd&&dateLabel?' — ':'')+dateLabel):dateLabel;
       if(abWeek) headerText+=' (Week '+(abWeek==='a'?'A':'B')+')';
-      $calTip.append($('<div>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',marginBottom:'8px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'}).text(headerText));
+      $hdrPad.append($('<div>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'}).text(headerText));
 
-      var $t=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'10.5px'});
+      var $tHdr=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
+      applyColWidths($tHdr);
       var $hrow=$('<tr>');
       var cols=bySchool?['School','Role','Start','End','Hrs','Count','Total']:['Role','Start','End','Hrs','Count','Total'];
       cols.forEach(function(h,i){
-        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=(bySchool?3:1)?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef'}).text(h));
+        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=(bySchool?3:1)?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',overflow:'hidden',textOverflow:'ellipsis'}).text(h));
       });
-      $t.append($('<thead>').append($hrow));
+      $tHdr.append($('<thead>').append($hrow));
+      $hdrPad.append($tHdr);
+      $calTip.append($hdrPad);
+
+      // ── Scrollable detail rows ──
+      var $scroll=$('<div>').css({overflowY:'auto',maxHeight:'240px',padding:'0 12px'});
       var $tb=$('<tbody>');
       var _lastSchool=null;
       rows.forEach(function(r,ri){
         var isNewSchool=bySchool && r.school !== _lastSchool;
         if(bySchool) _lastSchool=r.school;
         var $row=$('<tr>').css({background:ri%2?'#f9fafb':'#fff'});
-        if(isNewSchool && ri>0){
-          $row.css('border-top','2px solid #adb5bd');
-        }
+        if(isNewSchool && ri>0) $row.css('border-top','2px solid #adb5bd');
         var cells=bySchool?
-          [$('<td>').css({padding:'3px 5px',color:'#6c757d',fontSize:'9.5px'}).text(r.school),
-           $('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500'}).text(r.label),
+          [$('<td>').css({padding:'3px 5px',color:'#6c757d',fontSize:'9.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.school),
+           $('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500',overflow:'hidden',textOverflow:'ellipsis'}).text(r.label),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.hours),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.cnt),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.total)]:
-          [$('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500'}).text(r.label),
+          [$('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500',overflow:'hidden',textOverflow:'ellipsis'}).text(r.label),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.hours),
@@ -4342,19 +4567,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         cells.forEach(function($c){ $row.append($c); });
         $tb.append($row);
       });
+      var $tBody=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'}).append($tb);
+      applyColWidths($tBody);
+      $scroll.append($tBody);
+      $calTip.append($scroll);
+
+      // ── Fixed Total footer ──
       var grand=Math.round(rows.reduce(function(s,r){return s+r.total;},0)*100)/100;
       var colspan=bySchool?6:5;
-      var $trow=$('<tr>').css({borderTop:'2px solid #dee2e6',background:'#f0f4f8'});
-      [$('<td>').attr('colspan',colspan).css({padding:'3px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text('Total'),
-       $('<td>').css({padding:'3px 5px',textAlign:'center',fontWeight:'700',color:'#0d6efd'}).text(grand)
+      var $footPad=$('<div>').css({padding:'0 12px 10px 12px',borderTop:'2px solid #dee2e6',marginTop:'0'});
+      var $tFoot=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
+      applyColWidths($tFoot);
+      var $trow=$('<tr>').css({background:'#f0f4f8'});
+      [$('<td>').attr('colspan',colspan).css({padding:'5px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text('Total'),
+       $('<td>').css({padding:'5px 5px',textAlign:'center',fontWeight:'700',color:'#0d6efd'}).text(grand)
       ].forEach(function($c){ $trow.append($c); });
-      $tb.append($trow); $t.append($tb); $calTip.append($t);
+      $tFoot.append($('<tbody>').append($trow));
+      $footPad.append($tFoot);
+      $calTip.append($footPad);
 
-      var r=$td[0].getBoundingClientRect(), tx=r.left, ty=r.bottom+4;
-      if(tx+450>window.innerWidth) tx=Math.max(4,window.innerWidth-458);
-      $calTip.css({top:ty+'px',left:tx+'px',display:'block',visibility:'visible'});
-      if(_rafId) cancelAnimationFrame(_rafId);
-      _rafId=requestAnimationFrame(posCalTip);
+      // Show: make display:block but off-screen, wait two paint frames for layout, then position and reveal
+      cancelHide();
+      if(_rafId){ cancelAnimationFrame(_rafId); _rafId=null; }
+      $calTip[0].style.cssText+='display:block;visibility:hidden;top:-9999px;left:-9999px;';
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){   // second frame: layout is guaranteed complete
+          if(!_tipAnchor){ return; }
+          posCalTip(false);
+          $calTip.css('visibility','visible');
+          _rafId=requestAnimationFrame(function(){ posCalTip(true); });
+        });
+      });
     }
 
     // Clean up when section removed
@@ -4710,7 +4953,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if($(this).val()!==v)$(this).val(v);
             guideRoles[capturedRi].spc=parseInt(v)||0;
             saveRoles();
-            refreshTable();
+            debouncedRefreshTable();
           });
           $cb.on('change',function(){
             guideRoles[capturedRi].isCoach=$(this).prop('checked');
@@ -5323,8 +5566,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }); return t||'';
     }
 
+    // Debounce handle for updateTotalRow → _recalcAll cascade
+    var _updateTotalRafId=null;
+
     function updateTotalRow($tbody){
       var _roles=getRoles(g.id);
+      // 1. Tally counts from siteRows (pure data, no DOM)
       var t={};
       _roles.forEach(function(role){
         if(role.isCoach){ t[role.key]=0; t['coaches_'+role.key]=0; }
@@ -5332,13 +5579,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       siteRows.forEach(function(row){
         _roles.forEach(function(role){
-          if(role.isCoach){ t[role.key]+=(parseInt(row[role.key])||0); t['coaches_'+role.key]+=(parseInt(row['coaches_'+role.key])||0); }
-          else { t[role.key]+=(parseInt(row[role.key])||0); }
+          if(role.isCoach){
+            t[role.key]+=(parseInt(row[role.key])||0);
+            t['coaches_'+role.key]+=(parseInt(row['coaches_'+role.key])||0);
+          } else {
+            t[role.key]+=(parseInt(row[role.key])||0);
+          }
         });
       });
       var ts=0,tc=0,tst=0;
-      _roles.forEach(function(role){ if(role.isCoach){ts+=t[role.key]||0;tc+=t['coaches_'+role.key]||0;} });
-      _roles.forEach(function(role){ if(role.isCoach) tst+=t['coaches_'+role.key]||0; else tst+=t[role.key]||0; });
+      _roles.forEach(function(role){
+        if(role.isCoach){ ts+=t[role.key]||0; tc+=t['coaches_'+role.key]||0; }
+      });
+      _roles.forEach(function(role){
+        if(role.isCoach) tst+=t['coaches_'+role.key]||0; else tst+=t[role.key]||0;
+      });
+
+      // 2. Update the totals row in the Site Breakdown table
       var $tot=$tbody.find('.site-total-row');
       _roles.forEach(function(role){
         if(role.isCoach){
@@ -5351,44 +5608,49 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $tot.find('.tot-students').text(ts||'');
       $tot.find('.tot-coaches').text(tc||'');
       $tot.find('.tot-staff').text(tst||'');
-      // Sync Staffing Hours count cells
-      _roles.forEach(function(role){
-        var ck=role.isCoach?'coaches_'+role.key:role.key;
-        var val=t[ck]||'';
-        $('#planning-panel .count-cell[data-role="'+role.key+'"]').text(val);
-        $('#planning-panel .count-cell-u[data-role="'+role.key+'"]').text(val);
-      });
-      // Recalc Total Hours cells
-      $('#planning-panel .total-hrs-cell').each(function(){
-        var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
-        var role2=_roles.find(function(r){return r.key===rk;}); if(!role2) return;
-        var ck=role2.isCoach?'coaches_'+role2.key:role2.key;
-        var cnt=t[ck]||0;
-        var $hrsCell=$('#planning-panel .hrs-cell[data-role="'+rk+'"][data-day="'+dk+'"]');
-        var hVal=parseFloat($hrsCell.text());
-        $(this).text(!isNaN(hVal)&&cnt?(Math.round(hVal*cnt*100)/100):'');
-      });
-      // Show/hide conditional role rows
-      _roles.forEach(function(role){
-        if(!role.isCoach){
-          var cnt=t[role.key]||0;
-          $('#planning-panel tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
-        }
-      });
-      // Recalculate day grand totals
-      var $staffTbody=$('#planning-panel .staffing-tbody');
-      if($staffTbody.length){
-        var dayKeys=['min','mon','tue','wed','thu','fri','sat','sun'];
-        dayKeys.forEach(function(dk){
-          var sum=0;
-          $staffTbody.find('.total-hrs-cell[data-day="'+dk+'"]').each(function(){ if($(this).closest('tr').is(':visible')) sum+=parseFloat($(this).text())||0; });
-          $staffTbody.closest('table').find('.day-grand-total[data-day="'+dk+'"]').text(sum>0?(Math.round(sum*100)/100):'');
-        });
-        var $calSec=$('#planning-panel [id^="cal-section-"]');
-        if($calSec.length && $calSec[0]._updateHours) $calSec[0]._updateHours();
-      }
+
+      // 3. Sync Staffing Hours — scope to $sfSec to avoid full-panel DOM scan
       var $sfSec=$('#staffing-section-'+g.id);
-      if($sfSec.length&&$sfSec[0]._recalcAll) $sfSec[0]._recalcAll();
+      if($sfSec.length){
+        _roles.forEach(function(role){
+          var ck=role.isCoach?'coaches_'+role.key:role.key;
+          var val=t[ck]||'';
+          $sfSec.find('.count-cell[data-role="'+role.key+'"],.count-cell-u[data-role="'+role.key+'"]').text(val);
+        });
+
+        // 4. Recalc total-hrs cells — build hrs lookup first to avoid per-cell jQuery finds
+        _roles.forEach(function(role){
+          var ck=role.isCoach?'coaches_'+role.key:role.key;
+          var cnt=t[ck]||0;
+          // Collect hours values once per role
+          var hrsMap={};
+          $sfSec.find('.hrs-cell[data-role="'+role.key+'"],.hrs-cell-u[data-role="'+role.key+'"]').each(function(){
+            hrsMap[$(this).attr('data-day')]=parseFloat($(this).text())||0;
+          });
+          $sfSec.find('.total-hrs-cell[data-role="'+role.key+'"],.total-hrs-cell-u[data-role="'+role.key+'"]').each(function(){
+            var dk=$(this).attr('data-day');
+            var hVal=hrsMap[dk]||0;
+            $(this).text(hVal&&cnt?(Math.round(hVal*cnt*100)/100):'');
+          });
+        });
+
+        // 5. Show/hide conditional roles
+        _roles.forEach(function(role){
+          if(!role.isCoach){
+            var cnt=t[role.key]||0;
+            $sfSec.find('tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
+          }
+        });
+
+        // 6. Debounce the recalcAll cascade (footer totals + calendar hours)
+        if(_updateTotalRafId) cancelAnimationFrame(_updateTotalRafId);
+        _updateTotalRafId=requestAnimationFrame(function(){
+          _updateTotalRafId=null;
+          if($sfSec[0]&&$sfSec[0]._recalcAll) $sfSec[0]._recalcAll();
+          var $calSec=$('#cal-section-'+g.id);
+          if($calSec.length&&$calSec[0]._updateHours) $calSec[0]._updateHours();
+        });
+      }
     }
 
     
@@ -5596,7 +5858,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         _coachRoles.forEach(function(role){
           var ck='coaches_'+role.key;
           var $cell=numCell(ck);
-          $cell.find('input').on('change keyup',function(){ r[ck]=$(this).val(); recalcStudents(); });
+          var _coachTimer=null;
+          $cell.find('input').on('input',function(){ r[ck]=$(this).val(); if(_coachTimer)clearTimeout(_coachTimer); _coachTimer=setTimeout(function(){_coachTimer=null;recalcStudents();},80); });
           _coachCells[role.key]=$cell;
           $tr.append($cell);
         });
@@ -5680,6 +5943,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tableWrap.append($tableContent);
     $tableWrap.append($addRowBtn);
     $section.append($tableWrap);
+
+    var _refreshTableTimer=null;
+    function debouncedRefreshTable(){ if(_refreshTableTimer) clearTimeout(_refreshTableTimer); _refreshTableTimer=setTimeout(function(){ _refreshTableTimer=null; refreshTable(); },120); }
 
     function refreshTable(){
       $tableContent.remove();
