@@ -5670,8 +5670,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var headers1=[
         {label:'#', colspan:1, rowspan:2},
         {label:'School Name', colspan:1, rowspan:2, textAlign:'left'},
-        {label:'Max # of Students', colspan:_coachRoles.length},
-        {label:'Total', html:'Total<br>Max # of Students Per Site', colspan:1, rowspan:2},
+        {label:'# of Students', colspan:_coachRoles.length},
+        {label:'Total', html:'Total<br># of Students Per Site', colspan:1, rowspan:2},
         {label:'# of Coaches', colspan:_coachRoles.length},
         {label:'Total', html:'Total<br># of Coaches Per Site', colspan:1, rowspan:2}
       ];
@@ -5826,13 +5826,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         buildSchoolCell();
         $tr.append($nameTd);
 
-        // ── Student counts — calculated (read-only), one per coach role ──
-        var _stuCalcInputs={};
+        // ── Student counts — now editable, one per coach role ──
+        // Track which side was last edited to prevent circular updates
+        var _lastEdit={};  // role.key → 'coaches' | 'students'
+        var _stuInputs={};
         _coachRoles.forEach(function(role){
-          var $td=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',textAlign:'center',background:'#f0f4f8'});
-          var $inp=$('<input type="text" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',fontWeight:'600',color:'#495057'}).val(r[role.key]||'');
-          _stuCalcInputs[role.key]=$inp;
-          $tr.append($td.append($inp));
+          var $stuCell=numCell(role.key);
+          var $stuInp=$stuCell.find('input');
+          $stuInp.val(r[role.key]||'');
+          _stuInputs[role.key]=$stuInp;
+          $tr.append($stuCell);
         });
 
         // Total students (read-only)
@@ -5840,26 +5843,62 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStudents));
 
         // ── Coach counts — editable, one per coach role ──
-        var _coachCells={};
-        function recalcStudents(){
-          var _rl=getRoles(g.id);
-          _rl.forEach(function(role){
-            if(!role.isCoach) return;
-            var ck='coaches_'+role.key;
-            var spc=parseInt(role.spc)||0;
-            r[role.key]=(parseInt(r[ck])||0)*spc||'';
-            if(_stuCalcInputs[role.key]) _stuCalcInputs[role.key].val(r[role.key]||'');
-          });
+        var _coachInputs={};
+
+        function recalcFromCoaches(role){
+          // Coaches edited → recalculate students
+          var ck='coaches_'+role.key;
+          var spc=parseInt(role.spc)||0;
+          var coaches=parseInt(r[ck])||0;
+          var students=spc>0?coaches*spc:0;
+          r[role.key]=students||'';
+          if(_stuInputs[role.key]) _stuInputs[role.key].val(r[role.key]||'');
+          finishRecalc();
+        }
+
+        function recalcFromStudents(role){
+          // Students edited → recalculate coaches via ceiling division
+          var ck='coaches_'+role.key;
+          var spc=parseInt(role.spc)||0;
+          var students=parseInt(r[role.key])||0;
+          var coaches=spc>0?Math.ceil(students/spc):0;
+          r[ck]=coaches||'';
+          if(_coachInputs[role.key]) _coachInputs[role.key].val(r[ck]||'');
+          finishRecalc();
+        }
+
+        function finishRecalc(){
           $tr.find('.total-students').val(calcTotalStudents(r));
           $tr.find('.total-coaches').val(calcTotalCoaches(r)||'');
           $tr.find('.total-staff').val(calcTotalStaff(r));
           saveSiteRows(); updateTotalRow($tbody);
         }
+
+        // Wire student inputs
+        _coachRoles.forEach(function(role){
+          (function(capturedRole){
+            var _stuTimer=null;
+            _stuInputs[capturedRole.key].on('input',function(){
+              r[capturedRole.key]=$(this).val();
+              _lastEdit[capturedRole.key]='students';
+              if(_stuTimer) clearTimeout(_stuTimer);
+              _stuTimer=setTimeout(function(){ _stuTimer=null; recalcFromStudents(capturedRole); },80);
+            });
+          })(role);
+        });
+
+        var _coachCells={};
         _coachRoles.forEach(function(role){
           var ck='coaches_'+role.key;
           var $cell=numCell(ck);
           var _coachTimer=null;
-          $cell.find('input').on('input',function(){ r[ck]=$(this).val(); if(_coachTimer)clearTimeout(_coachTimer); _coachTimer=setTimeout(function(){_coachTimer=null;recalcStudents();},80); });
+          $cell.find('input').on('input',function(){
+            r[ck]=$(this).val();
+            _lastEdit[role.key]='coaches';
+            if(_coachTimer) clearTimeout(_coachTimer);
+            _coachTimer=setTimeout(function(){ _coachTimer=null; recalcFromCoaches(role); },80);
+          });
+          _coachInputs[role.key]=$cell.find('input');
           _coachCells[role.key]=$cell;
           $tr.append($cell);
         });
@@ -5869,15 +5908,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $totalCoachInp=$('<input type="text" class="total-coaches" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',fontWeight:'600',color:'#495057'}).val(calcTotalCoaches(r)||'');
         $totalCoachTd.append($totalCoachInp); $tr.append($totalCoachTd);
 
-        // Init calculated student values using role-specific spc
+        // Init calculated student values from stored data or coach × spc
         (function(){
           var _rl=getRoles(g.id);
           _rl.forEach(function(role){
             if(!role.isCoach) return;
             var ck='coaches_'+role.key; var spc=parseInt(role.spc)||0;
-            var v=(parseInt(r[ck])||0)*spc;
-            if(_stuCalcInputs[role.key]) _stuCalcInputs[role.key].val(v||'');
-            if(v) r[role.key]=v;
+            // If students already stored, use them; else calculate from coaches
+            if(!r[role.key] && r[ck]){
+              var v=(parseInt(r[ck])||0)*spc;
+              if(_stuInputs[role.key]) _stuInputs[role.key].val(v||'');
+              if(v) r[role.key]=v;
+            } else if(_stuInputs[role.key]){
+              _stuInputs[role.key].val(r[role.key]||'');
+            }
           });
         })();
 
