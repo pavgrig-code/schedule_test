@@ -2852,7 +2852,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _pickers={}; // {roleKey: {dayKey: {start:$picker, end:$picker}}}
 
     // Shared action menu for time copy
-    var $stMenu=$('<div>').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
+    var $stMenu=$('<div class="sf-action-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
     $('body').append($stMenu);
     function closeStMenu(){ $stMenu.hide(); $(document).off('click._stmenu'); }
     ROLES.forEach(function(r){ if(!sh[r.key]) sh[r.key]={}; DAYS.forEach(function(d){ if(!sh[r.key][d.k]) sh[r.key][d.k]={start:'',end:''}; }); });
@@ -2958,9 +2958,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $dd.append($mealWrap);
 
         var $btnRow=$('<div>').css({display:_showNonBillUI?'flex':'none',gap:'6px',marginTop:'8px',paddingTop:'8px',borderTop:'1px solid #e9ecef'});
-        var $resetBtn=$('<button type="button">').text('Reset').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+        var $cancelBtn=$('<button type="button">').text('Cancel').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
         var $applyBtn=$('<button type="button">').text('Apply').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'});
-        $resetBtn.on('click',function(e){ e.stopPropagation(); $mealInp.val(30); $applyBtn.prop('disabled',false).css('opacity','1'); });
+        $cancelBtn.on('click',function(e){
+          e.stopPropagation();
+          // Discard any unsaved Meal Break edits — do not touch d2.brk or recalc anything
+          ddClose();
+        });
         $applyBtn.prop('disabled',!(parseInt(startMins)>0)).css('opacity',(parseInt(startMins)>0)?'1':'.5');
         $applyBtn.on('click',function(e){
           e.stopPropagation();
@@ -2969,7 +2973,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           d2.brk={type:'nonbillable',mins:mins};
           ddClose(); refreshLabel(); onChange();
         });
-        $btnRow.append($resetBtn,$applyBtn);
+        $btnRow.append($cancelBtn,$applyBtn);
         $dd.append($btnRow);
 
         $nonBillRow.on('click',function(e){
@@ -2985,6 +2989,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(e) e.stopPropagation();
         if($dd.is(':visible')){ ddClose(); return; }
         $('.brk-dd').not($dd[0]).hide();
+        // Close any open Staffing Hours "…" action menu so only one popup is ever open at a time
+        $('.sf-action-menu').hide();
         buildDD();
         ddPos();
         $dd.show();
@@ -3263,6 +3269,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
               $dots.on('click',function(e){
                 e.stopPropagation(); closeStMenu(); $stMenu.empty();
+                $('.brk-dd').hide(); // close any open Break popup so only one popup is open at a time
                 var curVal=isE?dRef.end:dRef.start;
                 if(!curVal) return;
                 var dispVal=window._PICKER_FMT(curVal);
@@ -3605,7 +3612,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         function buildOneTable(shData,getCountsFn,sfxClass){
           ROLES.forEach(function(r){ if(!shData[r.key]) shData[r.key]={}; DAYS.forEach(function(d){ if(!shData[r.key][d.k]) shData[r.key][d.k]={start:'',end:''}; }); });
           var _p={};
-          var $stMn=$('<div>').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
+          var $stMn=$('<div class="sf-action-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
           $('body').append($stMn);
           var _mnUid='stm-u-'+Math.random().toString(36).slice(2);
           function closeMn(){ $stMn.hide(); $(document).off('click.'+_mnUid); }
@@ -3660,6 +3667,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     $dt.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
                     $dt.on('click',function(e){
                       e.stopPropagation(); closeMn(); $stMn.empty();
+                      $('.brk-dd').hide(); // close any open Break popup so only one popup is open at a time
                       var cv=isE?dR.end:dR.start; if(!cv) return;
                       var dv=window._PICKER_FMT(cv); var WD=['mon','tue','wed','thu','fri'];
                       var srcBrkU=dR.brk; // Billable/Non-Billable setting on the source cell
