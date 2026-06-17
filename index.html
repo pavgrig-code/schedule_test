@@ -2874,7 +2874,130 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return Math.round((em-sm2)/60*100)/100;
     }
 
-    // ── Styles matching Site Breakdown ──
+    // Returns {raw, adjusted} — adjusted subtracts the meal break (in hours) when
+    // a non-billable break is applied. d2.brk = {type:'billable'|'nonbillable', mins:N}
+    function calcAdjustedHours(d2){
+      var raw=calcHours(d2.start,d2.end);
+      if(raw===null) return {raw:null,adjusted:null};
+      var adjusted=raw;
+      if(d2.brk && d2.brk.type==='nonbillable'){
+        var mins=parseInt(d2.brk.mins)||0;
+        adjusted=Math.round((raw-mins/60)*100)/100;
+        if(adjusted<0) adjusted=0;
+      }
+      return {raw:raw,adjusted:adjusted};
+    }
+
+    // Shared Break/Billable/Meal-Break control. Builds a small label inside the Hours
+    // cell that reflects d2.brk state, and a portalled dropdown to edit it.
+    // onChange() is called after any state change so the caller can re-render hours/totals.
+    function buildBreakControl(d2, onChange){
+      var $lbl=$('<span class="brk-label">').css({
+        position:'absolute',top:'1px',right:'2px',fontSize:'8px',cursor:'pointer',
+        userSelect:'none',lineHeight:'1',padding:'0 1px',zIndex:'3'
+      });
+      var $dd=$('<div class="brk-dd">').css({
+        position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
+        borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.14)',padding:'8px 10px',
+        display:'none',minWidth:'170px',fontSize:'11px'
+      });
+      $('body').append($dd);
+      var _raf=null, _uid='brkdd-'+Math.random().toString(36).slice(2);
+
+      function ddPos(){ var r=$lbl[0].getBoundingClientRect(); $dd.css({top:(r.bottom+4)+'px',left:Math.max(4,r.left-140)+'px'}); }
+      function ddClose(){ $dd.hide(); if(_raf){cancelAnimationFrame(_raf);_raf=null;} $(document).off('mousedown.'+_uid); }
+
+      function refreshLabel(){
+        var raw=calcHours(d2.start,d2.end);
+        $lbl.off('click');
+        if(d2.brk && d2.brk.type==='billable'){
+          $lbl.text('Billable').css('color','green').show();
+          $lbl.on('click',openDD);
+        } else if(d2.brk && d2.brk.type==='nonbillable'){
+          $lbl.text('-'+(parseInt(d2.brk.mins)||0)+'m').css('color','blue').show();
+          $lbl.on('click',openDD);
+        } else if(raw!==null && raw>5){
+          $lbl.text('Break').css('color','red').show();
+          $lbl.on('click',openDD);
+        } else {
+          $lbl.hide();
+        }
+      }
+
+      function buildDD(){
+        $dd.empty();
+        var curType=d2.brk?d2.brk.type:null;
+        var $billRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='billable'?'700':'400',color:curType==='billable'?'#1a7a1a':'#212529'}).text('Billable'+(curType==='billable'?'  \u2713':''));
+        $billRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
+        $billRow.on('click',function(e){
+          e.stopPropagation();
+          if(curType==='billable'){ delete d2.brk; } else { d2.brk={type:'billable'}; }
+          ddClose(); refreshLabel(); onChange();
+        });
+        $dd.append($billRow);
+
+        var $nonBillRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='nonbillable'?'700':'400',color:curType==='nonbillable'?'#0a4fa0':'#212529'}).text('Non-Billable'+(curType==='nonbillable'?'  \u2713':''));
+        $nonBillRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
+        $dd.append($nonBillRow);
+
+        // Track whether the Non-Billable UI (meal break input + Reset/Apply) should show.
+        // Starts visible only if the cell already has a non-billable break applied
+        // (so reopening to edit an existing meal break shows the controls immediately).
+        var _showNonBillUI=(curType==='nonbillable');
+
+        var $mealWrap=$('<div>').css({marginTop:'2px',paddingLeft:'8px',display:_showNonBillUI?'block':'none'});
+        var $mealLbl=$('<div>').css({fontSize:'9.5px',color:'#6c757d',fontWeight:'600',marginBottom:'3px',marginTop:'4px'}).text('Meal Break (minutes)');
+        var startMins=(curType==='nonbillable'&&d2.brk.mins)?d2.brk.mins:30;
+        var $mealInp=$('<input type="text" inputmode="numeric">').css({width:'70px',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'3px 6px',boxSizing:'border-box'}).val(startMins);
+        $mealInp.on('input',function(){
+          var v=$(this).val().replace(/[^0-9]/g,'');
+          if($(this).val()!==v)$(this).val(v);
+          $applyBtn.prop('disabled',!(parseInt(v)>0)).css('opacity',(parseInt(v)>0)?'1':'.5');
+        });
+        $mealWrap.append($mealLbl,$mealInp);
+        $dd.append($mealWrap);
+
+        var $btnRow=$('<div>').css({display:_showNonBillUI?'flex':'none',gap:'6px',marginTop:'8px',paddingTop:'8px',borderTop:'1px solid #e9ecef'});
+        var $resetBtn=$('<button type="button">').text('Reset').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+        var $applyBtn=$('<button type="button">').text('Apply').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'});
+        $resetBtn.on('click',function(e){ e.stopPropagation(); $mealInp.val(30); $applyBtn.prop('disabled',false).css('opacity','1'); });
+        $applyBtn.prop('disabled',!(parseInt(startMins)>0)).css('opacity',(parseInt(startMins)>0)?'1':'.5');
+        $applyBtn.on('click',function(e){
+          e.stopPropagation();
+          var mins=parseInt($mealInp.val())||0;
+          if(mins<=0) return;
+          d2.brk={type:'nonbillable',mins:mins};
+          ddClose(); refreshLabel(); onChange();
+        });
+        $btnRow.append($resetBtn,$applyBtn);
+        $dd.append($btnRow);
+
+        $nonBillRow.on('click',function(e){
+          e.stopPropagation();
+          _showNonBillUI=true;
+          $mealWrap.css('display','block');
+          $btnRow.css('display','flex');
+          $mealInp.focus();
+        });
+      }
+
+      function openDD(e){
+        if(e) e.stopPropagation();
+        if($dd.is(':visible')){ ddClose(); return; }
+        $('.brk-dd').not($dd[0]).hide();
+        buildDD();
+        ddPos();
+        $dd.show();
+        if(_raf) cancelAnimationFrame(_raf);
+        _raf=requestAnimationFrame(function track(){ if($dd.is(':visible')){ddPos();_raf=requestAnimationFrame(track);}else{_raf=null;} });
+        setTimeout(function(){ $(document).on('mousedown.'+_uid,function(ev){ if(!$dd[0].contains(ev.target)) ddClose(); }); },0);
+      }
+
+      $dd.on('mousedown',function(e){ e.stopPropagation(); });
+      $lbl.one('remove',function(){ ddClose(); $dd.remove(); });
+      refreshLabel();
+      return {$lbl:$lbl, refresh:refreshLabel};
+    }
     var BDR='1px solid #dee2e6';
     var TH_BG='#f0f4f8', TH_CSS={border:BDR,background:TH_BG,fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
     var TD_CSS={border:BDR,padding:'2px 3px',textAlign:'center',fontSize:'11px',verticalAlign:'middle'};
@@ -3091,6 +3214,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tbl.append($thead);
 
     var $tbody=$('<tbody class="staffing-tbody">');
+    var _brkCtls={}; // {roleKey:{dayKey: {$lbl, refresh}}} — break label registry for this table
 
     ROLES.forEach(function(role,roleIdx){
       var rowDefs=[
@@ -3142,6 +3266,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var curVal=isE?dRef.end:dRef.start;
                 if(!curVal) return;
                 var dispVal=window._PICKER_FMT(curVal);
+                var srcBrk=dRef.brk; // Billable/Non-Billable setting on the source cell
                 var typeStr=isE?'end time':'start time';
                 var $item=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
                   .text('Copy across '+dayLbl+' (vertically)')
@@ -3154,6 +3279,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       // Only copy to roles with staffing count > 0
                       if(!(_counts[r2.countKey]>0)) return;
                       if(isE) sh[r2.key][dk].end=curVal; else sh[r2.key][dk].start=curVal;
+                      // Copy the Billable/Non-Billable break setting along with the time
+                      if(srcBrk) sh[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrk)); else delete sh[r2.key][dk].brk;
                       if(_pickers[r2.key]&&_pickers[r2.key][dk]){
                         var $p=_pickers[r2.key][dk][isE?'end':'start'];
                         if($p) $p.find('input').val(dispVal);
@@ -3182,6 +3309,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     WEEKDAYS.forEach(function(wdk){
                       if(!sh[rk]||!sh[rk][wdk]) return;
                       if(isE) sh[rk][wdk].end=curVal; else sh[rk][wdk].start=curVal;
+                      if(srcBrk) sh[rk][wdk].brk=JSON.parse(JSON.stringify(srcBrk)); else delete sh[rk][wdk].brk;
                       if(_pickers[rk]&&_pickers[rk][wdk]){
                         var $p=_pickers[rk][wdk][isE?'end':'start'];
                         if($p) $p.find('input').val(window._PICKER_FMT(curVal));
@@ -3203,6 +3331,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       _allTargets.forEach(function(wdk){
                         if(!sh[r2.key][wdk]) return;
                         if(isE) sh[r2.key][wdk].end=curVal; else sh[r2.key][wdk].start=curVal;
+                        if(srcBrk) sh[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrk)); else delete sh[r2.key][wdk].brk;
                         if(_pickers[r2.key]&&_pickers[r2.key][wdk]){
                           var $p=_pickers[r2.key][wdk][isE?'end':'start'];
                           if($p) $p.find('input').val(window._PICKER_FMT(curVal));
@@ -3232,11 +3361,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             })(d2,row.type==='end',role.key,day.k,(DAYS.find(function(d){return d.k===day.k;})||{l:day.k}).l,role.label);
 
           } else if(row.type==='hours'){
-            var h=calcHours(d2.start,d2.end);
-            var invalid=d2.start&&d2.end&&h===null;
+            var hInfo=calcAdjustedHours(d2);
+            var invalid=d2.start&&d2.end&&hInfo.raw===null;
+            $td.css('position','relative');
             $td.append($('<span class="hrs-cell">').attr('data-role',role.key).attr('data-day',day.k)
               .css({fontSize:'11px',fontWeight:'600',color:invalid?'#dc3545':'#212529'})
-              .text(h!==null?h:(invalid?'!':'')));
+              .text(hInfo.adjusted!==null?hInfo.adjusted:(invalid?'!':'')));
+            var brkCtl=buildBreakControl(d2,function(){ updateAllHours($tbody); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); });
+            $td.append(brkCtl.$lbl);
+            if(!_brkCtls[role.key]) _brkCtls[role.key]={};
+            _brkCtls[role.key][day.k]=brkCtl;
 
           } else if(row.type==='count'){
             var cnt=getCounts()[role.countKey];
@@ -3245,8 +3379,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               .css({fontSize:'11px',color:'#495057',fontWeight:'600'}).text(cnt||''));
 
           } else {
-            var h2=calcHours(d2.start,d2.end), cnt2=getCounts()[role.countKey];
-            var tot=h2!==null&&cnt2?(Math.round(h2*cnt2*100)/100):'';
+            var hInfo2=calcAdjustedHours(d2), cnt2=getCounts()[role.countKey];
+            var tot=hInfo2.adjusted!==null&&cnt2?(Math.round(hInfo2.adjusted*cnt2*100)/100):'';
             $td.append($('<span class="total-hrs-cell">').attr('data-role',role.key).attr('data-day',day.k)
               .css({fontSize:'11px',fontWeight:'700'}).text(tot));
           }
@@ -3267,10 +3401,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $tb.find('.hrs-cell').each(function(){
         var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
         var d2=sh[rk]&&sh[rk][dk]?sh[rk][dk]:{start:'',end:''};
-        var h=calcHours(d2.start,d2.end);
-        var invalid=d2.start&&d2.end&&h===null;
-        $(this).text(h!==null?h:(invalid?'!':'')).css('color',invalid?'#dc3545':'#212529');
-        hrsMap[rk+'|'+dk]=h;
+        var hInfo=calcAdjustedHours(d2);
+        var invalid=d2.start&&d2.end&&hInfo.raw===null;
+        // If hours became <=5 (or invalid), auto-clear any applied break per Hours-change behavior
+        if(d2.brk && (hInfo.raw===null || hInfo.raw<=5)) delete d2.brk;
+        var hInfo2=calcAdjustedHours(d2); // recompute after potential clear
+        $(this).text(hInfo2.adjusted!==null?hInfo2.adjusted:(invalid?'!':'')).css('color',invalid?'#dc3545':'#212529');
+        hrsMap[rk+'|'+dk]=hInfo2.adjusted;
+        // Refresh the break label to reflect current state (Break/Billable/-Nm/hidden)
+        if(_brkCtls[rk]&&_brkCtls[rk][dk]) _brkCtls[rk][dk].refresh();
       });
       $tb.find('.total-hrs-cell').each(function(){
         var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
@@ -3495,6 +3634,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           });
           $thU.append($hrU); $tblU.append($thU);
           var $tbU=$('<tbody class="staffing-tbody">');
+          var _brkCtlsU={}; // {roleKey:{dayKey:{$lbl,refresh}}} — break label registry for this combo table
           ROLES.forEach(function(role){
             var rowDefs=[{label:'Start Time',type:'start'},{label:'End Time',type:'end'},{label:'Hours',type:'hours'},{label:role.countLabel,type:'count'},{label:'Total Hours',type:'total'}];
             rowDefs.forEach(function(row,ri){
@@ -3522,6 +3662,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       e.stopPropagation(); closeMn(); $stMn.empty();
                       var cv=isE?dR.end:dR.start; if(!cv) return;
                       var dv=window._PICKER_FMT(cv); var WD=['mon','tue','wed','thu','fri'];
+                      var srcBrkU=dR.brk; // Billable/Non-Billable setting on the source cell
                       // Target list for "Copy to all on weekdays" depends on source day
                       var _allT=(function(){
                         var _srcDay2=DAYS.find(function(d){return d.k===dk;});
@@ -3533,9 +3674,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       function mI(lb,cb){ return $('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
                       function doR(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
                       var _c=getCountsFn();
-                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!(_c[r2.countKey]>0)||!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
-                      $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
-                      $stMn.append(mI('Copy to all on weekdays',function(){ var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!(_c2[r2.countKey]>0)||!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); }));
+                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!(_c[r2.countKey]>0)||!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
+                      $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(srcBrkU) shData[rk][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[rk][wdk].brk; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
+                      $stMn.append(mI('Copy to all on weekdays',function(){ var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!(_c2[r2.countKey]>0)||!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(srcBrkU) shData[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][wdk].brk; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); }));
                       var br=$dt[0].getBoundingClientRect(); $stMn.css({top:(br.bottom+4)+'px',left:Math.max(4,Math.min(br.right,window.innerWidth-200))+'px'}).show();
                       setTimeout(function(){$(document).on('click.'+_mnUid,closeMn);},0);
                     });
@@ -3544,14 +3685,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       .on('mouseenter',function(){ var _c2=getCountsFn(); var ck=(ROLES.find(function(r2){return r2.key===rk;})||{countKey:''}).countKey; if((isE?!!dR.end:!!dR.start)&&(_c2[ck]||0)>0) $dt.show(); }).on('mouseleave',function(){ $dt.hide(); });
                   })(dRef,row.type==='end',role.key,day.k,(DAYS.find(function(d){return d.k===day.k;})||{l:day.k}).l,role.label);
                 } else if(row.type==='hours'){
-                  var hU=calcHours(dRef.start,dRef.end),invU=dRef.start&&dRef.end&&hU===null;
-                  $td.append($('<span class="hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'600',color:invU?'#dc3545':'#212529'}).text(hU!==null?hU:(invU?'!':'')));
+                  var hInfoU=calcAdjustedHours(dRef);
+                  var invU=dRef.start&&dRef.end&&hInfoU.raw===null;
+                  $td.css('position','relative');
+                  $td.append($('<span class="hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'600',color:invU?'#dc3545':'#212529'}).text(hInfoU.adjusted!==null?hInfoU.adjusted:(invU?'!':'')));
+                  var brkCtlU=buildBreakControl(dRef,function(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); });
+                  $td.append(brkCtlU.$lbl);
+                  if(!_brkCtlsU[role.key]) _brkCtlsU[role.key]={};
+                  _brkCtlsU[role.key][day.k]=brkCtlU;
                 } else if(row.type==='count'){
                   $td.css({background:'#f0f4f8'});
                   $td.append($('<span class="count-cell-u">').attr('data-role',role.key).css({fontSize:'11px',color:'#495057',fontWeight:'600'}).text(getCountsFn()[role.countKey]||''));
                 } else {
-                  var hU2=calcHours(dRef.start,dRef.end),cU=getCountsFn()[role.countKey];
-                  $td.append($('<span class="total-hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'700'}).text(hU2!==null&&cU?(Math.round(hU2*cU*100)/100):''));
+                  var hInfoU2=calcAdjustedHours(dRef),cU=getCountsFn()[role.countKey];
+                  $td.append($('<span class="total-hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'700'}).text(hInfoU2.adjusted!==null&&cU?(Math.round(hInfoU2.adjusted*cU*100)/100):''));
                 }
                 $tr.append($td);
               });
@@ -3571,9 +3718,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $tb.find('.hrs-cell-u').each(function(){
               var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
               var d=shData[rk]&&shData[rk][dk]?shData[rk][dk]:{start:'',end:''};
-              var h=calcHours(d.start,d.end),inv=d.start&&d.end&&h===null;
-              $(this).text(h!==null?h:(inv?'!':'')).css('color',inv?'#dc3545':'#212529');
-              hrsMap[rk+'|'+dk]=h;
+              var hInfo=calcAdjustedHours(d);
+              var inv=d.start&&d.end&&hInfo.raw===null;
+              // Auto-clear break if hours dropped to <=5 or became invalid
+              if(d.brk && (hInfo.raw===null || hInfo.raw<=5)) delete d.brk;
+              var hInfo2=calcAdjustedHours(d);
+              $(this).text(hInfo2.adjusted!==null?hInfo2.adjusted:(inv?'!':'')).css('color',inv?'#dc3545':'#212529');
+              hrsMap[rk+'|'+dk]=hInfo2.adjusted;
+              if(_brkCtlsU[rk]&&_brkCtlsU[rk][dk]) _brkCtlsU[rk][dk].refresh();
             });
             $tb.find('.total-hrs-cell-u').each(function(){
               var rk=$(this).attr('data-role'),dk=$(this).attr('data-day');
@@ -3810,6 +3962,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       // Write to data store
                       tgt.shData[role.key][dk].start=src.start||'';
                       tgt.shData[role.key][dk].end=src.end||'';
+                      // Copy the Billable/Non-Billable break setting along with the time
+                      if(src.brk) tgt.shData[role.key][dk].brk=JSON.parse(JSON.stringify(src.brk));
+                      else delete tgt.shData[role.key][dk].brk;
                       // Push into picker input elements so UI updates immediately
                       var pp=tgt.res.pickers;
                       if(pp&&pp[role.key]&&pp[role.key][dk]){
@@ -4450,6 +4605,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // ── Shared helpers ──
       function calcH(s,e2){ if(!s||!e2)return null; var sp=s.split(':'),ep=e2.split(':'); var sm2=parseInt(sp[0])*60+(parseInt(sp[1])||0),em2=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em2>sm2?(Math.round((em2-sm2)/60*100)/100):null; }
+      // Adjusted hours — subtracts meal break when a non-billable break is applied to this cell
+      function calcAdjH(d){
+        var raw=calcH(d.start,d.end);
+        if(raw===null) return null;
+        if(d.brk && d.brk.type==='nonbillable'){
+          var mins=parseInt(d.brk.mins)||0;
+          var adj=Math.round((raw-mins/60)*100)/100;
+          return adj<0?0:adj;
+        }
+        return raw;
+      }
       function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
       var ROLES2=rolesToStaffingRoles(getRoles(gObj.id)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; });
 
@@ -4479,7 +4645,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             ROLES2.forEach(function(role){
               var cnt=schoolCounts[role.countKey]||0; if(!cnt) return;
               var d=(shSch[role.key]&&shSch[role.key][dayKey])||{start:'',end:''};
-              var h=calcH(d.start,d.end); if(!h||h<=0) return;
+              var h=calcAdjH(d); if(!h||h<=0) return;
               rows.push({school:schoolName,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
             });
           });
@@ -4489,7 +4655,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           ROLES2.forEach(function(role){
             var cnt=counts[role.countKey]||0; if(!cnt) return;
             var d=(shData[role.key]&&shData[role.key][dayKey])||{start:'',end:''};
-            var h=calcH(d.start,d.end); if(!h||h<=0) return;
+            var h=calcAdjH(d); if(!h||h<=0) return;
             rows.push({school:null,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
           });
         }
@@ -4500,7 +4666,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         ROLES2.forEach(function(role){
           var cnt=countsBase[role.countKey]||0; if(!cnt) return;
           var d=(shBase[role.key]&&shBase[role.key][dayKey])||{start:'',end:''};
-          var h=calcH(d.start,d.end); if(!h||h<=0) return;
+          var h=calcAdjH(d); if(!h||h<=0) return;
           rows.push({school:null,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
         });
       }
