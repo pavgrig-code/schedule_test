@@ -2931,6 +2931,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $billRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
         $billRow.on('click',function(e){
           e.stopPropagation();
+          // Toggle off if Billable is already selected; otherwise select it
           if(curType==='billable'){ delete d2.brk; } else { d2.brk={type:'billable'}; }
           ddClose(); refreshLabel(); onChange();
         });
@@ -2940,7 +2941,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $nonBillRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
         $dd.append($nonBillRow);
 
-        // Track whether the Non-Billable UI (meal break input + Reset/Apply) should show.
+        // Track whether the Non-Billable UI (meal break input + Cancel/Apply) should show.
         // Starts visible only if the cell already has a non-billable break applied
         // (so reopening to edit an existing meal break shows the controls immediately).
         var _showNonBillUI=(curType==='nonbillable');
@@ -2978,6 +2979,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         $nonBillRow.on('click',function(e){
           e.stopPropagation();
+          if(curType==='nonbillable'){
+            // Toggle off: remove the applied Non-Billable setting entirely,
+            // hide the meal-break controls, and close the dropdown.
+            delete d2.brk;
+            $mealWrap.css('display','none');
+            $btnRow.css('display','none');
+            ddClose(); refreshLabel(); onChange();
+            return;
+          }
+          // Not yet applied — just reveal the meal-break controls; nothing is saved until Apply
           _showNonBillUI=true;
           $mealWrap.css('display','block');
           $btnRow.css('display','flex');
@@ -2989,8 +3000,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(e) e.stopPropagation();
         if($dd.is(':visible')){ ddClose(); return; }
         $('.brk-dd').not($dd[0]).hide();
-        // Close any open Staffing Hours "…" action menu so only one popup is ever open at a time
+        // Close any open Staffing Hours "…" action menu or Calendar Special Day menu
+        // so only one popup is ever open at a time
         $('.sf-action-menu').hide();
+        $('.cal-ctx-menu').hide();
         buildDD();
         ddPos();
         $dd.show();
@@ -3269,7 +3282,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
               $dots.on('click',function(e){
                 e.stopPropagation(); closeStMenu(); $stMenu.empty();
-                $('.brk-dd').hide(); // close any open Break popup so only one popup is open at a time
+                $('.brk-dd').hide(); // close any open Break popup
+                $('.cal-ctx-menu').hide(); // close any open Calendar Special Day menu
                 var curVal=isE?dRef.end:dRef.start;
                 if(!curVal) return;
                 var dispVal=window._PICKER_FMT(curVal);
@@ -3667,7 +3681,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     $dt.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
                     $dt.on('click',function(e){
                       e.stopPropagation(); closeMn(); $stMn.empty();
-                      $('.brk-dd').hide(); // close any open Break popup so only one popup is open at a time
+                      $('.brk-dd').hide(); // close any open Break popup
+                      $('.cal-ctx-menu').hide(); // close any open Calendar Special Day menu
                       var cv=isE?dR.end:dR.start; if(!cv) return;
                       var dv=window._PICKER_FMT(cv); var WD=['mon','tue','wed','thu','fri'];
                       var srcBrkU=dR.brk; // Billable/Non-Billable setting on the source cell
@@ -4196,19 +4211,54 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(!guideDetails[String(g.id)].calMarkers) guideDetails[String(g.id)].calMarkers={};
     var markers=guideDetails[String(g.id)].calMarkers;
 
-    // Migrate old type-based markers to sdId-based
+    // Migrate markers to the per-school shape: markers[dateKey] = {schools:{schoolIdxStr: sdId}}
+    // Old shapes handled: {type:'holiday'|'noSchool'|'minDay'} and {sdId:'sd-xxx'} (single, all-schools)
     (function(){
       var sds=getSpecialDays(g.id);
       var typeToId={'holiday':'sd-holiday','noSchool':'sd-noschool','minDay':'sd-minday'};
+      var _siteRowsNow=(guideDetails[String(g.id)].siteRows)||[];
+      var _nSchools=_siteRowsNow.length;
       Object.keys(markers).forEach(function(dk){
         var m=markers[dk];
-        if(m&&m.type&&!m.sdId){
-          var mapped=typeToId[m.type];
-          if(mapped) markers[dk]={sdId:mapped};
-          else delete markers[dk];
-        }
+        if(!m) return;
+        if(m.schools) return; // already migrated
+        var resolvedSdId=null;
+        if(m.type && typeToId[m.type]) resolvedSdId=typeToId[m.type];
+        else if(m.sdId) resolvedSdId=m.sdId;
+        if(!resolvedSdId){ delete markers[dk]; return; }
+        // Apply the resolved Special Day to every existing school (or the no-school sentinel)
+        var schoolsMap={};
+        if(_nSchools>0){ for(var i=0;i<_nSchools;i++) schoolsMap[String(i)]=resolvedSdId; }
+        else schoolsMap['_none_']=resolvedSdId;
+        markers[dk]={schools:schoolsMap};
       });
     })();
+
+    // Returns the sdId applied to a given school index (or '_none_' when there are no schools) for a date.
+    // schoolIdx may be a number or the string '_none_'.
+    function getMarkerSdId(dateKey, schoolIdx){
+      var m=markers[dateKey];
+      if(!m||!m.schools) return null;
+      return m.schools[String(schoolIdx)]||null;
+    }
+    // Returns {sdId: count} of all distinct Special Days applied across schools for a date.
+    function getMarkerSdCounts(dateKey){
+      var m=markers[dateKey];
+      var counts={};
+      if(!m||!m.schools) return counts;
+      Object.keys(m.schools).forEach(function(k){
+        var sdId=m.schools[k];
+        if(!sdId) return;
+        counts[sdId]=(counts[sdId]||0)+1;
+      });
+      return counts;
+    }
+    // Returns the list of school indices (as numbers, or ['_none_']) currently configured for this guide
+    function getSchoolIndices(){
+      var _sr=(guideDetails[String(g.id)].siteRows)||[];
+      if(!_sr.length) return ['_none_'];
+      var out=[]; for(var i=0;i<_sr.length;i++) out.push(i); return out;
+    }
 
     // ── Calendar header element builder ──
     // Returns a <span> containing the calendar name (bold) and, when dates are
@@ -4257,9 +4307,51 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var WKND_STRIPE='repeating-linear-gradient(135deg,#c8d8eb 0px,#c8d8eb 2px,transparent 2px,transparent 8px)';
 
     // Shared context menu
-    var $ctxMenu=$('<div>').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'140px',padding:'4px',display:'none',fontSize:'12px'});
+    var $ctxMenu=$('<div class="cal-ctx-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'140px',maxHeight:'70vh',overflowY:'auto',padding:'4px',display:'none',fontSize:'12px'});
     $('body').append($ctxMenu);
-    function closeCtx(){ $ctxMenu.hide(); $(document).off('click._cal_ctx').off('contextmenu._cal_ctx'); }
+    var _ctxRaf=null;
+    var _ctxAnchor=null; // {x,y,$dots} or {$td} used to recompute position on scroll/resize
+    function closeCtx(){
+      $ctxMenu.hide();
+      $('.sch-pick-pop').remove(); // remove any per-school Special Day picker popups
+      $(document).off('click._cal_ctx').off('contextmenu._cal_ctx');
+      $(window).off('scroll._cal_ctx resize._cal_ctx');
+      $('#planning-panel').off('scroll._cal_ctx');
+      if(_ctxRaf){ cancelAnimationFrame(_ctxRaf); _ctxRaf=null; }
+      _ctxAnchor=null;
+    }
+    function posCtxMenu(){
+      if(!_ctxAnchor||!$ctxMenu[0]||$ctxMenu[0].style.display==='none'){ return; }
+      var mw=$ctxMenu[0].offsetWidth||220;
+      var mh=$ctxMenu[0].offsetHeight||160;
+      if(!mw||!mh) return; // not laid out yet — bail so we don't snap to top-left
+      var r=_ctxAnchor.getBoundingClientRect();
+      // If the anchor is hidden/detached its rect is all-zeros — keep the last position
+      if(r.width===0 && r.height===0 && r.top===0 && r.left===0) return;
+      var vw=window.innerWidth, vh=window.innerHeight, MARGIN=8, GAP=4;
+      // The "…" label sits at the cell's TOP-RIGHT corner (top:2px, right:3px).
+      var dotsX=r.right;     // ≈ horizontal position of the "…" label
+      var dotsY=r.top+2;     // ≈ top of the "…" label
+      var tx, ty;
+      // ── Preferred: open to the RIGHT of the "…", with the dropdown's top-left at the label ──
+      if(dotsX+GAP+mw <= vw-MARGIN){
+        tx=dotsX+GAP;
+      } else if(r.left-GAP-mw >= MARGIN){
+        // Not enough room right → open to the LEFT of the cell
+        tx=r.left-GAP-mw;
+      } else {
+        // Neither side fits → align left edge with the cell, clamp into viewport
+        tx=Math.max(MARGIN, Math.min(r.left, vw-mw-MARGIN));
+      }
+      // Vertically align the dropdown's top with the "…" label; flip up if it overflows
+      ty=dotsY;
+      if(ty+mh > vh-MARGIN){
+        var aboveY=(r.bottom)-mh; // bottom-align to the cell so it stays attached
+        ty=(aboveY>=MARGIN)?aboveY:Math.max(MARGIN, vh-mh-MARGIN);
+      }
+      if(ty<MARGIN) ty=MARGIN;
+      $ctxMenu.css({top:ty+'px',left:tx+'px'});
+    }
     function menuItem(label,danger,cb){
       var $item=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:danger?'#dc3545':'#212529',fontWeight:'400'})
         .text(label)
@@ -4268,82 +4360,379 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         .on('click',function(e){e.stopPropagation();closeCtx();cb();});
       return $item;
     }
-    // Like menuItem but prepends a small color circle for Special Day entries
-    function sdMenuItem(sd,sdIdx,cb){
-      var $item=$('<div>').css({padding:'5px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontWeight:'400',display:'flex',alignItems:'center',gap:'7px'});
+    // Like menuItem but prepends a small color circle for Special Day entries.
+    // selState: 'none' | 'all' (applied to every selected school) | 'partial' (some schools)
+    // count: number of schools currently with this Special Day applied (for the partial label)
+    function sdMenuItem(sd,sdIdx,cb,selState,count){
+      selState=selState||'none';
+      var selBg=(selState==='all')?'#e7f0fd':(selState==='partial')?'#f0f5fb':'none';
+      var $item=$('<div>').css({padding:'5px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontWeight:(selState!=='none')?'600':'400',display:'flex',alignItems:'center',gap:'7px',background:selBg});
       var $circle=$('<span>').css({width:'10px',height:'10px',background:sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'});
-      $item.append($circle,$('<span>').text(sdName(sd,sdIdx)));
-      $item.on('mouseenter',function(){$(this).css('background','#f1f3f4');});
-      $item.on('mouseleave',function(){$(this).css('background','none');});
+      $item.append($circle,$('<span>').css({flex:'1'}).text(sdName(sd,sdIdx)));
+      // Right-side indicator: ✓ when applied to all, "N school(s)" when applied to some
+      var $ind=$('<span>').css({marginLeft:'auto',display:'inline-flex',alignItems:'center'});
+      $item.append($ind);
+      function renderInd(st,cnt){
+        $ind.empty();
+        if(st==='all'){
+          $ind.append($('<span>').css({fontSize:'11px',color:'#1a73e8',fontWeight:'700'}).html('&#10003;'));
+        } else if(st==='partial'){
+          $ind.append($('<span>').css({fontSize:'9.5px',color:'#6c757d',fontWeight:'600',whiteSpace:'nowrap'}).text(cnt+' school'+(cnt===1?'':'s')));
+        }
+      }
+      renderInd(selState,count||0);
+      // Hover restores to the SELECTED background (not 'none') so the saved state isn't lost
+      $item.on('mouseenter',function(){$(this).css('background',(selState!=='none')?'#dbe7fb':'#f1f3f4');});
+      $item.on('mouseleave',function(){$(this).css('background',selBg);});
       $item.on('click',function(e){e.stopPropagation();closeCtx();cb();});
+      // Allow live updates of the highlight + count as checkboxes change
+      $item.data('updateSel',function(st,cnt){
+        selState=st||'none';
+        selBg=(selState==='all')?'#e7f0fd':(selState==='partial')?'#f0f5fb':'none';
+        $item.css({background:selBg,fontWeight:(selState!=='none')?'600':'400'});
+        renderInd(selState,cnt||0);
+      });
       return $item;
     }
 
-    function openActionMenu(dateKey,$td,x,y,inRange){
+    function openActionMenu(dateKey,$td,anchorEl,inRange){
       closeCtx(); $ctxMenu.empty();
       if(!inRange) return;
+      // Close any open Staffing Hours "…" menu, Break popup, or Calendar breakdown popup
+      $('.sf-action-menu').hide();
+      $('.brk-dd').hide();
+      hideCalTooltip();
       var sds=getSpecialDays(g.id);
-      var curSdId=markers[dateKey]&&markers[dateKey].sdId;
+      var _siteRowsNow=(guideDetails[String(g.id)].siteRows)||[];
+      var schoolIdxs=getSchoolIndices();           // [0,1,2,…] or ['_none_']
+      var showSchoolList=_siteRowsNow.length>1;
+
+      // ── Staged draft of per-school Special Day selections (committed only on Apply) ──
+      // _draft[schoolIdxStr] = sdId | undefined
+      var _draft={};
+      schoolIdxs.forEach(function(si){ var v=getMarkerSdId(dateKey,si); if(v) _draft[String(si)]=v; });
+      var _dirty=false;
+
+      // Live registries for in-place updates
+      var _sdLabelEls={};   // sdId → {$row, update(count)}
+      var _circleEls={};    // schoolIdxStr → {$circle, set(sdId)}
+
+      function draftCount(sdId){
+        var c=0; schoolIdxs.forEach(function(si){ if(_draft[String(si)]===sdId) c++; }); return c;
+      }
+      function refreshCounts(){
+        Object.keys(_sdLabelEls).forEach(function(sdId){ _sdLabelEls[sdId].update(draftCount(sdId)); });
+        if(typeof refreshClearBtn==='function') refreshClearBtn();
+      }
+      function markDirty(){ if(!_dirty){ _dirty=true; if($applyBtn) $applyBtn.css('display',''); } }
+
+      // ── Top: Special Day labels with live school counts ──
       sds.forEach(function(sd,sdIdx){
-        if(curSdId===sd.id) return; // skip currently applied
-        $ctxMenu.append(sdMenuItem(sd,sdIdx,function(){
-          markers[dateKey]={sdId:sd.id};
-          refreshCell($td,dateKey,inRange,false);
-        }));
+        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 12px',cursor:'pointer',borderRadius:'4px'});
+        var $circle=$('<span>').css({width:'10px',height:'10px',background:sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'});
+        var $name=$('<span>').css({flex:'1',fontSize:'12px'}).text(sdName(sd,sdIdx));
+        var $cnt=$('<span>').css({fontSize:'9.5px',color:'#6c757d',fontWeight:'600',whiteSpace:'nowrap',marginLeft:'auto'});
+        $row.append($circle,$name,$cnt);
+        function updateCount(c){
+          if(c>0){ $cnt.text(c+' school'+(c===1?'':'s')); $row.css({background:'#eef4fd',fontWeight:'600'}); }
+          else { $cnt.text(''); $row.css({background:'none',fontWeight:'400'}); }
+        }
+        updateCount(draftCount(sd.id));
+        $row.on('mouseenter',function(){$(this).css('background','#e3edfb');}).on('mouseleave',function(){updateCount(draftCount(sd.id));});
+        $row.on('click',function(e){
+          e.stopPropagation();
+          // Apply this Special Day to ALL schools in the draft
+          schoolIdxs.forEach(function(si){ _draft[String(si)]=sd.id; });
+          schoolIdxs.forEach(function(si){ if(_circleEls[String(si)]) _circleEls[String(si)].set(sd.id); });
+          refreshCounts(); markDirty();
+        });
+        _sdLabelEls[sd.id]={$row:$row,update:updateCount};
+        $ctxMenu.append($row);
       });
-      if(curSdId) $ctxMenu.append(menuItem('Remove',true,function(){ delete markers[dateKey]; refreshCell($td,dateKey,inRange,false); }));
+
+      // ── Middle: per-school list (only when >1 school) ──
+      var $schList=null;
+      if(showSchoolList){
+        $schList=$('<div>').css({borderTop:'1px solid #e9ecef',marginTop:'4px',paddingTop:'4px',maxHeight:'180px',overflowY:'auto'});
+        $schList.on('click mousedown',function(e){ e.stopPropagation(); });
+        _siteRowsNow.forEach(function(sr,si){
+          var key=String(si);
+          var nm=(si+1)+'. '+(sr.school||sr.schoolAbbr||('School '+(si+1)));
+          var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'2px 12px'});
+          // Fixed name column keeps the circle column aligned vertically across all rows
+          var $name=$('<span>').css({fontSize:'12px',color:'#212529',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:'0',width:'165px'}).text(nm).attr('title',nm);
+          // Circle — same size/border/radius as the top Special Day label circles (10×10)
+          var $circle=$('<span>').css({width:'10px',height:'10px',borderRadius:'50%',border:'1px solid rgb(180,180,180)',display:'inline-block',flexShrink:'0',cursor:'pointer',background:'#ffffff'});
+          // Special Day name shown immediately after the circle (blank when none)
+          var $sdNameLbl=$('<span>').css({fontSize:'11px',color:'#495057',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer',flexShrink:'0'});
+          function setCircle(sdId){
+            var sd=sdId?getSdById(g.id,sdId):null;
+            $circle.css('background',sd?(sd.color||'#ffffff'):'#ffffff');
+            $sdNameLbl.text(sd?sdName(sd,sds.indexOf(sd)):'');
+          }
+          setCircle(_draft[key]);
+          _circleEls[key]={$circle:$circle,set:setCircle};
+
+          // Per-school Special Day picker (portalled popup)
+          var $pick=$('<div>').css({position:'fixed',zIndex:'1000000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.16)',padding:'3px',display:'none',fontSize:'12px',minWidth:'130px'});
+          $('body').append($pick);
+          function closePick(){ $pick.hide(); $(document).off('mousedown._schpick_'+si); }
+          function buildPick(){
+            $pick.empty();
+            sds.forEach(function(sd,sdIdx){
+              var cur=_draft[key]===sd.id;
+              var $opt=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'5px 9px',cursor:'pointer',borderRadius:'4px',background:cur?'#eef4fd':'none',fontWeight:cur?'600':'400'});
+              $opt.append($('<span>').css({width:'10px',height:'10px',background:sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}),$('<span>').text(sdName(sd,sdIdx)));
+              $opt.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background',cur?'#eef4fd':'none');});
+              $opt.on('click',function(e){ e.stopPropagation(); _draft[key]=sd.id; setCircle(sd.id); refreshCounts(); markDirty(); closePick(); });
+              $pick.append($opt);
+            });
+            // Clear / None
+            var $clear=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'5px 9px',cursor:'pointer',borderRadius:'4px',color:'#6c757d',borderTop:'1px solid #f0f0f0',marginTop:'2px'});
+            $clear.append($('<span>').css({width:'10px',height:'10px',background:'#fff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}),$('<span>').text('Clear / None'));
+            $clear.on('mouseenter',function(){$(this).css('background','#f8f8f8');}).on('mouseleave',function(){$(this).css('background','none');});
+            $clear.on('click',function(e){ e.stopPropagation(); delete _draft[key]; setCircle(null); refreshCounts(); markDirty(); closePick(); });
+            $pick.append($clear);
+          }
+          function openPick(e){
+            e.stopPropagation();
+            if($pick.is(':visible')){ closePick(); return; }
+            $('.sch-pick-pop').hide();
+            buildPick();
+            var r=$circle[0].getBoundingClientRect();
+            var px=r.right+4, py=r.top;
+            if(px+140>window.innerWidth) px=Math.max(4,r.left-144);
+            if(py+200>window.innerHeight) py=Math.max(4,window.innerHeight-204);
+            $pick.css({top:py+'px',left:px+'px'}).show();
+            setTimeout(function(){ $(document).on('mousedown._schpick_'+si,function(ev){ if(!$pick[0].contains(ev.target)&&ev.target!==$circle[0]&&ev.target!==$sdNameLbl[0]) closePick(); }); },0);
+          }
+          $circle.on('click',openPick);
+          $sdNameLbl.on('click',openPick); // clicking the Special Day name also opens the picker
+          $pick.addClass('sch-pick-pop').on('mousedown',function(e){ e.stopPropagation(); });
+          $row.append($name,$circle,$sdNameLbl);
+          $schList.append($row);
+        });
+        $ctxMenu.append($schList);
+      }
+
+      // ── Bottom: Close / Clear / Apply buttons ──
+      var $btnRow=$('<div>').css({display:'flex',justifyContent:'flex-start',gap:'6px',padding:'7px 12px 4px',borderTop:'1px solid #e9ecef',marginTop:'4px'});
+      var $closeBtn=$('<button type="button">').text('Close').css({fontSize:'11px',padding:'4px 12px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+      // Clear — shown only when at least one school currently has a Special Day in the draft
+      var $clearBtn=$('<button type="button">').text('Clear').css({fontSize:'11px',padding:'4px 12px',background:'none',color:'#dc3545',border:'1px solid #f1c2c7',borderRadius:'5px',cursor:'pointer',display:'none'});
+      var $applyBtn=$('<button type="button">').text('Apply').css({fontSize:'11px',padding:'4px 14px',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600',display:'none'});
+      function _draftHasAny(){ return Object.keys(_draft).some(function(k){ return !!_draft[k]; }); }
+      function refreshClearBtn(){ $clearBtn.css('display', _draftHasAny() ? '' : 'none'); }
+      $closeBtn.on('click',function(e){ e.stopPropagation(); closeCtx(); }); // discard — never commit
+      $clearBtn.on('click',function(e){
+        e.stopPropagation();
+        // Remove every Special Day from every school in the draft
+        Object.keys(_draft).forEach(function(k){ delete _draft[k]; });
+        // Reset all school circles to white and clear their Special Day names
+        Object.keys(_circleEls).forEach(function(k){ _circleEls[k].set(null); });
+        refreshCounts();      // clears the counts at the top
+        refreshClearBtn();    // hide Clear now that nothing is applied
+        markDirty();          // reveal Apply so the cleared state can be committed
+      });
+      $applyBtn.on('click',function(e){
+        e.stopPropagation();
+        // Commit the draft to the real markers
+        if(!markers[dateKey]) markers[dateKey]={schools:{}};
+        markers[dateKey].schools={};
+        Object.keys(_draft).forEach(function(k){ if(_draft[k]) markers[dateKey].schools[k]=_draft[k]; });
+        if(!Object.keys(markers[dateKey].schools).length) delete markers[dateKey];
+        refreshCell($td,dateKey,inRange,false);
+        closeCtx();
+      });
+      $btnRow.append($closeBtn,$clearBtn,$applyBtn);
+      $btnRow.on('click mousedown',function(e){ e.stopPropagation(); });
+      $ctxMenu.append($btnRow);
+      refreshClearBtn(); // set initial visibility from saved state
+
       if(!$ctxMenu.children().length) return;
-      var px=Math.min(x,window.innerWidth-160), py=Math.min(y,window.innerHeight-120);
-      $ctxMenu.css({top:py+'px',left:px+'px'}).show();
-      setTimeout(function(){ $(document).on('click._cal_ctx',closeCtx).on('contextmenu._cal_ctx',closeCtx); },0);
+      _ctxAnchor=anchorEl;
+      // Render off-screen invisible so layout is complete before measuring
+      $ctxMenu.css({minWidth:showSchoolList?'215px':'170px',width:'max-content',maxWidth:'360px',visibility:'hidden',display:'block',top:'-9999px',left:'-9999px'});
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){ // second frame: layout guaranteed complete
+          if(!_ctxAnchor) return;
+          posCtxMenu();               // compute real position
+          $ctxMenu.css('visibility','visible'); // reveal only AFTER positioning
+          if(_ctxRaf) cancelAnimationFrame(_ctxRaf);
+          // Start tracking AFTER reveal so posCtxMenu never runs while top:-9999px
+          _ctxRaf=requestAnimationFrame(function track(){
+            if($ctxMenu[0]&&$ctxMenu[0].style.display!=='none'){
+              posCtxMenu();
+              _ctxRaf=requestAnimationFrame(track);
+            } else {
+              // Menu was hidden externally — fully clean up listeners/state
+              _ctxRaf=null;
+              $(document).off('click._cal_ctx').off('contextmenu._cal_ctx');
+              $(window).off('scroll._cal_ctx resize._cal_ctx');
+              $('#planning-panel').off('scroll._cal_ctx');
+              _ctxAnchor=null;
+            }
+          });
+        });
+      });
+      setTimeout(function(){
+        $(document).on('click._cal_ctx',closeCtx).on('contextmenu._cal_ctx',closeCtx);
+        $(window).on('scroll._cal_ctx resize._cal_ctx',posCtxMenu);
+        $('#planning-panel').on('scroll._cal_ctx',posCtxMenu);
+      },0);
     }
 
     function refreshCell($td,dateKey,inRange,isWknd){
-      var m=markers[dateKey];
-      var sd=m&&m.sdId?getSdById(g.id,m.sdId):null;
+      var sdCounts=getMarkerSdCounts(dateKey);
+      var sdIds=Object.keys(sdCounts);
       var baseBg=inRange?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
-      var markedBg=sd?sd.color:baseBg;
-      $td.css({background:markedBg,color:inRange?'#212529':'#ccc'});
-      $td.attr('data-orig-bg',markedBg); // keep in sync so hideCalTooltip restores correctly
+
       $td.find('.cal-label').remove();
-      if(sd){
-        var sdIdx2=getSpecialDays(g.id).indexOf(sd);
-        $td.prepend($('<div class="cal-label">').css({fontSize:'8px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:'1.2',paddingBottom:'1px',color:'#495057'}).text(sdName(sd,sdIdx2)));
+
+      if(sdIds.length===0){
+        // No Special Day applied to any school
+        $td.css({background:baseBg,color:inRange?'#212529':'#ccc'});
+        $td.attr('data-orig-bg',baseBg);
+      } else if(sdIds.length===1){
+        var sd=getSdById(g.id,sdIds[0]);
+        var totalSchools=getSchoolIndices().length;
+        var appliesToAll=(sdCounts[sdIds[0]]>=totalSchools);
+        if(appliesToAll){
+          // Single Special Day applied to EVERY school — solid whole-cell background + plain label
+          var bg=sd?sd.color:baseBg;
+          $td.css({background:bg,color:inRange?'#212529':'#ccc'});
+          $td.attr('data-orig-bg',bg);
+          if(sd){
+            var sdIdx2=getSpecialDays(g.id).indexOf(sd);
+            $td.prepend($('<div class="cal-label">').attr('data-sd-id',sd.id).css({fontSize:'8px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:'1.2',paddingBottom:'1px',color:'#495057'}).text(sdName(sd,sdIdx2)));
+          }
+        } else {
+          // Single Special Day applied to only SOME schools — no whole-cell background;
+          // show a color-coded pill label with the school count (e.g. "Min Day (1)").
+          $td.css({background:baseBg,color:inRange?'#212529':'#ccc'});
+          $td.attr('data-orig-bg',baseBg);
+          if(sd){
+            var sdIdx2b=getSpecialDays(g.id).indexOf(sd);
+            $td.prepend($('<div class="cal-label">').attr('data-sd-id',sd.id).css({
+              fontSize:'8px',fontWeight:'700',borderRadius:'2px',padding:'2px 4px',
+              background:sd.color||'#ffffff',color:'#495057',lineHeight:'1.2',display:'block'
+            }).text(sdName(sd,sdIdx2b)+' ('+sdCounts[sdIds[0]]+')'));
+          }
+        }
+      } else {
+        // Multiple distinct Special Days across schools — no cell-level background;
+        // render one color-coded label per Special Day with its school count.
+        $td.css({background:baseBg,color:inRange?'#212529':'#ccc'});
+        $td.attr('data-orig-bg',baseBg);
+        var sds=getSpecialDays(g.id);
+        sdIds.forEach(function(sdId,labelIdx){
+          var sd=getSdById(g.id,sdId);
+          if(!sd) return;
+          var sdIdx3=sds.indexOf(sd);
+          var $lbl=$('<div class="cal-label">').attr('data-sd-id',sd.id).css({
+            fontSize:'8px',fontWeight:'700',borderRadius:'2px',padding:'2px 4px',
+            background:sd.color||'#ffffff',color:'#495057',lineHeight:'1.2',
+            display:'block',marginBottom:labelIdx>0?'2px':'0'
+          }).text(sdName(sd,sdIdx3)+' ('+sdCounts[sdId]+')');
+          $td.prepend($lbl);
+        });
+        // Re-reverse so labels appear in original sdIds order (prepend reverses order)
+        var $allLbls=$td.find('.cal-label').get().reverse();
+        $allLbls.forEach(function(el){ $td.prepend(el); });
       }
+
       var dayKey=$td.attr('data-day-key');
-      if(dayKey) updateCalendarCellHours($td,sd&&sd.noHours,sd&&!sd.noHours,dayKey,sd?sd.id:null);
+      if(dayKey) updateCalendarCellHours($td,dateKey,dayKey);
     }
 
-    function updateCalendarCellHours($td,noHours,hasSdHours,dayKey,sdId){
+    function updateCalendarCellHours($td,dateKey,dayKey){
       var $hrs=$td.find('.cal-hours');
       if(!$hrs.length) return;
-      if(noHours){ $hrs.text(''); return; }
       var abWeek=$td.closest('tr').attr('data-ab-week')||'';
       var calOrigIdx=$td.closest('tr').attr('data-cal-orig-idx');
       calOrigIdx=(calOrigIdx!==undefined&&calOrigIdx!==null&&calOrigIdx!=='') ? parseInt(calOrigIdx) : null;
-      var _anyOpt2=sopts.bySchool||sopts.byCalendar||sopts.alternateWeeks;
-      // srcKey: if it's a special day with hours, use its sdId as the column key; else use the weekday key
-      var srcKey=hasSdHours&&sdId ? sdId : dayKey;
-      var val='';
-      if(_anyOpt2){
-        var _wkPart=abWeek?abWeek:'';
-        var _ciPart=(sopts.byCalendar&&calOrigIdx!==null)?calOrigIdx:null;
-        var sfxU=(sopts.byCalendar&&_ciPart!==null?'c'+_ciPart:'')+_wkPart;
-        val=$('#planning-panel .day-total-u[data-sfx="'+sfxU+'"][data-day="'+srcKey+'"]').text()||'';
-        if(sopts.bySchool&&val===''){
-          var _tot=0;
-          $('#planning-panel .day-total-u[data-day="'+srcKey+'"]').each(function(){
-            var _sfx2=$(this).attr('data-sfx')||'';
-            var _calMatch=(!sopts.byCalendar||(_ciPart!==null&&_sfx2.indexOf('c'+_ciPart)>=0));
-            var _wkMatch=(!sopts.alternateWeeks||_sfx2.indexOf(_wkPart)>=0);
-            if(_calMatch&&_wkMatch) _tot+=parseFloat($(this).text())||0;
-          });
-          val=_tot>0?(Math.round(_tot*100)/100):'';
+      var _gd=guideDetails[String(g.id)]||{};
+      var _slots=_gd.staffingHoursSlots||{};
+      var _baseSH=_gd.staffingHours||{};
+      var _siteRows=_gd.siteRows||[];
+      var _roles=getRoles(g.id);
+      var _wkPart=abWeek?abWeek:'';
+      var _ciPart=(sopts.byCalendar&&calOrigIdx!==null)?calOrigIdx:null;
+      var _anyOpt=sopts.bySchool||sopts.byCalendar||sopts.alternateWeeks;
+
+      function _slotKeyC(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
+      // Local adjusted-hours helper (calcAdjustedHours lives in the staffing-section scope and
+      // isn't visible here). Computes raw start→end hours minus any non-billable meal break.
+      function _calcAdj(d){
+        if(!d||!d.start||!d.end) return 0;
+        var sp=d.start.split(':'),ep=d.end.split(':');
+        var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0), em=parseInt(ep[0])*60+(parseInt(ep[1])||0);
+        if(em<=sm) return 0;
+        var raw=Math.round((em-sm)/60*100)/100;
+        if(d.brk && d.brk.type==='nonbillable'){
+          var mins=parseInt(d.brk.mins)||0;
+          raw=Math.round((raw-mins/60)*100)/100;
+          if(raw<0) raw=0;
+        }
+        return raw;
+      }
+      // Returns the staffing data object {role:{day:{start,end,brk}}} for a school context.
+      // bySchool ON → that school's own slot; bySchool OFF → the shared aggregate slot
+      // (or the base staffingHours table when no option modes are enabled).
+      function _slotFor(si){
+        if(!_anyOpt) return _baseSH;
+        var siReal=(si==='_none_')?null:si;
+        var key=_slotKeyC(sopts.bySchool?siReal:null, _ciPart, _wkPart);
+        return _slots[key]||{};
+      }
+      // Computes one school's total hours for the day: its OWN staff counts (from siteRows)
+      // times the adjusted hours of its resolved column (its Special Day column, or weekday).
+      function schoolDayHours(si, srcKey){
+        var slot=_slotFor(si);
+        var sRow=(si==='_none_'||si==null)?null:_siteRows[si];
+        var t=0;
+        _roles.forEach(function(role){
+          var ck=role.isCoach?'coaches_'+role.key:role.key;
+          var cnt;
+          if(sRow) cnt=parseInt(sRow[ck])||0;
+          else {
+            // No per-school row (no schools configured): sum counts across all rows, or 0
+            cnt=0; _siteRows.forEach(function(r){ if(r) cnt+=parseInt(r[ck])||0; });
+          }
+          if(!cnt) return;
+          var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
+          var h=_calcAdj(d);
+          if(h&&h>0) t+=h*cnt;
+        });
+        return t;
+      }
+
+      var schoolIdxs=getSchoolIndices();
+      var total=0;
+
+      if(schoolIdxs[0]==='_none_'){
+        // No schools configured — single implicit context
+        var sdId0=getMarkerSdId(dateKey,'_none_');
+        var sd0=sdId0?getSdById(g.id,sdId0):null;
+        if(!(sd0&&sd0.noHours)){
+          var srcKey0=(sd0&&!sd0.noHours)?sd0.id:dayKey;
+          total=schoolDayHours('_none_',srcKey0);
         }
       } else {
-        val=$('#planning-panel .day-grand-total[data-day="'+srcKey+'"]').text()||'';
+        // Per-school: each school uses ITS OWN Special Day column (or weekday), with its OWN
+        // counts. A No Hours Special Day contributes 0 for that school only. This is correct
+        // whether bySchool is on (own slot) or off (shared aggregate slot, own counts).
+        schoolIdxs.forEach(function(si){
+          var sdId=getMarkerSdId(dateKey,si);
+          var sd=sdId?getSdById(g.id,sdId):null;
+          if(sd&&sd.noHours) return; // this school contributes 0 hours
+          var srcKey=(sd&&!sd.noHours)?sd.id:dayKey;
+          total+=schoolDayHours(si,srcKey);
+        });
       }
-      $hrs.text(val?val+' hrs':'');
+
+      total=Math.round(total*100)/100;
+      $hrs.text(total>0?(total+' hrs'):'');
     }
 
     function updateCalendarHours(){
@@ -4352,9 +4741,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var dateKey=$td.attr('data-date-key');
         var dayKey=$td.attr('data-day-key');
         if(!dateKey||!dayKey) return;
-        var _m=markers[dateKey];
-        var _sd=_m&&_m.sdId?getSdById(g.id,_m.sdId):null;
-        updateCalendarCellHours($td,_sd&&_sd.noHours,_sd&&!_sd.noHours,dayKey,_sd?_sd.id:null);
+        updateCalendarCellHours($td,dateKey,dayKey);
       });
     }
 
@@ -4425,10 +4812,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var isWknd=di>=5;
           var inRange=day>=fd&&day<=ld;
           var dateKey=isoDate(day);
-          var _marker=markers[dateKey];
-          var _sd=_marker&&_marker.sdId?getSdById(g.id,_marker.sdId):null;
+          var sdCounts0=getMarkerSdCounts(dateKey);
+          var sdIds0=Object.keys(sdCounts0);
           var baseBg=inRange?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
-          var cellBg=_sd?_sd.color:baseBg;
+          // A single Special Day gets the solid whole-cell background ONLY when it applies to
+          // every school. A single SD on just some schools (or multiple distinct SDs) uses
+          // color-coded pill labels with counts instead, leaving the cell background plain.
+          var _totalSchools0=getSchoolIndices().length;
+          var _singleSd=(sdIds0.length===1)?getSdById(g.id,sdIds0[0]):null;
+          var _singleAll=(_singleSd && sdCounts0[sdIds0[0]]>=_totalSchools0);
+          var cellBg=_singleAll?_singleSd.color:baseBg;
 
           var _dayKeyMap=['mon','tue','wed','thu','fri','sat','sun'];
           var _dayKey=_dayKeyMap[di];
@@ -4439,10 +4832,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             color:inRange?'#212529':'#ccc',fontSize:'9px'
           });
 
-          // Special day label
-          if(_sd){
-            var _sdIdx=getSpecialDays(g.id).indexOf(_sd);
-            $td.append($('<div class="cal-label">').css({fontSize:'8px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:'1.2',paddingBottom:'1px',color:'#495057'}).text(sdName(_sd,_sdIdx)));
+          // Special day label(s)
+          if(_singleAll){
+            // Single SD on all schools → plain uppercase label (cell already has solid bg)
+            var _sdIdx=getSpecialDays(g.id).indexOf(_singleSd);
+            $td.append($('<div class="cal-label">').attr('data-sd-id',_singleSd.id).css({fontSize:'8px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.04em',lineHeight:'1.2',paddingBottom:'1px',color:'#495057'}).text(sdName(_singleSd,_sdIdx)));
+          } else if(sdIds0.length>=1){
+            // One SD on some schools, or multiple distinct SDs → color-coded pill label(s) w/ counts
+            var _sdsAll=getSpecialDays(g.id);
+            sdIds0.forEach(function(sdId,labelIdx){
+              var sdObj=getSdById(g.id,sdId);
+              if(!sdObj) return;
+              var sdIdxB=_sdsAll.indexOf(sdObj);
+              $td.append($('<div class="cal-label">').attr('data-sd-id',sdObj.id).css({
+                fontSize:'8px',fontWeight:'700',borderRadius:'2px',padding:'2px 4px',
+                background:sdObj.color||'#ffffff',color:'#495057',lineHeight:'1.2',
+                display:'block',marginBottom:labelIdx>0?'2px':'0'
+              }).text(sdName(sdObj,sdIdxB)+' ('+sdCounts0[sdId]+')'));
+            });
           }
 
           // Date label
@@ -4453,7 +4860,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $td.css('cursor','pointer');
             $td.attr('data-orig-bg', cellBg);  // used by hideCalTooltip to restore bg
             $td.append($('<div class="cal-hours">').css({fontSize:'11px',fontWeight:'600',color:'#3c4043',lineHeight:'1.2',marginTop:'2px'}));
-            var _initCellBg=cellBg;
             (function(dk, dateKey2, _baseBg2){
               var _thisHasPopup=false;
               var _hoverClass=isWknd?'cal-hovered-wknd':'cal-hovered';
@@ -4461,22 +4867,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 cancelHide();
                 // Apply hover via CSS class — never touch inline background
                 $td.addClass(_hoverClass);
-                // Always read markers live
-                var _m2=markers[dateKey2];
-                var _sd2=_m2&&_m2.sdId?getSdById(g.id,_m2.sdId):null;
-                var _currentBg=_sd2?_sd2.color:_baseBg2;
-                if(!_sd2||!_sd2.noHours){
-                  var hrsVal=parseFloat($td.find('.cal-hours').text());
-                  if(hrsVal>0){
-                    var _srcKey=(_sd2&&!_sd2.noHours)?_sd2.id:dk;
-                    _tipCellBg=_currentBg;
-                    $td.attr('data-orig-bg',_currentBg);
-                    _thisHasPopup=true;
-                    showCalTooltip($td, _srcKey, g, day);
-                  } else {
-                    _thisHasPopup=false;
-                    hideCalTooltip();
-                  }
+                // Always read markers live — recompute the cell's current bg for restore-on-leave
+                var _liveSdCounts=getMarkerSdCounts(dateKey2);
+                var _liveSdIds=Object.keys(_liveSdCounts);
+                var _liveSingleSd=(_liveSdIds.length===1)?getSdById(g.id,_liveSdIds[0]):null;
+                var _currentBg=_liveSingleSd?_liveSingleSd.color:_baseBg2;
+                var hrsVal=parseFloat($td.find('.cal-hours').text());
+                if(hrsVal>0){
+                  _tipCellBg=_currentBg;
+                  $td.attr('data-orig-bg',_currentBg);
+                  _thisHasPopup=true;
+                  // Pass the raw weekday key — showCalTooltip resolves each school's own
+                  // applicable column (its assigned Special Day, or this regular weekday) itself.
+                  showCalTooltip($td, dk, g, day);
                 } else {
                   _thisHasPopup=false;
                   hideCalTooltip();
@@ -4504,13 +4907,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $dots.on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
             $dots.on('click',function(e){
               e.stopPropagation();
-              var r=$dots[0].getBoundingClientRect();
-              openActionMenu(dateKey,$td,r.left,r.bottom+4,inRange);
+              openActionMenu(dateKey,$td,$td[0],inRange);
             });
             $td.on('mouseenter',function(){$dots.show();}).on('mouseleave',function(){$dots.hide();});
             $td.on('contextmenu',function(e){
               e.preventDefault();e.stopPropagation();
-              openActionMenu(dateKey,$td,e.clientX,e.clientY,inRange);
+              openActionMenu(dateKey,$td,$td[0],inRange);
             });
             $td.append($dots);
           }
@@ -4627,64 +5029,98 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
       var ROLES2=rolesToStaffingRoles(getRoles(gObj.id)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; });
 
-      // dayKey may be a weekday key ('mon'…'sun') or an sdId ('sd-minday' etc.)
-      // The staffing column key matches directly — use dayKey as srcKey
-      var _srcDayKey=dayKey;
+      // dayKey is always the raw weekday key ('mon'…'sun'); each school resolves its OWN
+      // applicable column below (its assigned Special Day's id, or this regular weekday).
+      var dateKeyForTip=isoDate(cellDate);
 
       // Build slot key matching the unified slotKey(si, ci, wk) function
       function _slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
       function _getSlot(si,ci,wk){ return _sfSlots[_slotKey2(si,ci,wk)]||{}; }
 
-      var bySchool=_sopts.bySchool && _siteRows.length>0;
       var byCal=_sopts.byCalendar;
       var byAB=_sopts.alternateWeeks;
-      var _anyOpt3=bySchool||byCal||byAB;
+      var _anyOpt3=_sopts.bySchool||byCal||byAB;
       var ciForTip=(byCal&&calOrigIdx!==null)?calOrigIdx:null;
       var wkForTip=byAB?(abWeek||'a'):'';
 
       var rows=[];
 
-      if(_anyOpt3){
-        if(bySchool){
-          _siteRows.forEach(function(sRow,si){
-            var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
-            var schoolCounts={}; var _rl2=getRoles(gObj.id); _rl2.forEach(function(role){ var ck=role.isCoach?'coaches_'+role.key:role.key; schoolCounts[ck]=parseInt(sRow[ck])||0; });
-            var shSch=_getSlot(si,ciForTip,wkForTip);
-            ROLES2.forEach(function(role){
-              var cnt=schoolCounts[role.countKey]||0; if(!cnt) return;
-              var d=(shSch[role.key]&&shSch[role.key][dayKey])||{start:'',end:''};
-              var h=calcAdjH(d); if(!h||h<=0) return;
-              rows.push({school:schoolName,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
-            });
+      // Staffing data {role:{day:{start,end,brk}}} for a school context.
+      function _slotForTip(si){
+        if(!_anyOpt3) return _gdet.staffingHours||{};
+        var key=_slotKey2(_sopts.bySchool?si:null, ciForTip, wkForTip);
+        return _sfSlots[key]||{};
+      }
+      // Resolve a school's own applicable column: its assigned Special Day's id (when that SD has
+      // hours) or the regular weekday key when no SD is applied or the SD has no hours.
+      function resolveSchoolKey(si){
+        var sdId=getMarkerSdId(dateKeyForTip,si);
+        var sd=sdId?getSdById(gObj.id,sdId):null;
+        return {sd:sd, srcKey:(sd&&!sd.noHours)?sd.id:dayKey, noHours:!!(sd&&sd.noHours)};
+      }
+
+      // Is any Special Day applied to any school on this date?
+      var _anySDApplied=false;
+      if(_siteRows.length) _siteRows.forEach(function(sr,si){ if(getMarkerSdId(dateKeyForTip,si)) _anySDApplied=true; });
+
+      // Break down by school (School + Special Day columns) when Separate-by-School is enabled
+      // OR any Special Day is applied to a subset of schools on this date.
+      var bySchool = _siteRows.length>1 && (_sopts.bySchool || _anySDApplied);
+
+      if(bySchool){
+        // Per-school: each school uses its OWN counts and its OWN resolved column.
+        _siteRows.forEach(function(sRow,si){
+          var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
+          var resolved=resolveSchoolKey(si);
+          if(resolved.noHours){
+            rows.push({school:schoolName,schoolIdx:si,sd:resolved.sd,noHoursNote:true,label:'—',start:'—',end:'—',hours:0,cnt:'',total:0});
+            return;
+          }
+          var slot=_slotForTip(si);
+          var added=false;
+          ROLES2.forEach(function(role){
+            var cnt=parseInt(sRow[role.countKey])||0; if(!cnt) return;
+            var d=(slot[role.key]&&slot[role.key][resolved.srcKey])||{start:'',end:''};
+            var h=calcAdjH(d); if(!h||h<=0) return;
+            rows.push({school:schoolName,schoolIdx:si,sd:resolved.sd,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
+            added=true;
           });
-        } else {
-          var shData=_getSlot(null,ciForTip,wkForTip);
-          var counts=(function(){ var t={}; var _rl3=getRoles(gObj.id); _rl3.forEach(function(role){ var ck=role.isCoach?'coaches_'+role.key:role.key; t[ck]=0; }); _siteRows.forEach(function(r){ if(r) _rl3.forEach(function(role){ var ck=role.isCoach?'coaches_'+role.key:role.key; t[ck]+=(parseInt(r[ck])||0); }); }); return t; })();
+          if(!added && resolved.sd){
+            rows.push({school:schoolName,schoolIdx:si,sd:resolved.sd,noHoursNote:true,label:'—',start:'—',end:'—',hours:0,cnt:'',total:0});
+          }
+        });
+      } else {
+        // Aggregate view: no per-school Special Days in play (and not Separate-by-School).
+        // Every school uses the same resolved column; sum counts across all schools.
+        var aggResolved=resolveSchoolKey(_siteRows.length?0:'_none_');
+        if(!aggResolved.noHours){
+          var slotAgg=_slotForTip(_sopts.bySchool?0:null);
+          var counts=(function(){ var t={}; ROLES2.forEach(function(role){ t[role.countKey]=0; }); _siteRows.forEach(function(r){ if(r) ROLES2.forEach(function(role){ t[role.countKey]+=(parseInt(r[role.countKey])||0); }); }); return t; })();
           ROLES2.forEach(function(role){
             var cnt=counts[role.countKey]||0; if(!cnt) return;
-            var d=(shData[role.key]&&shData[role.key][dayKey])||{start:'',end:''};
+            var d=(slotAgg[role.key]&&slotAgg[role.key][aggResolved.srcKey])||{start:'',end:''};
             var h=calcAdjH(d); if(!h||h<=0) return;
-            rows.push({school:null,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
+            rows.push({school:null,schoolIdx:null,sd:aggResolved.sd,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
           });
         }
-      } else {
-        // No options: use base staffingHours
-        var shBase=_gdet.staffingHours||{};
-        var countsBase=(function(){ var t={}; var _rl4=getRoles(gObj.id); _rl4.forEach(function(role){ var ck=role.isCoach?'coaches_'+role.key:role.key; t[ck]=0; }); _siteRows.forEach(function(r){ if(r) _rl4.forEach(function(role){ var ck=role.isCoach?'coaches_'+role.key:role.key; t[ck]+=(parseInt(r[ck])||0); }); }); return t; })();
-        ROLES2.forEach(function(role){
-          var cnt=countsBase[role.countKey]||0; if(!cnt) return;
-          var d=(shBase[role.key]&&shBase[role.key][dayKey])||{start:'',end:''};
-          var h=calcAdjH(d); if(!h||h<=0) return;
-          rows.push({school:null,label:role.label,start:fmt12(d.start),end:fmt12(d.end),hours:h,cnt:cnt,total:Math.round(h*cnt*100)/100});
-        });
       }
 
       if(!rows.length){ hideCalTooltip(); return; }
 
       $calTip.empty();
 
+      // ── Fixed header (title + column headers) ──
+      var $hdrPad=$('<div>').css({padding:'10px 12px 6px 12px'});
+      var FULL_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      var FULL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
+      var headerText=dateLabel;
+      if(abWeek) headerText+=' (Week '+(abWeek==='a'?'A':'B')+')';
+      $hdrPad.append($('<div>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'}).text(headerText));
+
       // Column width distribution (shared by header, body, and footer tables)
-      var colWidths=bySchool?['18%','18%','14%','14%','10%','10%','16%']:['28%','16%','16%','12%','12%','16%'];
+      // bySchool adds a Special Day column right after School Name.
+      var colWidths=bySchool?['16%','16%','16%','12%','12%','9%','9%','10%']:['28%','16%','16%','12%','12%','16%'];
 
       function applyColWidths($tbl){
         var $cg=$('<colgroup>');
@@ -4693,23 +5129,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tbl.css({'table-layout':'fixed','width':'100%'});
       }
 
-      // ── Fixed header (title + column headers) ──
-      var $hdrPad=$('<div>').css({padding:'10px 12px 6px 12px'});
-      var FULL_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-      var FULL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-      var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
-      var _sds=getSpecialDays(gObj.id);
-      var _matchSd=_sds.find(function(s){return s.id===dayKey;})||null;
-      var headerText=_matchSd?(sdName(_matchSd,_sds.indexOf(_matchSd))+(_matchSd&&dateLabel?' — ':'')+dateLabel):dateLabel;
-      if(abWeek) headerText+=' (Week '+(abWeek==='a'?'A':'B')+')';
-      $hdrPad.append($('<div>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'}).text(headerText));
-
       var $tHdr=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
       applyColWidths($tHdr);
       var $hrow=$('<tr>');
-      var cols=bySchool?['School','Role','Start','End','Hrs','Count','Total']:['Role','Start','End','Hrs','Count','Total'];
+      var cols=bySchool?['School','Special Day','Role','Start','End','Hrs','Count','Total']:['Role','Start','End','Hrs','Count','Total'];
       cols.forEach(function(h,i){
-        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=(bySchool?3:1)?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',overflow:'hidden',textOverflow:'ellipsis'}).text(h));
+        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=(bySchool?4:1)?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',overflow:'hidden',textOverflow:'ellipsis'}).text(h));
       });
       $tHdr.append($('<thead>').append($hrow));
       $hdrPad.append($tHdr);
@@ -4726,12 +5151,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(isNewSchool && ri>0) $row.css('border-top','2px solid #adb5bd');
         var cells=bySchool?
           [$('<td>').css({padding:'3px 5px',color:'#6c757d',fontSize:'9.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.school),
-           $('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500',overflow:'hidden',textOverflow:'ellipsis'}).text(r.label),
+           (function(){
+             var $sdTd=$('<td>').css({padding:'3px 5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'});
+             if(r.sd){
+               var sdIdxR=getSpecialDays(gObj.id).indexOf(r.sd);
+               var $wrap=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px'});
+               $wrap.append($('<span>').css({width:'8px',height:'8px',background:r.sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}));
+               $wrap.append($('<span>').css({fontSize:'9.5px',color:'#495057'}).text(sdName(r.sd,sdIdxR)));
+               $sdTd.append($wrap);
+             } else {
+               // No Special Day for this school → subtle "Regular Day"
+               $sdTd.append($('<span>').css({fontSize:'9.5px',color:'#adb5bd',fontStyle:'italic'}).text('Regular Day'));
+             }
+             return $sdTd;
+           })(),
+           $('<td>').css({padding:'3px 5px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.hours),
+           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.noHoursNote?'0':r.hours),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.cnt),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.total)]:
+           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.noHoursNote?'0':r.total)]:
           [$('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500',overflow:'hidden',textOverflow:'ellipsis'}).text(r.label),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
@@ -4748,7 +5187,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // ── Fixed Total footer ──
       var grand=Math.round(rows.reduce(function(s,r){return s+r.total;},0)*100)/100;
-      var colspan=bySchool?6:5;
+      var colspan=bySchool?7:5;
       var $footPad=$('<div>').css({padding:'0 12px 10px 12px',borderTop:'2px solid #dee2e6',marginTop:'0'});
       var $tFoot=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
       applyColWidths($tFoot);
@@ -5243,18 +5682,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $opt.on('mouseenter',function(){ if(!isSel) $(this).css({border:'1.5px solid #999','box-shadow':'inset 0 0 0 1px rgba(0,0,0,0.10)'}); });
               $opt.on('mouseleave',function(){ if(!isSel) $(this).css({border:'1px solid rgb(210,210,210)','box-shadow':'none'}); });
               $opt.on('click',function(e){
-                e.stopPropagation(); specialDays[capturedRi].color=c; saveSpecialDays();
+                e.stopPropagation(); specialDays[capturedRi].color=c; specialDays[capturedRi]._colorCustomized=true; saveSpecialDays();
                 $circle.css('background',c); pClose();
                 var _sdId=specialDays[capturedRi].id;
-                // Refresh calendar cells with this special day — read markers from guideDetails
                 var _markers=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calMarkers)||{};
                 var $calSec=$('#cal-section-'+g.id);
+                var totalSchools=Math.max(1,(guideDetails[String(g.id)].siteRows||[]).length);
+                // Recompute per affected cell whether this SD covers all schools (solid cell bg)
+                // or only some / shares with other SDs (color-coded pill labels).
                 $calSec.find('.cal-day-cell').each(function(){
-                  var dk2=$(this).attr('data-date-key');
-                  var _m=_markers[dk2];
-                  if(_m&&_m.sdId===_sdId) $(this).css('background',c);
+                  var $cell=$(this);
+                  var dk2=$cell.attr('data-date-key');
+                  var m=_markers[dk2];
+                  if(!m||!m.schools) return;
+                  var counts={}; Object.keys(m.schools).forEach(function(k){ var id=m.schools[k]; if(id) counts[id]=(counts[id]||0)+1; });
+                  if(!counts[_sdId]) return; // this SD isn't applied on this cell
+                  var distinctIds=Object.keys(counts);
+                  var singleAll=(distinctIds.length===1 && counts[distinctIds[0]]>=totalSchools);
+                  if(singleAll){
+                    // Solid whole-cell background uses this SD's new color
+                    $cell.css('background',c);
+                    $cell.attr('data-orig-bg',c);
+                  } else {
+                    // Update this SD's color-coded pill label(s), matched by data-sd-id
+                    $cell.find('.cal-label[data-sd-id="'+_sdId+'"]').css('background',c);
+                  }
                 });
-                // Refresh Staffing Hours header circles
+                // Refresh Staffing Hours header circles for this SD
                 $('#staffing-section-'+g.id).find('th[data-sd-hdr="'+_sdId+'"] .sd-hdr-circle').css('background',c);
               });
               $grid.append($opt);
@@ -6177,12 +6631,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $('#staffing-section-'+g.id).replaceWith($newSf2);
         var $newCal2=buildCalendarSection(g);
         $('#cal-section-'+g.id).replaceWith($newCal2);
-        $newSf2[0]._recalcAll&&$newSf2[0]._recalcAll();
+        setTimeout(function(){
+          if($newSf2[0]._recalcAll) $newSf2[0]._recalcAll();
+          if($newCal2[0]._updateHours) $newCal2[0]._updateHours();
+        },0);
       }
     }
 
     $addRowBtn.on('click',function(){
+      var _oldLen=siteRows.length;
       siteRows.push({school:''});
+      var _newIdx=_oldLen; // index of the newly-added school
+
+      // ── Inherit Special Days: if every existing school shares the same Special Day on a
+      // given Calendar date, the new school automatically receives that same Special Day. ──
+      if(_oldLen>0){
+        var _cm=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calMarkers)||null;
+        if(_cm){
+          Object.keys(_cm).forEach(function(dateKey){
+            var m=_cm[dateKey];
+            if(!m||!m.schools) return;
+            // Determine the Special Day applied to each existing school for this date
+            var sharedSdId=null, allSame=true;
+            for(var i=0;i<_oldLen;i++){
+              var sid=m.schools[String(i)]||null;
+              if(i===0){ sharedSdId=sid; }
+              else if(sid!==sharedSdId){ allSame=false; break; }
+            }
+            // Only inherit when every existing school has the SAME (non-null) Special Day
+            if(allSame && sharedSdId){
+              m.schools[String(_newIdx)]=sharedSdId;
+            }
+          });
+        }
+      }
+
       saveSiteRows();
       refreshTable();
     });
