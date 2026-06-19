@@ -2817,7 +2817,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         label: r.name,
         countLabel: r.isCoach?'# of Coaches':'# of Staff',
         countKey: r.isCoach?'coaches_'+r.key:r.key,
-        conditional: !r.isCoach
+        // All rows stay visible/editable regardless of staff count, so Start/End times can
+        // always be entered or edited (totals stay blank until the count is > 0).
+        conditional: false
       };
     });
   }
@@ -3082,7 +3084,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Dropdown (body-mounted for overflow escape)
     var $optsDD=$('<div>').css({
       position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
-      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'6px 0',
+      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'4px 0',
       minWidth:'210px',display:'none',fontSize:'12px'
     });
     $('body').append($optsDD);
@@ -3090,7 +3092,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function buildOptsDD(){
       $optsDD.empty();
       function optRow(label,key){
-        var $lbl=$('<label>').css({display:'flex',alignItems:'center',gap:'10px',padding:'7px 16px',cursor:'pointer',color:'#212529',userSelect:'none'});
+        var $lbl=$('<label>').css({display:'flex',alignItems:'center',gap:'8px',padding:'3px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
         var $chk=$('<input type="checkbox">').css({width:'14px',height:'14px',cursor:'pointer',accentColor:'#0d6efd'}).prop('checked',sopts[key]);
         $chk.on('change',function(){
           sopts[key]=$(this).prop('checked');
@@ -3167,7 +3169,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $viewBtn.css('marginLeft','auto');
     var $viewDD=$('<div>').css({
       position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
-      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'6px 0',
+      borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'4px 0',
       minWidth:'210px',display:'none',fontSize:'12px'
     });
     $('body').append($viewDD);
@@ -3289,7 +3291,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var dispVal=window._PICKER_FMT(curVal);
                 var srcBrk=dRef.brk; // Billable/Non-Billable setting on the source cell
                 var typeStr=isE?'end time':'start time';
-                var $item=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
+                var $item=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
                   .text('Copy across '+dayLbl+' (vertically)')
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
@@ -3297,8 +3299,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     var _counts=getCounts();
                     ROLES.forEach(function(r2){
                       if(!sh[r2.key]||!sh[r2.key][dk]) return;
-                      // Only copy to roles with staffing count > 0
-                      if(!(_counts[r2.countKey]>0)) return;
+                      // Copy Start/End regardless of staff count (count may be 0/blank/missing)
                       if(isE) sh[r2.key][dk].end=curVal; else sh[r2.key][dk].start=curVal;
                       // Copy the Billable/Non-Billable break setting along with the time
                       if(srcBrk) sh[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrk)); else delete sh[r2.key][dk].brk;
@@ -3322,7 +3323,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if(dk==='sun')  return ['mon','tue','wed','thu','fri','sun'];
                   return _wkd;
                 })();
-                var $item2=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
+                var $item2=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
                   .text('Copy to '+roleLbl+' on weekdays (horizontally)')
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
@@ -3340,14 +3341,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
                   });
                 // Option 3: Copy to all roles — targets based on source day
-                var $item3=$('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
+                var $item3=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
                   .text('Copy to all on weekdays')
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
                     var _cts=getCounts();
                     ROLES.forEach(function(r2){
-                      if(!(_cts[r2.countKey]>0)) return;
                       if(!sh[r2.key]) return;
                       _allTargets.forEach(function(wdk){
                         if(!sh[r2.key][wdk]) return;
@@ -3374,10 +3374,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $td.css({padding:'2px 4px',background:_isWknd?'#edf3fa':'#fff',position:'relative'})
                 .append($picker,$dots)
                 .on('mouseenter',function(){
+                  // Show the copy "…" whenever this field has a time value, regardless of
+                  // the related staff count (count may be 0/blank/missing).
                   var hasVal=isE?!!dRef.end:!!dRef.start;
-                  var countKey=(ROLES.find(function(r2){return r2.key===rk;})||{countKey:''}).countKey;
-                  var hasCount=(getCounts()[countKey]||0)>0;
-                  if(hasVal&&hasCount) $dots.show();
+                  if(hasVal) $dots.show();
                 }).on('mouseleave',function(){$dots.hide();});
             })(d2,row.type==='end',role.key,day.k,(DAYS.find(function(d){return d.k===day.k;})||{l:day.k}).l,role.label);
 
@@ -3555,7 +3555,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var state={schools:[], cals:[], wks:[]};
 
             function mkVCb(lbl,checked){
-              var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'7px 16px',cursor:'pointer',color:'#212529',userSelect:'none'});
+              var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'3px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
               var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',width:'13px',height:'13px',accentColor:'#0d6efd',margin:'0'});
               $row.append($cb,$('<span>').css({fontSize:'11px'}).text(lbl));
               $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
@@ -3694,18 +3694,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                         if(dk==='sun')  return ['mon','tue','wed','thu','fri','sun'];
                         return ['mon','tue','wed','thu','fri'];
                       })();
-                      function mI(lb,cb){ return $('<div>').css({padding:'6px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
+                      function mI(lb,cb){ return $('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
                       function doR(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
                       var _c=getCountsFn();
-                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!(_c[r2.countKey]>0)||!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
+                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
                       $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(srcBrkU) shData[rk][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[rk][wdk].brk; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
-                      $stMn.append(mI('Copy to all on weekdays',function(){ var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!(_c2[r2.countKey]>0)||!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(srcBrkU) shData[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][wdk].brk; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); }));
+                      $stMn.append(mI('Copy to all on weekdays',function(){ var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(srcBrkU) shData[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][wdk].brk; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); }));
                       var br=$dt[0].getBoundingClientRect(); $stMn.css({top:(br.bottom+4)+'px',left:Math.max(4,Math.min(br.right,window.innerWidth-200))+'px'}).show();
                       setTimeout(function(){$(document).on('click.'+_mnUid,closeMn);},0);
                     });
                     $pk.css({display:'block',width:'calc(100% - 22px)'}); $pk.find('input').css({width:'100%','box-sizing':'border-box'});
                     $td.css({padding:'2px 4px',background:W?'#edf3fa':'#fff',position:'relative'}).append($pk,$dt)
-                      .on('mouseenter',function(){ var _c2=getCountsFn(); var ck=(ROLES.find(function(r2){return r2.key===rk;})||{countKey:''}).countKey; if((isE?!!dR.end:!!dR.start)&&(_c2[ck]||0)>0) $dt.show(); }).on('mouseleave',function(){ $dt.hide(); });
+                      .on('mouseenter',function(){ if(isE?!!dR.end:!!dR.start) $dt.show(); }).on('mouseleave',function(){ $dt.hide(); });
                   })(dRef,row.type==='end',role.key,day.k,(DAYS.find(function(d){return d.k===day.k;})||{l:day.k}).l,role.label);
                 } else if(row.type==='hours'){
                   var hInfoU=calcAdjustedHours(dRef);
@@ -3824,16 +3824,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $hdr.append(abBadge(combo.wk==='a'?'Week A':'Week B','12px'));
           }
 
-          // ── Copy to button — matches Options button style ──────────────────
-          var $copyToBtn=$('<button type="button">').css({
-            background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
-            padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
-            display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',
-            marginLeft:'8px',flexShrink:'0',whiteSpace:'nowrap'
-          }).html('Copy to <span style="font-size:8px;opacity:.7;">&#9660;</span>');
-          $copyToBtn.on('mouseenter',function(){$(this).css({borderColor:'#adb5bd',color:'#495057'});});
-          $copyToBtn.on('mouseleave',function(){$(this).css({borderColor:'#dee2e6',color:'#6c757d'});});
-          $hdr.append($copyToBtn);
+          // ── Copy to button — only when more than one Staffing Hours table exists ──
+          var $copyToBtn=null;
+          if(_combos.length>1){
+            $copyToBtn=$('<button type="button">').css({
+              background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
+              padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
+              display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',
+              marginLeft:'8px',flexShrink:'0',whiteSpace:'nowrap'
+            }).html('Copy to <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+            $copyToBtn.on('mouseenter',function(){$(this).css({borderColor:'#adb5bd',color:'#495057'});});
+            $copyToBtn.on('mouseleave',function(){$(this).css({borderColor:'#dee2e6',color:'#6c757d'});});
+            $hdr.append($copyToBtn);
+          }
 
           $section.append($hdr);
 
@@ -3843,8 +3846,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           _allRecalcs.push(res);
           _comboResults.push({combo:combo,shData:shData,res:res,$hdr:$hdr});
 
-          // ── Copy to dropdown (portalled) ────────────────────────────────
-          (function(srcCombo, srcShData, $btn, comboIdx){
+          // ── Copy to dropdown (portalled) — only when the Copy to button was created ──
+          if($copyToBtn) (function(srcCombo, srcShData, $btn, comboIdx){
             var $dd=$('<div>').css({
               position:'fixed',zIndex:'99999',background:'#fff',
               border:'1px solid #dee2e6',borderRadius:'8px',
@@ -5143,11 +5146,29 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ── Scrollable detail rows ──
       var $scroll=$('<div>').css({overflowY:'auto',maxHeight:'240px',padding:'0 12px'});
       var $tb=$('<tbody>');
+      var _totalColspan=bySchool?7:5; // columns before the Total column (for subtotal layout)
+
+      // Emits a subtotal row for a school (only when it has hours > 0)
+      function appendSubtotal(schoolName, subtotal){
+        if(!(subtotal>0)) return;
+        var $sub=$('<tr>').css({background:'#eef2f7'});
+        $sub.append($('<td>').attr('colspan',_totalColspan).css({padding:'4px 5px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text((schoolName?schoolName+' ':'')+'Subtotal'));
+        $sub.append($('<td>').css({padding:'4px 5px',textAlign:'center',fontWeight:'700',color:'#1a73e8'}).text(Math.round(subtotal*100)/100));
+        $tb.append($sub);
+      }
+
       var _lastSchool=null;
+      var _schoolSubtotal=0;
+      var _rowParity=0;
       rows.forEach(function(r,ri){
         var isNewSchool=bySchool && r.school !== _lastSchool;
+        // When a new school begins, close out the previous school's subtotal first
+        if(bySchool && isNewSchool && ri>0){
+          appendSubtotal(_lastSchool, _schoolSubtotal);
+          _schoolSubtotal=0;
+        }
         if(bySchool) _lastSchool=r.school;
-        var $row=$('<tr>').css({background:ri%2?'#f9fafb':'#fff'});
+        var $row=$('<tr>').css({background:(_rowParity++%2)?'#f9fafb':'#fff'});
         if(isNewSchool && ri>0) $row.css('border-top','2px solid #adb5bd');
         var cells=bySchool?
           [$('<td>').css({padding:'3px 5px',color:'#6c757d',fontSize:'9.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.school),
@@ -5179,7 +5200,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
            $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.total)];
         cells.forEach(function($c){ $row.append($c); });
         $tb.append($row);
+        if(bySchool) _schoolSubtotal += (r.total||0);
       });
+      // Close out the last school's subtotal
+      if(bySchool) appendSubtotal(_lastSchool, _schoolSubtotal);
       var $tBody=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'}).append($tb);
       applyColWidths($tBody);
       $scroll.append($tBody);
