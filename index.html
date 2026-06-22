@@ -2928,6 +2928,101 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   function populateSchedFilters(g){ /* handled within renderSchedulePanel */ }
 
   // Render the right-side schedule details for the selected guide (header + filters + state)
+  // ══════════════════════════════════════════════════════════════════════════
+  // Schedule-mode SHIFT staff assignment (read-only schedule; assignment only)
+  // A "shift" = one generated schedule block. One staff member may be assigned per
+  // shift, keyed by the exact shift instance (guide|school|calendar|date|role|#).
+  // The date subsumes Week A/B parity and Special-Day status (both derived from it).
+  // Assignment is kept separate from Planning Guide data and never alters the
+  // generated time/hours, nor makes the block draggable/resizable.
+  // ══════════════════════════════════════════════════════════════════════════
+  var scheduleAssignments = {}; // shiftKey -> staffId
+
+  function _staffIdxById(sid){ for(var i=0;i<STAFF.length;i++){ if(String(STAFF[i].id)===String(sid)) return i; } return -1; }
+
+  // Mini avatar matching Staff mode (round, AVATAR_COLORS, initials, white bold) — sized to fit a shift line.
+  function _shiftAvatar(name, absIdx, size){
+    return $('<div>').css({width:size+'px',height:size+'px',borderRadius:'50%',flexShrink:'0',display:'flex',
+      alignItems:'center',justifyContent:'center',fontSize:(size<=16?8:11)+'px',fontWeight:'700',color:'#fff',
+      letterSpacing:'.02em',userSelect:'none',background:AVATAR_COLORS[(absIdx<0?0:absIdx)%AVATAR_COLORS.length]}).text(initials(name));
+  }
+
+  // Render the shift first-line control into $host: assigned staff (avatar+name+remove) or the
+  // clickable "{Role} #{num}" placeholder. compact=true for the narrow week/month chip.
+  // Assigned vs. unassigned shift styling. Changes COLOR/BORDER-STYLE only (border width is kept
+  // identical), so block size, line positions, and matrix layout never change. Status markers keep
+  // their own green/blue/red. Unassigned = subtle warm bg + dashed muted border + muted label.
+  function _styleShift($block, assigned, compact){
+    var bw = compact ? '1px' : '1.5px';
+    if(assigned){
+      $block.css({background:'#e7f1ff',border:bw+' solid #9ec5fe',color:'#0a4ea8'});
+    } else {
+      $block.css({background:'#faf6ef',border:bw+' dashed #dccfb5',color:'#6b717a'});
+    }
+  }
+
+  function renderShiftAssign($host, $block, shiftKey, placeholderText, compact){
+    $host.empty().css({display:'flex',alignItems:'center',gap:'4px',minWidth:'0',minHeight:(compact?'15px':'17px')});
+    var sid = scheduleAssignments[shiftKey];
+    var idx = (sid!=null) ? _staffIdxById(sid) : -1;
+    _styleShift($block, idx>=0, compact);
+    if(idx>=0){
+      var st = STAFF[idx];
+      var $main=$('<span>').attr('title', st.n+' — click to change').css({display:'flex',alignItems:'center',gap:'4px',flex:'1 1 auto',minWidth:'0',cursor:'pointer'});
+      $main.append(_shiftAvatar(st.n, idx, compact?14:16));
+      $main.append($('<span>').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
+      $main.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
+      var $rm=$('<span>').attr('title','Remove staff').css({flexShrink:'0',cursor:'pointer',opacity:'.5',fontWeight:'700',lineHeight:'1',padding:'0 1px',fontSize:'12px'}).html('&times;');
+      $rm.on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.5');});
+      $rm.on('click',function(e){ e.stopPropagation(); delete scheduleAssignments[shiftKey]; renderShiftAssign($host,$block,shiftKey,placeholderText,compact); });
+      $host.append($main).append($rm);
+      $host.removeAttr('title');
+    } else {
+      var $lbl=$('<span>').attr('title', placeholderText+' — click to assign staff').css({flex:'1 1 auto',minWidth:'0',cursor:'pointer',color:'#9d8a66',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(placeholderText);
+      $lbl.on('mouseenter',function(){$(this).css('textDecoration','underline');}).on('mouseleave',function(){$(this).css('textDecoration','none');});
+      $lbl.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
+      $host.append($lbl);
+    }
+  }
+
+  // Turn the first line into an inline staff search field (integrated in the block); results show
+  // as a body-level popup so they are not clipped by the block's overflow.
+  function _openShiftSearch($host, $block, shiftKey, placeholderText, compact){
+    $host.empty().removeAttr('title');
+    var $inp=$('<input type="text" autocomplete="off" placeholder="Search staff…">').css({
+      flex:'0 1 auto',width:(compact?'112px':'150px'),maxWidth:'100%',minWidth:'0',boxSizing:'border-box',border:'1px solid #9ec5fe',borderRadius:'3px',
+      padding:'0 4px',height:(compact?'15px':'17px'),fontSize:(compact?'9px':'10px'),fontWeight:'600',color:'#0a4ea8',background:'#fff',outline:'none'});
+    $host.append($inp);
+
+    var $pop=$('<div>').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #cdd6e0',borderRadius:'6px',
+      boxShadow:'0 6px 22px rgba(20,30,50,.16)',maxHeight:'230px',overflowY:'auto',padding:'4px',fontSize:'11px'});
+    function place(){ var r=$inp[0].getBoundingClientRect(); var w=Math.max(190,r.width);
+      $pop.css({left:Math.max(6,Math.min(r.left,window.innerWidth-w-6))+'px',top:(r.bottom+4)+'px',width:w+'px'}); }
+    var onScroll=function(){ place(); };
+    function close(){ $pop.remove(); window.removeEventListener('scroll',onScroll,true); window.removeEventListener('resize',onScroll); }
+    function revert(){ close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
+    function commit(s){ scheduleAssignments[shiftKey]=s.id; close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
+    function refresh(){
+      var q=$inp.val().trim().toLowerCase(); $pop.empty();
+      var list=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
+      if(!list.length){ $pop.append($('<div>').css({padding:'8px 10px',color:'#868e96'}).text('No staff found')); return; }
+      list.slice(0,12).forEach(function(s){
+        var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 8px',borderRadius:'4px',cursor:'pointer'});
+        $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 24));
+        $r.append($('<span>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529'}).text(s.n));
+        $r.on('mouseenter',function(){$(this).css('background','#eef3fb');}).on('mouseleave',function(){$(this).css('background','transparent');});
+        $r.on('mousedown',function(e){ e.preventDefault(); commit(s); });
+        $pop.append($r);
+      });
+    }
+    $inp.on('input',refresh);
+    $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); revert(); } });
+    $inp.on('blur',function(){ setTimeout(function(){ if(document.body.contains($pop[0])) revert(); },130); });
+    $('body').append($pop); place(); refresh();
+    window.addEventListener('scroll',onScroll,true); window.addEventListener('resize',onScroll);
+    $inp.focus();
+  }
+
   function renderSchedulePanel(g){
     // Tear down any portalled calendar-filter menu before rebuilding
     var prev=$('#filter-calendar-dd').data('cleanup'); if(typeof prev==='function') prev();
@@ -3169,8 +3264,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var ds=decH(b.start), de=decH(b.end);
           if(ds!=null&&de!=null&&de>ds){
             var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=RH-8;
-            var $el=$('<div class="sched-block">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',background:'#e7f1ff',borderColor:'#9ec5fe',color:'#0a4ea8',cursor:'default'});
-            $el.append($('<div class="block-title">').text(inst.roleLabel+' #'+inst.num));
+            var $el=$('<div class="sched-block">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',cursor:'default'});
+            var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(dateObj)+'|'+inst.roleKey+'|'+inst.num;
+            var $line1=$('<div class="block-title">');
+            renderShiftAssign($line1, $el, shiftKey, inst.roleLabel+' #'+inst.num, false);
+            $el.append($line1);
             var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
             $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
             $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(b.hrsEach)));
@@ -3235,8 +3333,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $td.append($('<span>').css({fontSize:'8px',color:'#adb5bd'}).text('—'));
           } else if(b){
             var ds=decH(b.start), de=decH(b.end);
-            var $chip=$('<div>').css({display:'inline-block',maxWidth:'172px',background:'#e7f1ff',border:'1px solid #9ec5fe',color:'#0a4ea8',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
-            $chip.append($('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(inst.roleLabel+' #'+inst.num));
+            var $chip=$('<div>').css({display:'inline-block',maxWidth:'172px',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
+            var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(col.date)+'|'+inst.roleKey+'|'+inst.num;
+            var $line1=$('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',minWidth:'0'});
+            renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
+            $chip.append($line1);
             var $l2=$('<div>');
             $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
             $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(b.hrsEach)));
@@ -5888,7 +5989,36 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
       var headerText=dateLabel;
       if(abWeek) headerText+=' (Week '+(abWeek==='a'?'A':'B')+')';
-      $hdrPad.append($('<div>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'}).text(headerText));
+      var $titleRow=$('<div>').css({display:'flex',alignItems:'center',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px'});
+      $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043'}).text(headerText));
+      if(gObj && gObj.id){
+        var _sp=new URLSearchParams();
+        _sp.set('section','schedule'); _sp.set('planning_guide', gObj.id); _sp.set('view','day'); _sp.set('day', isoDate(cellDate));
+        var _schedHref=window.location.pathname+'?'+_sp.toString();
+        var $schedLink=$('<a>').attr({href:_schedHref,title:'Open this day in Schedule mode'}).css({
+          display:'inline-flex',alignItems:'center',gap:'3px',marginLeft:'8px',flexShrink:'0',
+          fontSize:'10px',fontWeight:'600',color:'#0d6efd',textDecoration:'none',cursor:'pointer',padding:'1px 6px',borderRadius:'4px',lineHeight:'1.4'});
+        $schedLink.append($('<span>').css({display:'inline-flex',alignItems:'center'}).html('<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="display:block;"><path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/></svg>'));
+        $schedLink.append($('<span>').text('Schedule'));
+        $schedLink.on('mouseenter',function(){ $(this).css({background:'#eaf2ff',textDecoration:'underline'}); });
+        $schedLink.on('mouseleave',function(){ $(this).css({background:'transparent',textDecoration:'none'}); });
+        $schedLink.on('click',function(e){
+          e.preventDefault();
+          hideCalTooltip();
+          // Switch this same window from Planning Guides → Schedule mode for this guide + day (Day view).
+          selectedGuideId = gObj.id;
+          schedFilterSchool=''; schedFilterCalendar='';
+          viewMode='day';
+          viewYear=cellDate.getFullYear(); viewMonth=cellDate.getMonth(); viewDay=cellDate.getDate();
+          _schedDateInit=true; // date set explicitly; don't let a stale URL override it
+          // Push a new history entry so the URL fully represents the Schedule state AND browser Back
+          // returns to the current Planning Guides view (replaceState alone would discard it).
+          try{ history.pushState({}, '', _schedHref); }catch(_e){}
+          setPageMode('schedule'); // transitions the UI and renders; Schedule mode normalizes its own URL
+        });
+        $titleRow.append($schedLink);
+      }
+      $hdrPad.append($titleRow);
 
       // Column width distribution (shared by header, body, and footer tables)
       // bySchool adds a Special Day column right after School Name.
