@@ -349,8 +349,8 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
   <div class="toolbar">
     <div class="mode-toggle">
       <button class="mode-btn" id="btn-planning">Planning Guides</button>
+      <button class="mode-btn" id="btn-schedule">Schedule</button>
       <button class="mode-btn" id="btn-people">Staff</button>
-      <button class="mode-btn active" id="btn-schedule">Schedule</button>
       <button class="mode-btn" id="btn-availability">Availability</button>
     </div>
     <div class="view-toggle">
@@ -389,10 +389,6 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
     </select></span>
     <span class="filter-count" id="filter-count"></span>
     <button class="filter-reset" id="filter-reset" style="display:none">&#215; Clear filters</button>
-    <label class="avail-overlay-check" id="avail-overlay-label" title="Show availability overlay on schedule blocks">
-      <input type="checkbox" id="avail-overlay-chk"/>
-      Availability Overlay
-    </label>
   </div>
 
   <div class="main-area">
@@ -408,6 +404,7 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
       <div class="grid-body" id="grid-body"><div class="blocks-layer" id="blocks-layer"></div></div>
     </div>
     <div id="planning-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
+    <div id="schedule-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="people-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     
   </div>
@@ -637,6 +634,10 @@ $(function(){
   ];
   var selectedGuideId = null;
   var pgSearchFilter = '';
+  // Schedule mode (Planning-Guide-driven) state
+  var schedFilterSchool = '';   // selected school index (as string) within the selected guide
+  var schedFilterCalendar = ''; // selected calendar index (as string) within the selected guide
+  var schedSearchFilter = '';   // guide search text in Schedule mode
 
   // People mode: staff detail store (in-memory, keyed by staff id)
   var staffDetails = {};
@@ -659,110 +660,196 @@ $(function(){
   // Lookup helpers — return the object for a given name (or null)
 
   function buildWeekTable(fs, days, isAvail){ if(isAvail) rAvailWeekView(); else rWeekView(); }
+  /* ── event delegation: bound ONCE on the persistent #week-container ──
+     Replaces thousands of per-cell / per-chip handlers created every render.
+     Both the schedule (#week-table) and availability (#week-avail-table)
+     grids are served here; selectors scope handlers to the active grid. */
+  var _gridDelegationBound=false;
+  function _bindGridDelegation(){
+    if(_gridDelegationBound) return;
+    _gridDelegationBound=true;
+    var $wc=$('#week-container');
+    var $t=$('#tooltip');
+    function blkById(arr,id){ for(var i=0;i<arr.length;i++){ if(arr[i].id===id) return arr[i]; } return null; }
+
+    /* shared: staff search input (class scoped to week-container, not the sidebar #staff-search) */
+    $wc.on('input','.staff-search',function(){
+      staffFilter=$(this).val().trim(); rStaff(); rGrid(); refreshView(true);
+    });
+
+    /* shared: day header click → switch to day view */
+    $wc.on('click','.week-th-day',function(){
+      viewYear=+$(this).attr('data-y'); viewMonth=+$(this).attr('data-m'); viewDay=+$(this).attr('data-d');
+      viewMode='day';
+      $('#btn-day').addClass('active'); $('#btn-week,#btn-month').removeClass('active');
+      render();
+    });
+
+    /* ════════ SCHEDULE grid (#week-table) ════════ */
+    $wc.on('dragstart','#week-table .week-chip',function(e){
+      e.originalEvent.dataTransfer.setData('text/plain','sched:'+$(this).attr('data-bid'));
+      $(this).addClass('dragging');
+      _dragOrigDow=_dateFromStr($(this).attr('data-date')).getDay();
+    });
+    $wc.on('dragend','#week-table .week-chip',function(){
+      $(this).removeClass('dragging'); _dragOrigDow=undefined;
+    });
+    $wc.on('click','#week-table .week-chip',function(e){
+      e.stopPropagation();
+      openEdit(parseInt($(this).attr('data-bid'),10), _dateFromStr($(this).attr('data-date')));
+    });
+    $wc.on('mouseenter','#week-table .week-chip',function(){
+      if(_suppressTooltip) return;
+      var b=blkById(blocks,parseInt($(this).attr('data-bid'),10)); if(!b) return;
+      $t.html(buildBlockTooltipHtml(b,false,_dateFromStr($(this).attr('data-date')).getDay())).show();
+    });
+    $wc.on('mousemove','#week-table .week-chip',function(e){
+      if(!_suppressTooltip) $t.css({left:e.clientX+14,top:e.clientY-10});
+    });
+    $wc.on('mouseleave','#week-table .week-chip',function(){
+      $t.hide(); _suppressTooltip=false;
+    });
+    $wc.on('dragover','#week-table .week-td-day',function(e){
+      if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){ e.preventDefault(); $(this).addClass('drag-over'); }
+    });
+    $wc.on('dragleave','#week-table .week-td-day',function(){ $(this).removeClass('drag-over'); });
+    $wc.on('drop','#week-table .week-td-day',function(e){
+      e.preventDefault(); $(this).removeClass('drag-over');
+      var raw=e.originalEvent.dataTransfer.getData('text/plain'); if(!raw) return;
+      var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1],10);
+      var sn=$(this).attr('data-staff'), dd=_dateFromStr($(this).attr('data-date'));
+      if(type==='sched'){ var blk=blkById(blocks,id); if(blk){ moveBlockToDate(blk,sn,dd,_dragOrigDow); refreshView(); } }
+      else if(type==='avail'){ var ab=blkById(availBlocks,id); if(ab){ moveAvailBlockToDate(ab,sn,dd,_dragOrigDow); refreshView(); } }
+    });
+    $wc.on('click','#week-table .week-td-day',function(e){
+      if($(e.target).closest('.week-chip').length) return;
+      openCreate({coach:$(this).attr('data-staff'),date:$(this).attr('data-date'),days:[+$(this).attr('data-dow')],startTime:'12:00 PM',endTime:'1:00 PM'});
+    });
+    $wc.on('mouseenter','#week-table .week-td-day',function(){
+      $('#week-table thead th').eq($(this).index()).addClass('col-hovered');
+    });
+    $wc.on('mouseleave','#week-table .week-td-day',function(){
+      $('#week-table thead th').removeClass('col-hovered');
+    });
+    $wc.on('mouseenter','#week-table .week-tr',function(){
+      $('#staff-list-scroll .staff-row').removeClass('hovered').eq(+$(this).attr('data-fi')).addClass('hovered');
+    });
+    $wc.on('mouseleave','#week-table .week-tr',function(){
+      $('#staff-list-scroll .staff-row').removeClass('hovered');
+    });
+
+    /* ════════ AVAILABILITY grid (#week-avail-table) ════════ */
+    $wc.on('dragstart','#week-avail-table .week-chip',function(e){
+      var bid=$(this).attr('data-bid');
+      e.originalEvent.dataTransfer.setData('text/plain','avail:'+bid);
+      $(this).addClass('dragging');
+      _dragOrigDow=_dateFromStr($(this).attr('data-date')).getDay();
+      $('.week-chip[data-bid="'+bid+'"]').not(this).addClass('drag-sibling');
+    });
+    $wc.on('dragend','#week-avail-table .week-chip',function(){
+      $(this).removeClass('dragging'); $('.week-chip').removeClass('drag-sibling'); _dragOrigDow=undefined;
+    });
+    $wc.on('click','#week-avail-table .week-chip',function(e){
+      e.stopPropagation();
+      openAvailEdit(parseInt($(this).attr('data-bid'),10), _dateFromStr($(this).attr('data-date')));
+    });
+    $wc.on('mouseenter','#week-avail-table .week-chip',function(){
+      if(_suppressTooltip) return;
+      var b=blkById(availBlocks,parseInt($(this).attr('data-bid'),10)); if(!b) return;
+      $t.html(buildAvailTooltipHtml(b,_dateFromStr($(this).attr('data-date')).getDay())).show();
+    });
+    $wc.on('mousemove','#week-avail-table .week-chip',function(e){
+      if(!_suppressTooltip) $t.css({left:e.clientX+14,top:e.clientY-10});
+    });
+    $wc.on('mouseleave','#week-avail-table .week-chip',function(){
+      $t.hide(); _suppressTooltip=false;
+    });
+    $wc.on('mouseenter','#week-avail-table .week-td-day',function(){
+      $('#week-avail-table thead th').eq($(this).index()).addClass('col-hovered');
+      $('#staff-list-scroll .staff-row').removeClass('hovered').eq(+$(this).closest('.week-tr').attr('data-fi')).addClass('hovered');
+    });
+    $wc.on('mouseleave','#week-avail-table .week-td-day',function(){
+      $('#week-avail-table thead th').eq($(this).index()).removeClass('col-hovered');
+      $('#staff-list-scroll .staff-row').removeClass('hovered');
+    });
+    $wc.on('dragover','#week-avail-table .week-td-day',function(e){
+      if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){ e.preventDefault(); $(this).addClass('drag-over'); }
+    });
+    $wc.on('dragleave','#week-avail-table .week-td-day',function(){ $(this).removeClass('drag-over'); });
+    $wc.on('drop','#week-avail-table .week-td-day',function(e){
+      e.preventDefault(); $(this).removeClass('drag-over');
+      var raw=e.originalEvent.dataTransfer.getData('text/plain'); if(!raw) return;
+      var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1],10);
+      if(type==='avail'){ var ab=blkById(availBlocks,id); if(ab){ moveAvailBlockToDate(ab,$(this).attr('data-staff'),_dateFromStr($(this).attr('data-date'))); refreshView(); } }
+    });
+    $wc.on('click','#week-avail-table .week-td-day',function(e){
+      if($(e.target).closest('.week-chip').length) return;
+      openAvailCreate({coach:$(this).attr('data-staff'),date:$(this).attr('data-date'),days:[+$(this).attr('data-dow')]});
+    });
+  }
+
   function rWeekView(){
     var fs=getFilteredStaff();
     var days=getViewDays();
-    var isWeek=(viewMode==='week');
 
-    // Hide day view, show/create week container
     $('#timeline-header,#grid-body').hide();
     var $ta=$('#timeline-area');
     if(!$('#week-container').length) $ta.append('<div id="week-container"></div>');
-    var $wc=$('#week-container').show().empty();
+    var $wc=$('#week-container').show();
+    _bindGridDelegation();
 
-    // Build a real <table> — column alignment is guaranteed by the browser
-    var $tbl=$('<table class="week-table">').attr('id','week-table');
-    var $thead=$('<thead>');
-    var $tbody=$('<tbody class="staffing-tbody">');
-
-    // --- HEADER ROW ---
-    var $htr=$('<tr>');
-    // Staff search cell
-    var $th0=$('<th class="week-th-staff">');
-    var $si=$('<input type="text" class="staff-search" placeholder="Search staff…" autocomplete="off">').val(staffFilter);
-    $si.on('input',function(){staffFilter=$(this).val().trim();rStaff();rGrid();refreshView(true);});
-    $th0.append($si);
-    $htr.append($th0);
-    // Day header cells
-    days.forEach(function(d, colIdx){
-      var isW=d.getDay()===0||d.getDay()===6;
-      var isToday=isTodayDate(d);
-      var $th=$('<th class="week-th-day">').toggleClass('today',isToday).toggleClass('weekend',isW);
-      var $name=$('<div class="week-day-name">').text(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]);
-      var $num=$('<div class="week-day-num">').text(d.getDate());
-      if(isToday) $num.wrap('<div style="display:flex;justify-content:center;">');
-      $th.append($name,$num);
-      (function(dd){
-        $th.on('click',function(){
-          viewYear=dd.getFullYear();viewMonth=dd.getMonth();viewDay=dd.getDate();
-          viewMode='day';
-          $('#btn-day').addClass('active');$('#btn-week,#btn-month').removeClass('active');
-          render();
-        }).on('mouseenter',function(){$(this).css('background','#eef3ff');})
-          .on('mouseleave',function(){$(this).css('background','');});
-      })(d);
-      $htr.append($th);
-    });
-    $thead.append($htr);
-
-    // --- BODY ROWS ---
-    if(!fs.length){
-      var $tr=$('<tr>');
-      $tr.append($('<td>').attr('colspan',days.length+1).css({padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--tx2)'}).text('No staff found'));
-      $tbody.append($tr);
-    } else {
-      fs.forEach(function(s){
-        var $tr=$('<tr class="week-tr">');
-        // Staff name cell
-        var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
-        var $av=$('<div class="staff-avatar" style="flex-shrink:0;">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
-        var $sn=$('<span class="week-staff-name">').text(s.n);
-        var wkH=calcWeekHours(s.n), wkOT=calcWeekOT(s.n);
-        var $hrs=$('<div class="staff-day-hours">').toggleClass('has-ot',wkOT>0).text(wkH>0?fmtHrs(wkH):'—').css(wkH===0?{opacity:.35}:{});
-        if(wkOT>0) $hrs.append($('<span class="staff-ot-badge">').text('+'+fmtHrs(wkOT)+' OT'));
-        var $td0=$('<td class="week-td-staff">').append($('<div style="display:flex;align-items:center;gap:8px;">').append($av,$('<div>').append($sn,$hrs)));
-        $tr.append($td0);
-        // Day cells
-        days.forEach(function(d, colIdx){
-          var isW=d.getDay()===0||d.getDay()===6;
-          var $td=$('<td class="week-td-day">').toggleClass('today-col',isTodayDate(d)).toggleClass('weekend-col',isW).css('cursor','pointer');
-          // Schedule chips
-          blocks.forEach(function(b){
-            if(b.coach!==s.n) return;
-            if(!isApplicableOnDate(b,d)) return;
-            if(!isVisible(b)) return;
-            var c=COLORS[b.color%COLORS.length];
-            var $chip=$('<div class="week-chip">').css({background:c.bg,color:c.tx,border:'1px solid '+c.bd}).attr({'draggable':'true','data-bid':b.id,'data-date':localDateStr(d)})
-              .append($('<span class="week-chip-title">').text(b.lbl+(b.staffType?' · '+b.staffType:'')))
-              .append(b.school?$('<span class="week-chip-school">').text(b.school):null)
-              .append($('<span class="week-chip-time">').html(fmtT(b.s)+'–'+fmtT(b.e)+' · <strong>'+fmtHrs(b.e-b.s)+'</strong>'));
-            (function(bid){$chip.on('dragstart',function(e){e.originalEvent.dataTransfer.setData('text/plain','sched:'+bid);$(this).addClass('dragging');_dragOrigDow=new Date(($(this).attr('data-date')||'')+'T00:00:00').getDay();}).on('dragend',function(){$(this).removeClass('dragging');_dragOrigDow=undefined;});})(b.id);
-            (function(bid,cd){$chip.on('click',function(e){e.stopPropagation();openEdit(bid,cd);});attachChipTip($chip,b,d);})(b.id,d);
-            $td.append($chip);
-          });
-          // Drop + click
-          (function(sn,dd,colIdx){
-            $td.on('dragover',function(e){if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){e.preventDefault();$(this).addClass('drag-over');}})
-               .on('dragleave',function(){$(this).removeClass('drag-over');})
-               .on('drop',function(e){e.preventDefault();$(this).removeClass('drag-over');var raw=e.originalEvent.dataTransfer.getData('text/plain');if(!raw)return;var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1]);if(type==='sched'){var blk=blocks.find(function(x){return x.id===id;});if(blk){moveBlockToDate(blk,sn,dd,_dragOrigDow);refreshView();}}else if(type==='avail'){var ab=availBlocks.find(function(x){return x.id===id;});if(ab){moveAvailBlockToDate(ab,sn,dd,_dragOrigDow);refreshView();}}})
-               .on('click',function(e){if($(e.target).closest('.week-chip').length)return;openCreate({coach:sn,date:localDateStr(dd),days:[dd.getDay()],startTime:'12:00 PM',endTime:'1:00 PM'});});
-            // Highlight column header on cell hover
-            $td.on('mouseenter',function(){
-              $tbl.find('thead tr th').eq(colIdx+1).addClass('col-hovered');
-            }).on('mouseleave',function(){
-              $tbl.find('thead tr th').removeClass('col-hovered');
-            });
-          })(s.n,d,colIdx);
-          $tr.append($td);
-        });
-        // Row hover → highlight staff
-        (function(fi){$tr.on('mouseenter',function(){$('#staff-list-scroll .staff-row').removeClass('hovered').eq(fi).addClass('hovered');}).on('mouseleave',function(){$('#staff-list-scroll .staff-row').removeClass('hovered');});})(fs.indexOf(s));
-        $tbody.append($tr);
-      });
+    var staffIdx=_buildStaffIdx();
+    var byCoach=_indexByCoach(blocks);
+    var i, ri, c, b, list, d, dow, isW, isToday, absIdx, wkH, wkOT, col, dstr, s;
+    var H=['<table class="week-table" id="week-table"><thead><tr>'];
+    H.push('<th class="week-th-staff"><input type="text" class="staff-search" placeholder="Search staff\u2026" autocomplete="off" value="'+esc(staffFilter)+'"></th>');
+    for(i=0;i<days.length;i++){
+      d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); isToday=isTodayDate(d);
+      H.push('<th class="week-th-day'+(isToday?' today':'')+(isW?' weekend':'')+'" data-y="'+d.getFullYear()+'" data-m="'+d.getMonth()+'" data-d="'+d.getDate()+'">');
+      H.push('<div class="week-day-name">'+_DOW3[dow]+'</div>');
+      if(isToday) H.push('<div style="display:flex;justify-content:center;"><div class="week-day-num">'+d.getDate()+'</div></div>');
+      else H.push('<div class="week-day-num">'+d.getDate()+'</div>');
+      H.push('</th>');
     }
-
-    $tbl.append($thead,$tbody);
-    $wc.append($tbl);
+    H.push('</tr></thead><tbody class="staffing-tbody">');
+    if(!fs.length){
+      H.push('<tr><td colspan="'+(days.length+1)+'" style="padding:20px;text-align:center;font-size:12px;color:var(--tx2);">No staff found</td></tr>');
+    } else {
+      for(ri=0;ri<fs.length;ri++){
+        s=fs[ri];
+        absIdx=staffIdx[s.n]; if(absIdx==null) absIdx=0;
+        wkH=calcWeekHours(s.n); wkOT=calcWeekOT(s.n);
+        H.push('<tr class="week-tr" data-fi="'+ri+'">');
+        H.push('<td class="week-td-staff"><div style="display:flex;align-items:center;gap:8px;">');
+        H.push('<div class="staff-avatar" style="flex-shrink:0;background:'+AVATAR_COLORS[absIdx%AVATAR_COLORS.length]+';">'+esc(initials(s.n))+'</div>');
+        H.push('<div><span class="week-staff-name">'+esc(s.n)+'</span>');
+        H.push('<div class="staff-day-hours'+(wkOT>0?' has-ot':'')+'"'+(wkH===0?' style="opacity:.35;"':'')+'>'+(wkH>0?fmtHrs(wkH):'\u2014'));
+        if(wkOT>0) H.push('<span class="staff-ot-badge">+'+fmtHrs(wkOT)+' OT</span>');
+        H.push('</div></div></div></td>');
+        list=byCoach[s.n]||null;
+        for(i=0;i<days.length;i++){
+          d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); dstr=localDateStr(d);
+          H.push('<td class="week-td-day'+(isTodayDate(d)?' today-col':'')+(isW?' weekend-col':'')+'" data-staff="'+esc(s.n)+'" data-date="'+dstr+'" data-dow="'+dow+'" style="cursor:pointer;">');
+          if(list){
+            for(c=0;c<list.length;c++){
+              b=list[c];
+              if(!isApplicableOnDate(b,d)) continue;
+              if(!isVisible(b)) continue;
+              col=COLORS[b.color%COLORS.length];
+              H.push('<div class="week-chip" style="background:'+col.bg+';color:'+col.tx+';border:1px solid '+col.bd+';" draggable="true" data-bid="'+b.id+'" data-date="'+dstr+'">');
+              H.push('<span class="week-chip-title">'+esc(b.lbl+(b.staffType?' \u00b7 '+b.staffType:''))+'</span>');
+              if(b.school) H.push('<span class="week-chip-school">'+esc(b.school)+'</span>');
+              H.push('<span class="week-chip-time">'+esc(fmtT(b.s))+'\u2013'+esc(fmtT(b.e))+' \u00b7 <strong>'+esc(fmtHrs(b.e-b.s))+'</strong></span>');
+              H.push('</div>');
+            }
+          }
+          H.push('</td>');
+        }
+        H.push('</tr>');
+      }
+    }
+    H.push('</tbody></table>');
+    $wc[0].innerHTML=H.join('');
   }
 
   function rAvailWeekView(){
@@ -772,91 +859,50 @@ $(function(){
     $('#timeline-header,#grid-body').hide();
     if(!$('#week-container').length) $('#timeline-area').append('<div id="week-container"></div>');
     $('#staff-col').hide();
-    var $wc=$('#week-container').show().empty();
-    var $tbl=$('<table class="week-table" id="week-avail-table">');
-    if(isWeek) $tbl.css('width','100%');
-    var $thead=$('<thead>');
-    var $tbody=$('<tbody class="staffing-tbody">');
-    // Header
-    var $htr=$('<tr>');
-    var $th0=$('<th class="week-th-staff">');
-    var $si=$('<input type="text" class="staff-search" placeholder="Search staff..." autocomplete="off">').val(staffFilter);
-    $si.on('input',function(){staffFilter=$(this).val().trim();rStaff();rGrid();refreshView(true);});
-    $th0.append($si);
-    $htr.append($th0);
-    days.forEach(function(d){
-      var isW=d.getDay()===0||d.getDay()===6;
-      var $th=$('<th class="week-th-day">').toggleClass('today',isTodayDate(d)).toggleClass('weekend',isW);
-      $th.append($('<div class="week-day-name">').text(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]));
-      $th.append($('<div class="week-day-num">').text(d.getDate()));
-      (function(dd){
-        $th.on('click',function(){
-          viewYear=dd.getFullYear();viewMonth=dd.getMonth();viewDay=dd.getDate();
-          viewMode='day';
-          $('#btn-day').addClass('active');$('#btn-week,#btn-month').removeClass('active');
-          render();
-        }).on('mouseenter',function(){$(this).css('background','#eef3ff');})
-          .on('mouseleave',function(){$(this).css('background','');});
-      })(d);
-      $htr.append($th);
-    });
-    $thead.append($htr);
-    if(!fs.length){
-      $tbody.append($('<tr>').append($('<td>').attr('colspan',days.length+1).css({padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--tx2)'}).text('No staff found')));
-    } else {
-      fs.forEach(function(s, rowIdx){
-        var $tr=$('<tr class="week-tr">');
-        var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
-        var $av=$('<div class="staff-avatar" style="flex-shrink:0;">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
-        (function(staffName){
-          var wkH=calcWeekHours(staffName), wkOT=calcWeekOT(staffName);
-          var $nameDiv=$('<div style="display:flex;align-items:center;gap:8px;">').append($av,$('<span class="week-staff-name">').text(staffName));
-          var $info=$('<div>').append($nameDiv);
-          var _wkH = pageMode==='availability' ? calcAvailWeekHours(staffName) : wkH;
-            var _wkOT = pageMode==='availability' ? 0 : wkOT;
-            var $hrs=$('<div class="staff-day-hours">').text(_wkH>0?fmtHrs(_wkH):'—').css(_wkH===0?{opacity:.35}:{});
-            if(pageMode!=='availability') $hrs.toggleClass('has-ot',_wkOT>0);
-            if(pageMode!=='availability'&&_wkOT>0) $hrs.append($('<span class="staff-ot-badge">').text('+'+fmtHrs(_wkOT)+' OT'));
-            $info.append($hrs);
-          $tr.append($('<td class="week-td-staff">').append($info));
-        })(s.n);
-        days.forEach(function(d){
-          var isW=d.getDay()===0||d.getDay()===6;
-          var $td=$('<td class="week-td-day">').toggleClass('today-col',isTodayDate(d)).toggleClass('weekend-col',isW).attr('data-date',localDateStr(d)).css('cursor','pointer');
-          availBlocks.forEach(function(b){
-            if(b.coach!==s.n) return;
-            if(!isAvailApplicableOnDate(b,d)) return;
-            var st=AVAIL_STYLES[b.status]||AVAIL_STYLES['available'];
-            var $chip=$('<div class="week-chip">').css({background:st.bg,color:st.tx,border:'1px solid '+st.bd}).attr({'draggable':'true','data-bid':b.id,'data-date':localDateStr(d)})
-              .append($('<span class="week-chip-title">').text(st.label))
-              .append($('<span class="week-chip-time">').html(fmtT(b.s)+'–'+fmtT(b.e)+' · <strong>'+fmtHrs(b.e-b.s)+'</strong>'));
-            (function(bid,cd){
-              $chip.on('dragstart',function(e){
-                e.originalEvent.dataTransfer.setData('text/plain','avail:'+bid);
-                $(this).addClass('dragging');
-                _dragOrigDow = new Date(($(this).attr('data-date')||'')+'T00:00:00').getDay();
-                $('.week-chip[data-bid="'+bid+'"]').not(this).addClass('drag-sibling');
-              }).on('dragend',function(){$(this).removeClass('dragging');$('.week-chip').removeClass('drag-sibling');_dragOrigDow=undefined;});
-              $chip.on('click',function(e){e.stopPropagation();openAvailEdit(bid,cd);});
-              attachAvailChipTip($chip,b,d);
-            })(b.id,d);
-            $td.append($chip);
-          });
-          (function(sn,dd,colIdx){
-            $td.on('mouseenter',function(){$('#week-avail-table thead tr th').eq(colIdx+1).addClass('col-hovered');$('#staff-list-scroll .staff-row').removeClass('hovered').eq(fs.indexOf(s)).addClass('hovered');})
-               .on('mouseleave',function(){$('#week-avail-table thead tr th').eq(colIdx+1).removeClass('col-hovered');$('#staff-list-scroll .staff-row').removeClass('hovered');});
-            $td.on('dragover',function(e){if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){e.preventDefault();$(this).addClass('drag-over');}})
-               .on('dragleave',function(){$(this).removeClass('drag-over');})
-               .on('drop',function(e){e.preventDefault();$(this).removeClass('drag-over');var raw=e.originalEvent.dataTransfer.getData('text/plain');if(!raw)return;var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1]);if(type==='avail'){var ab=availBlocks.find(function(x){return x.id===id;});if(ab){moveAvailBlockToDate(ab,sn,dd);refreshView();}}})
-               .on('click',function(e){if($(e.target).closest('.week-chip').length)return;openAvailCreate({coach:sn,date:localDateStr(dd),days:[dd.getDay()]});});
-          })(s.n,d,days.indexOf(d));
-          $tr.append($td);
-        });
-        $tbody.append($tr);
-      });
+    var $wc=$('#week-container').show();
+    _bindGridDelegation();
+
+    var staffIdx=_buildStaffIdx();
+    var availByCoach=_indexByCoach(availBlocks);
+    var i, ri, c, b, list, d, dow, isW, isToday, absIdx, _wkH, st, dstr, s;
+    var H=['<table class="week-table" id="week-avail-table"'+(isWeek?' style="width:100%;"':'')+'><thead><tr>'];
+    H.push('<th class="week-th-staff"><input type="text" class="staff-search" placeholder="Search staff..." autocomplete="off" value="'+esc(staffFilter)+'"></th>');
+    for(i=0;i<days.length;i++){
+      d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); isToday=isTodayDate(d);
+      H.push('<th class="week-th-day'+(isToday?' today':'')+(isW?' weekend':'')+'" data-y="'+d.getFullYear()+'" data-m="'+d.getMonth()+'" data-d="'+d.getDate()+'"><div class="week-day-name">'+_DOW3[dow]+'</div><div class="week-day-num">'+d.getDate()+'</div></th>');
     }
-    $tbl.append($thead,$tbody);
-    $wc.append($tbl);
+    H.push('</tr></thead><tbody class="staffing-tbody">');
+    if(!fs.length){
+      H.push('<tr><td colspan="'+(days.length+1)+'" style="padding:20px;text-align:center;font-size:12px;color:var(--tx2);">No staff found</td></tr>');
+    } else {
+      for(ri=0;ri<fs.length;ri++){
+        s=fs[ri];
+        absIdx=staffIdx[s.n]; if(absIdx==null) absIdx=0;
+        _wkH=calcAvailWeekHours(s.n);
+        H.push('<tr class="week-tr" data-fi="'+ri+'">');
+        H.push('<td class="week-td-staff"><div>');
+        H.push('<div style="display:flex;align-items:center;gap:8px;"><div class="staff-avatar" style="flex-shrink:0;background:'+AVATAR_COLORS[absIdx%AVATAR_COLORS.length]+';">'+esc(initials(s.n))+'</div><span class="week-staff-name">'+esc(s.n)+'</span></div>');
+        H.push('<div class="staff-day-hours"'+(_wkH===0?' style="opacity:.35;"':'')+'>'+(_wkH>0?fmtHrs(_wkH):'\u2014')+'</div>');
+        H.push('</div></td>');
+        list=availByCoach[s.n]||null;
+        for(i=0;i<days.length;i++){
+          d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); dstr=localDateStr(d);
+          H.push('<td class="week-td-day'+(isTodayDate(d)?' today-col':'')+(isW?' weekend-col':'')+'" data-staff="'+esc(s.n)+'" data-date="'+dstr+'" data-dow="'+dow+'" style="cursor:pointer;">');
+          if(list){
+            for(c=0;c<list.length;c++){
+              b=list[c];
+              if(!isAvailApplicableOnDate(b,d)) continue;
+              st=AVAIL_STYLES[b.status]||AVAIL_STYLES['available'];
+              H.push('<div class="week-chip" style="background:'+st.bg+';color:'+st.tx+';border:1px solid '+st.bd+';" draggable="true" data-bid="'+b.id+'" data-date="'+dstr+'"><span class="week-chip-title">'+esc(st.label)+'</span><span class="week-chip-time">'+esc(fmtT(b.s))+'\u2013'+esc(fmtT(b.e))+' \u00b7 <strong>'+esc(fmtHrs(b.e-b.s))+'</strong></span></div>');
+            }
+          }
+          H.push('</td>');
+        }
+        H.push('</tr>');
+      }
+    }
+    H.push('</tbody></table>');
+    $wc[0].innerHTML=H.join('');
   }
 
   function progByName(name){ return PROGS.find(function(p){return p.name===name;})||null; }
@@ -865,10 +911,36 @@ $(function(){
 
   function schoolByName(name){ return SCHOOLS.find(function(s){return s.name===name;})||null; }
 
+  // ── Application-wide stable IDs for schools (CDS-based) and calendars (generated) ──
+  function _genEntityId(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  // Build a name(+abbr) → CDS lookup from the preset school list (district_schools_cdscode)
+  var _cdsByName=(function(){ var m={}; SCHOOLS_DATA.forEach(function(s){ if(s.name){ var k=s.name.trim(); if(!(k in m)) m[k]=s.cds; m[k+'||'+(s.abbr||'')]=s.cds; } }); return m; })();
+  function cdsForSchool(name, abbr){
+    if(!name) return null;
+    var n=String(name).trim();
+    return _cdsByName[n+'||'+(abbr||'')] || _cdsByName[n] || null;
+  }
+  // Ensure every site row has a stable schoolId (CDS when available, else generated) and every
+  // calendar row a stable calId. IDs persist once assigned so they survive reorder/rename/reload.
+  function ensureGuideEntityIds(g){
+    if(!g) return;
+    var gd=guideDetails[String(g.id)]; if(!gd) return;
+    (gd.siteRows||[]).forEach(function(r){
+      if(!r.schoolId) r.schoolId = cdsForSchool(r.school, r.schoolAbbr) || _genEntityId('sch_');
+    });
+    (gd.calendarRows||[]).forEach(function(r){
+      if(!r.calId) r.calId = _genEntityId('cal_');
+    });
+  }
+
   function staffByName(name){ return STAFF.find(function(s){return s.n===name;})||null; }
 
   // View date stored as plain integers to avoid Date object mutation bugs
   var viewYear=2026, viewMonth=4, viewDay=22; // month is 0-based
+  // Tracks whether Schedule mode has already resolved its starting date (from the `day` URL param,
+  // or defaulting to today). Reset on leaving schedule mode / on fresh load so re-entry re-initializes;
+  // prevents date navigation (prev/next/week/month) from being reset on every re-render.
+  var _schedDateInit=false;
   var nid=10, eid=null, creating=false;
   // curDate is a computed property so existing code still works
   function getCurDate(){ return new Date(viewYear, viewMonth, viewDay); }
@@ -917,6 +989,35 @@ $(function(){
   ];
 
   /* ── helpers ── */
+
+  /* ============================================================
+     PERF LAYER (added) — memoization, indexing & escaping helpers.
+     Transparent: identical return values as before, but they remove
+     redundant work from the render hot paths. The week/month grids
+     call these O(staff × days) times per render, so the savings
+     compound as staff/block counts grow.
+     ============================================================ */
+  var _ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  var _DOW3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  // HTML-escape for string-built DOM (replaces thousands of jQuery .text() calls).
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return _ESC_MAP[c];}); }
+  // 'YYYY-MM-DD' -> midnight-local Date (matches getWeekDays/getMonthDays output).
+  function _dateFromStr(ds){ var p=(ds||'').split('-'); return new Date(+p[0],(+p[1])-1,+p[2]); }
+  // name -> first STAFF index (matches Array.findIndex: first match wins).
+  function _buildStaffIdx(){ var m={},i; for(i=0;i<STAFF.length;i++){ if(!(STAFF[i].n in m)) m[STAFF[i].n]=i; } return m; }
+  // coach -> [items] index so day cells stop re-scanning the whole array each time.
+  function _indexByCoach(arr){ var m={},i,o; for(i=0;i<arr.length;i++){ o=arr[i]; (m[o.coach]||(m[o.coach]=[])).push(o); } return m; }
+  // Cache "today" parts (30s TTL) — avoids a `new Date()` allocation per grid cell.
+  var _todayCache={t:0,y:0,m:0,d:0};
+  function _today(){ var n=Date.now(); if(n-_todayCache.t>30000){ var dd=new Date(); _todayCache={t:n,y:dd.getFullYear(),m:dd.getMonth(),d:dd.getDate()}; } return _todayCache; }
+  // Memo for getViewDays(): keyed purely on the primitives that define the days,
+  // so it is correct regardless of any data mutation.
+  var _viewDaysCache={key:'',val:null};
+  // Memo for getFilteredStaff(): keyed on filters + lengths; also force-cleared on
+  // every render entry (see render()/refreshView()) to catch in-place edits.
+  var _fsCache={key:'\u0000',val:null};
+  function _invalidateStaffCache(){ _fsCache.key='\u0000'; }
+
   function fmtD(d){return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
 
   function fmtT(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60),ap=hh<12?'AM':'PM',dh=hh%12||12;return dh+':'+String(mm).padStart(2,'0')+' '+ap;}
@@ -933,6 +1034,10 @@ $(function(){
 
   // Returns STAFF filtered by current search query
   function getFilteredStaff(){
+    // Memo key captures every input that affects the result (filters, the data
+    // arrays' lengths, and — for schedule-mode isApplicableInView — the view date).
+    var k=pageMode+'|'+staffFilter+'|'+filterSchool+'|'+filterProg+'|'+STAFF.length+'|'+blocks.length+'|'+viewMode+'|'+viewYear+'|'+viewMonth+'|'+viewDay;
+    if(_fsCache.key===k && _fsCache.val) return _fsCache.val;
     var result = STAFF;
     // Filter by name search
     if(staffFilter){
@@ -958,6 +1063,7 @@ $(function(){
         result=result.filter(function(s){ return coachesWithProg.has(s.n); });
       }
     }
+    _fsCache.key=k; _fsCache.val=result;
     return result;
   }
 
@@ -1036,7 +1142,17 @@ $(function(){
 
   $('#filter-school').on('change',function(){filterSchool=$(this).val();filterProg='';buildFilterOptions();refreshView();});
   $('#filter-prog').on('change',function(){filterProg=$(this).val();refreshView();});
-  $('#filter-reset').on('click',function(){filterSchool='';filterProg='';$('#filter-school').val('');$('#filter-prog').val('');refreshView();});
+  // (Schedule-mode Calendars/Schools filters live inside the details panel and bind their own
+  //  handlers there — see buildSchedFilters / buildCalFilterDropdown.)
+  $('#filter-reset').on('click',function(){
+    if(pageMode==='schedule'){
+      schedFilterSchool=''; schedFilterCalendar='';
+      var g=selectedGuideId?PLANNING_GUIDES.find(function(x){return x.id===selectedGuideId;}):null;
+      renderSchedulePanel(g); schedUpdateURL(false);
+      return;
+    }
+    filterSchool='';filterProg='';$('#filter-school').val('');$('#filter-prog').val('');refreshView();
+  });
 
   /* ── combobox ── */
   function mkCombo(cfg){
@@ -1309,6 +1425,7 @@ $(function(){
   }
 
   function refreshView(replace){
+    _invalidateStaffCache();
     if(pageMode==='people'){ render(replace); return; }
     buildFilterOptions();
     updateFilterUI();
@@ -1331,7 +1448,7 @@ $(function(){
     }
     updateURL(replace);
     // Sync staff row heights with grid row heights after render
-    setTimeout(syncRowHeights, 0);
+    requestAnimationFrame(syncRowHeights);
   }
 
   /* ── URL state sync ── */
@@ -1343,16 +1460,17 @@ $(function(){
     } else if(pageMode==='planning'){
       if(selectedPersonId) params.set('staff_id', selectedPersonId);
       if(selectedGuideId) params.set('planning_guide', selectedGuideId);
+    } else if(pageMode==='schedule'){
+      // Guide-driven schedule: planning_guide + (school / calendar) filters
+      params.set('section','schedule');
+      if(selectedGuideId)          params.set('planning_guide', selectedGuideId);
+      if(schedFilterSchool!=='')   params.set('school',   schedFilterSchool);
+      if(schedFilterCalendar!=='') params.set('calendar', schedFilterCalendar);
     } else {
-      params.set('schedule', pageMode==='availability' ? 'availability' : 'regular');
+      params.set('schedule','availability');
       params.set('view',   viewMode);
       params.set('date',   viewDateStr());
-      if(pageMode==='schedule'){
-        if(filterSchool)  params.set('school',      filterSchool);
-        if(filterProg)    params.set('discipline',   filterProg);
-      }
       if(staffFilter)     params.set('search',      staffFilter);
-      params.set('avail_overlay', availOverlay ? 'true' : 'false');
     }
     return window.location.pathname + '?' + params.toString();
   }
@@ -1387,6 +1505,8 @@ $(function(){
     filterSchool = '';
     filterProg   = '';
     staffFilter  = '';
+    // Re-resolve the schedule starting date on (re)load: honor the URL `day`, else default to today
+    _schedDateInit = false;
 
     // View mode
     var v = params.get('view');
@@ -1434,6 +1554,10 @@ $(function(){
       selectedPersonId=null;
     } else if(sec==='schedule'){
       pageMode='schedule';
+      // Restore guide + Calendars/Schools filters from the URL
+      try{ var _sgid=params.get('planning_guide'); selectedGuideId=_sgid||null; }catch(e){ selectedGuideId=null; }
+      schedFilterSchool   = params.get('school')   || '';
+      schedFilterCalendar = params.get('calendar') || '';
     } else if(sec==='availability'){
       pageMode='availability';
     }
@@ -1456,29 +1580,40 @@ $(function(){
     $('#btn-people').toggleClass('active',     pageMode==='people');
     $('#btn-schedule').toggleClass('active',    pageMode==='schedule');
     $('#btn-availability').toggleClass('active',pageMode==='availability');
-    $('.view-toggle,.date-nav').toggle(pageMode!=='people');
-    $('#summary-bar').toggle(pageMode==='schedule');
+    $('.view-toggle,.date-nav').toggle(pageMode!=='people'&&pageMode!=='planning');
+    $('#summary-bar').toggle(false);
     // Sync panels
     if(pageMode!=='people'){
-      selectedPersonId=null;
+      if(pageMode!=='schedule') selectedPersonId=null;
       $('#people-panel').hide().css('display','none');
-      $('#timeline-area').show();
-      $('#timeline-header,#grid-body').show();
+      // Schedule + planning are panel-based (no staff timeline)
+      if(pageMode!=='schedule'&&pageMode!=='planning'){
+        $('#timeline-area').show();
+        $('#timeline-header,#grid-body').show();
+      }
       $('#week-container').remove();
     }
+    if(pageMode!=='schedule'){ $('#schedule-panel').hide().css('display','none'); }
     setTimeout(function(){
-      $('.filter-item').toggle(pageMode==='schedule');
-      syncOverlayCheckVisibility();
+      $('#filter-school').closest('.filter-item').hide();
+      $('#filter-prog').closest('.filter-item').hide();
+      updateSchedFilterVisibility(); // schedule filters only when a guide is selected
     },0);
   }
 
   function render(replace){
+    _invalidateStaffCache();
     // Planning Guides mode
     if(pageMode==='planning'){
       $('#timeline-area').hide(); $('#summary-bar').hide();
       rPlanningGuides();
       updateURL(replace);
       return;
+    }
+    // Schedule mode — now driven by the selected Planning Guide (no staff timeline)
+    if(pageMode==='schedule'){
+      rScheduleMode();
+      return; // rScheduleMode owns its own URL sync
     }
     // People mode: completely separate rendering path
     if(pageMode==='people'){
@@ -1531,7 +1666,7 @@ $(function(){
       updateFilterUI();
       updateSummary();
       updateURL(replace);
-      setTimeout(syncRowHeights, 0);
+      requestAnimationFrame(syncRowHeights);
     } else {
       $('#date-label').text(fmtD(getCurDate()));
       // Highlight today badge when viewing today in day mode
@@ -1611,13 +1746,16 @@ $(function(){
 
   // Returns the days array for whichever multi-day view is active
   function getViewDays(){
-    if(viewMode==='month') return getMonthDays();
-    return getWeekDays();
+    var k=viewMode+'|'+viewYear+'|'+viewMonth+'|'+viewDay;
+    if(_viewDaysCache.key===k && _viewDaysCache.val) return _viewDaysCache.val;
+    var v=(viewMode==='month')?getMonthDays():getWeekDays();
+    _viewDaysCache.key=k; _viewDaysCache.val=v;
+    return v;
   }
 
   function isTodayDate(d){
-    var now=new Date();
-    return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate();
+    var t=_today();
+    return d.getFullYear()===t.y&&d.getMonth()===t.m&&d.getDate()===t.d;
   }
 
   // Returns true if block b is applicable on at least one day in the current view period
@@ -1886,13 +2024,14 @@ $(function(){
     }
 
     var fs=getFilteredStaff();
+    var _idxMap=_buildStaffIdx();
     var $scroll=$('#staff-list-scroll').empty();
     if(!fs.length){
       $scroll.append('<div class="staff-no-results">No staff found</div>');
       return;
     }
     $.each(fs,function(fi,s){
-      var absIdx=STAFF.findIndex(function(x){return x.n===s.n;});
+      var absIdx=_idxMap[s.n]; if(absIdx==null) absIdx=0;
       var av=$('<div class="staff-avatar">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
       var info=$('<div class="staff-info">').append($('<div class="staff-name">').text(s.n));
       if(pageMode==='people'){
@@ -2566,6 +2705,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               // New duplicated template always starts as Draft
               if(!guideDetails[nid]) guideDetails[nid]={};
               guideDetails[nid].status='Draft';
+              // Duplicated calendars receive NEW unique Calendar IDs (relationships within the copy
+              // aren't preserved by cloned IDs here). School IDs stay CDS-based (re-derived if blank).
+              (guideDetails[nid].calendarRows||[]).forEach(function(r){ r.calId=_genEntityId('cal_'); });
+              (guideDetails[nid].siteRows||[]).forEach(function(r){
+                if(!cdsForSchool(r.school, r.schoolAbbr)) r.schoolId=_genEntityId('sch_'); // regenerate non-CDS ids
+              });
+              ensureGuideEntityIds(ng);
               selectGuide(ng);
             },$ni);
           }));
@@ -2614,6 +2760,622 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     } else {
       $('#planning-panel').empty();
     }
+  }
+
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Schedule mode — driven by the selected Planning Guide
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Calendars belonging to a guide → [{idx, id, name, color}]
+  function schedGuideCalendars(g){
+    if(!g) return [];
+    ensureGuideEntityIds(g);
+    var rows=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calendarRows)||[];
+    var out=[];
+    rows.forEach(function(r,i){
+      var f=(r.firstDay||'').trim(), l=(r.lastDay||'').trim();
+      if(!f&&!l&&!(r.name&&r.name.trim())) return; // skip wholly-empty rows
+      out.push({idx:i, id:r.calId, name:(r.name&&r.name.trim())||('Calendar '+(i+1)), color:r.color||'#ffffff'});
+    });
+    return out;
+  }
+  // Schools belonging to a guide → [{idx, id, name}]
+  function schedGuideSchools(g){
+    if(!g) return [];
+    ensureGuideEntityIds(g);
+    var rows=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].siteRows)||[];
+    var out=[];
+    rows.forEach(function(r,i){
+      var nm=(r.school||r.schoolAbbr||'').trim();
+      out.push({idx:i, id:r.schoolId, name:nm||('School '+(i+1))});
+    });
+    return out;
+  }
+
+  // Drop school/calendar params that don't belong to the selected guide, or that correspond to a
+  // filter that won't be shown (≤1 option) — so hidden filters never appear in the URL.
+  function schedValidateFilters(g){
+    var calList=schedGuideCalendars(g), schList=schedGuideSchools(g);
+    var cals=calList.map(function(c){return String(c.id);});
+    var schs=schList.map(function(s){return String(s.id);});
+    if(calList.length<=1 || (schedFilterCalendar && cals.indexOf(String(schedFilterCalendar))<0)) schedFilterCalendar='';
+    if(schList.length<=1 || (schedFilterSchool && schs.indexOf(String(schedFilterSchool))<0)) schedFilterSchool='';
+  }
+
+  // Build the schedule URL (section=schedule, planning_guide, school, calendar)
+  function schedUpdateURL(replace){
+    try{
+      var p=new URLSearchParams();
+      p.set('section','schedule');
+      if(selectedGuideId) p.set('planning_guide',selectedGuideId);
+      if(schedFilterSchool!=='')   p.set('school',  schedFilterSchool);
+      if(schedFilterCalendar!=='') p.set('calendar',schedFilterCalendar);
+      p.set('view', viewMode);
+      p.set('day',  viewDateStr());
+      var url=window.location.pathname+'?'+p.toString();
+      if(replace) history.replaceState({},'',url); else history.pushState({},'',url);
+    }catch(e){}
+  }
+
+  // Populate the Calendars + Schools dropdowns from the selected guide
+  // Custom Calendars-filter dropdown that renders a calendar color circle before each name.
+  // Mirrors the native <select> styling/behavior (value + change) but allows colored circles.
+  var _calFilterDDState={open:false};
+  function _calCircle(color){
+    return $('<span>').css({width:'10px',height:'10px',borderRadius:'50%',border:'1px solid rgb(180,180,180)',background:color||'#ffffff',display:'inline-block',flexShrink:'0',verticalAlign:'middle'});
+  }
+  function buildCalFilterDropdown(g){
+    var $wrap=$('#filter-calendar-dd').empty();
+    var cals=schedGuideCalendars(g);
+    var disabled=!g;
+    // Button (styled like .filter-select)
+    var $btn=$('<button type="button" class="filter-select cal-filter-btn">').css({
+      display:'inline-flex',alignItems:'center',gap:'6px',minWidth:'130px',textAlign:'left',
+      paddingRight:'28px',cursor:disabled?'default':'pointer',opacity:disabled?'0.5':'1'
+    }).prop('disabled',disabled);
+    // Current selection label
+    var sel=cals.find(function(c){return String(c.id)===String(schedFilterCalendar);});
+    if(sel){ $btn.append(_calCircle(sel.color)); $btn.append($('<span>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(sel.name)); }
+    else { $btn.append($('<span>').css({color:'var(--tx)'}).text('All Calendars ('+cals.length+')')); }
+    $wrap.append($btn);
+
+    // Portalled options list
+    var $menu=$('<div class="cal-filter-menu">').css({
+      position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
+      boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'4px 0',minWidth:'150px',maxHeight:'260px',
+      overflowY:'auto',display:'none',fontSize:'12px'
+    });
+    $('body').append($menu);
+
+    function closeMenu(){ $menu.hide(); _calFilterDDState.open=false; $(document).off('mousedown._calfdd'); }
+    function pick(val){
+      schedFilterCalendar=val;
+      var gg=selectedGuideId?PLANNING_GUIDES.find(function(x){return x.id===selectedGuideId;}):null;
+      renderSchedulePanel(gg); schedUpdateURL(false);
+    }
+    function row(label, val, color){
+      var isSel=String(val)===String(schedFilterCalendar);
+      var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'7px',padding:'4px 12px',cursor:'pointer',background:isSel?'#eef4fd':''});
+      if(color!==undefined) $r.append(_calCircle(color)); else $r.append($('<span>').css({width:'10px',flexShrink:'0'}));
+      $r.append($('<span>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(label));
+      $r.on('mouseenter',function(){ if(!isSel)$(this).css('background','#f1f3f4'); })
+        .on('mouseleave',function(){ if(!isSel)$(this).css('background',''); })
+        .on('click',function(e){ e.stopPropagation(); closeMenu(); pick(val); });
+      return $r;
+    }
+    function rebuildMenu(){
+      $menu.empty();
+      $menu.append(row('All Calendars ('+cals.length+')','')); // clear option (no circle)
+      cals.forEach(function(c){ $menu.append(row(c.name,String(c.id),c.color)); });
+    }
+    $btn.on('click',function(e){
+      if(disabled) return;
+      e.stopPropagation();
+      if(_calFilterDDState.open){ closeMenu(); return; }
+      rebuildMenu();
+      var r=$btn[0].getBoundingClientRect();
+      var mw=Math.max(150,r.width);
+      var lft=Math.min(r.left, window.innerWidth-mw-8);
+      $menu.css({top:(r.bottom+4)+'px',left:lft+'px',minWidth:mw+'px'}).show();
+      _calFilterDDState.open=true;
+      setTimeout(function(){ $(document).on('mousedown._calfdd',function(ev){ if(!$menu[0].contains(ev.target)&&ev.target!==$btn[0]&&!$btn[0].contains(ev.target)) closeMenu(); }); },0);
+    });
+    // Clean up any stale menu when the dropdown is rebuilt
+    $wrap.data('cleanup',function(){ $menu.remove(); });
+  }
+
+  // Schedule filters now live inside the details panel — keep the top filter-bar hidden in
+  // Schedule mode (the panel renders/hides the filters based on guide selection itself).
+  function updateSchedFilterVisibility(){
+    if(pageMode==='schedule') $('#filter-bar').hide();
+  }
+
+  // Build the Calendars + Schools filter dropdowns into a container that is ALREADY in the DOM.
+  // No separate labels — the dropdown's placeholder/selected value identifies the filter.
+  // Each filter is shown ONLY when the guide has more than one of that item.
+  function buildSchedFilters($container, g){
+    $container.empty();
+    var cals=schedGuideCalendars(g);
+    var schs=schedGuideSchools(g);
+    var showCal=cals.length>1;
+    var showSch=schs.length>1;
+    // A filter that isn't shown must not constrain the URL — clear its selection
+    if(!showCal && schedFilterCalendar!=='') schedFilterCalendar='';
+    if(!showSch && schedFilterSchool!=='')   schedFilterSchool='';
+
+    if(showCal){
+      // Calendars custom dropdown (color circles). Container must exist before buildCalFilterDropdown.
+      $container.append($('<div id="filter-calendar-dd" class="cal-filter-dd">'));
+      buildCalFilterDropdown(g);
+    }
+    if(showSch){
+      var $sch=$('<select class="filter-select" id="filter-school-pg" style="min-width:130px;"></select>');
+      $sch.append($('<option value="">').text('All Schools ('+schs.length+')'));
+      schs.forEach(function(s){ $sch.append($('<option>').attr('value',String(s.id)).text(s.name)); });
+      $sch.val(schedFilterSchool||'');
+      $sch.on('change',function(){
+        schedFilterSchool=$(this).val();
+        var gg=selectedGuideId?PLANNING_GUIDES.find(function(x){return x.id===selectedGuideId;}):null;
+        renderSchedulePanel(gg); schedUpdateURL(false);
+      });
+      $container.append($sch);
+    }
+    return showCal||showSch;
+  }
+
+  // populateSchedFilters now just re-renders the panel (filters live inside it)
+  function populateSchedFilters(g){ /* handled within renderSchedulePanel */ }
+
+  // Render the right-side schedule details for the selected guide (header + filters + state)
+  function renderSchedulePanel(g){
+    // Tear down any portalled calendar-filter menu before rebuilding
+    var prev=$('#filter-calendar-dd').data('cleanup'); if(typeof prev==='function') prev();
+    var $panel=$('#schedule-panel').empty();
+    if(!g){
+      $panel.append($('<div>').css({display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx2)',textAlign:'center',padding:'40px 20px'})
+        .append($('<div>').css({fontSize:'14px',fontWeight:'600',marginBottom:'6px',color:'#495057'}).text('No Planning Guide selected'))
+        .append($('<div>').css({fontSize:'12px'}).text('Select a Planning Guide from the list to view its schedule.')));
+      $('#filter-reset').hide();
+      return;
+    }
+    // Header — matches the Planning Guides mode detail header (avatar + name + Guide ID)
+    var $hdr=$('<div class="d-flex align-items-center gap-3">').css({paddingBottom:'12px',borderBottom:'1px solid #e9ecef',marginBottom:'2px'});
+    var $avatar=$('<div>').css({width:'46px',height:'46px',borderRadius:'10px',background:'#e8f1ff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:'0'})
+      .html('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="#0d6efd" viewBox="0 0 16 16"><path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/><path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2m0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>');
+    var $nameWrap=$('<div class="flex-grow-1">');
+    $nameWrap.append($('<div>').css({fontSize:'15px',fontWeight:'600',color:'#212529',lineHeight:'1.4',wordBreak:'break-word',whiteSpace:'normal'}).text(g.name));
+    $nameWrap.append($('<div class="text-muted" style="font-size:11px;margin-top:2px;">').text('Guide ID: '+g.id));
+    var _status=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].status)||'';
+    var _sc=_status&&PG_STATUSES[_status]?PG_STATUSES[_status]:null;
+    if(_status&&_sc){
+      $nameWrap.append($('<div>').css({fontSize:'10px',fontWeight:'600',marginTop:'2px',color:_sc.color}).text(_status));
+    }
+    $hdr.append($avatar,$nameWrap);
+    $panel.append($hdr);
+
+    // Filters — directly under the header. Decide visibility first, attach the row to the DOM,
+    // THEN build the dropdowns (the custom calendar dropdown needs its container in the document).
+    var cals=schedGuideCalendars(g), schs=schedGuideSchools(g);
+    if(cals.length>1 || schs.length>1){
+      var $filterRow=$('<div>').css({display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'center',padding:'4px 0 2px'});
+      $panel.append($filterRow);          // attach first
+      buildSchedFilters($filterRow, g);    // then build (container is now in the DOM)
+    } else {
+      // No applicable filters — make sure stale selections don't linger in the URL
+      schedFilterCalendar=''; schedFilterSchool='';
+    }
+    // The top filter-bar is no longer used in Schedule mode
+    $('#filter-bar').hide();
+    $('#filter-reset').hide();
+
+    // Read-only Schedule Matrix (one per School × Calendar combination)
+    renderScheduleMatrices(g, $panel);
+  }
+
+  // ── Read-only Schedule Matrix (Schedule mode) ──────────────────────────────
+  // Renders one matrix per visible School × Calendar combination using the selected
+  // Planning Guide's Calendar + Staffing Hours data. Hours match the Calendar breakdown
+  // popup exactly (same resolution: per-school Special Day column, Week A/B, byCalendar).
+  function renderScheduleMatrices(g, $panel){
+    var det = getGuideDetail(g.id);
+    var sopts = det.staffingOpts || {alternateWeeks:false,bySchool:false,byCalendar:false};
+    var sfSlots = det.staffingHoursSlots || {};
+    var siteRows = det.siteRows || [];
+    var calRows = det.calendarRows || [];
+    var roles = rolesToStaffingRoles(getRoles(g.id)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; });
+
+    // ── local date + hours helpers (self-contained; mirror the Calendar breakdown) ──
+    function parseD(s){ return s?new Date(s+'T00:00:00'):null; }
+    function isoD(d){ return d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate(); }
+    function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
+    function toMonday(d){ var dow=d.getDay(); return addDays(d, dow===0?-6:1-dow); }
+    function calcH(s,e){ if(!s||!e)return null; var sp=s.split(':'),ep=e.split(':'); var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0),em=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em>sm?(Math.round((em-sm)/60*100)/100):null; }
+    function calcAdjH(d){ var raw=calcH(d.start,d.end); if(raw===null)return null; if(d.brk&&d.brk.type==='nonbillable'){ var mins=parseInt(d.brk.mins)||0; var adj=Math.round((raw-mins/60)*100)/100; return adj<0?0:adj; } return raw; }
+    // Billable / Non-Billable / Break-alert status for a staffing cell. Mirrors the
+    // Staffing Hours break label EXACTLY (same thresholds + colors green/blue/red);
+    // only the wording is expanded for Schedule mode ("Non-Billable (30m)" vs "-30m").
+    // Break alert = a shift longer than 5h with no meal break configured.
+    function brkStatus(d){
+      if(d.brk && d.brk.type==='billable')    return {text:'Billable', color:'green'};
+      if(d.brk && d.brk.type==='nonbillable') return {text:'Non-Billable ('+(parseInt(d.brk.mins)||0)+'m)', color:'blue'};
+      var raw=calcH(d.start,d.end);
+      if(raw!==null && raw>5)                 return {text:'Break', color:'red'};
+      return null;
+    }
+    function decH(hhmm){ if(!hhmm)return null; var p=hhmm.split(':'); return parseInt(p[0])+(parseInt(p[1]||'0')/60); }
+    function slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
+    function markerSdId(dateKey, si){ var m=det.calMarkers&&det.calMarkers[dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
+    var DOWKEY=['sun','mon','tue','wed','thu','fri','sat'];
+    function hrsLabel(h){ var r=Math.round(h*100)/100; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+(r===1?' hour':' hours'); }
+
+    // Visible-period dates (intersected per-calendar with its date range below)
+    function visibleDates(){
+      if(viewMode==='week') return getWeekDays();
+      if(viewMode==='month') return getMonthDays();
+      return [new Date(viewYear,viewMonth,viewDay)];
+    }
+    var vDates = visibleDates();
+
+    // ab-week parity for a date within a calendar (mirrors Calendar render: wi%2 over Monday-weeks)
+    function abWeekFor(origIdx, dateObj){
+      if(!sopts.alternateWeeks) return '';
+      var cr=calRows[origIdx]; var fd=cr?parseD(cr.firstDay):null;
+      if(!fd) return 'a';
+      var wi=Math.round((toMonday(dateObj).getTime()-toMonday(fd).getTime())/(7*86400000));
+      return (wi%2===0)?'a':'b';
+    }
+
+    // Resolve one school × calendar × date → {noHours, sd, blocks:[{roleKey,label,start,end,count,hrsEach}]}
+    function resolveDay(si, origIdx, dateObj){
+      var dateKey=isoD(dateObj);
+      var dayKey=DOWKEY[dateObj.getDay()];
+      var abWeek=abWeekFor(origIdx, dateObj);
+      var byCal=sopts.byCalendar, byAB=sopts.alternateWeeks;
+      var anyOpt=sopts.bySchool||byCal||byAB;
+      var ci=(byCal && origIdx!=null)?origIdx:null;
+      var wk=byAB?(abWeek||'a'):'';
+      var slot = anyOpt ? (sfSlots[slotKey2(sopts.bySchool?si:null, ci, wk)]||{}) : (det.staffingHours||{});
+      var sdId=markerSdId(dateKey, si);
+      var sd=sdId?getSdById(g.id, sdId):null;
+      if(sd && sd.noHours) return {noHours:true, sd:sd, blocks:[]};
+      var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
+      var siteRow=siteRows[si]||{};
+      var out=[];
+      roles.forEach(function(role){
+        var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return;
+        var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
+        var h=calcAdjH(d); if(!h||h<=0) return;
+        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:brkStatus(d)});
+      });
+      return {noHours:false, sd:sd, blocks:out};
+    }
+
+    // Role-instance rows for a school (expanded by count; only count>0; labels match Staffing Hours)
+    function roleInstances(si){
+      var siteRow=siteRows[si]||{}; var out=[];
+      roles.forEach(function(role){ var cnt=parseInt(siteRow[role.countKey])||0; for(var i=1;i<=cnt;i++) out.push({roleKey:role.key, roleLabel:role.label, num:i}); });
+      return out;
+    }
+
+    // Visible schools / calendars (respect filters), as {idx,id,name,color}
+    var calsAll=schedGuideCalendars(g), schsAll=schedGuideSchools(g);
+    var visCals = schedFilterCalendar ? calsAll.filter(function(c){return String(c.id)===String(schedFilterCalendar);}) : calsAll;
+    var visSchs = schedFilterSchool   ? schsAll.filter(function(s){return String(s.id)===String(schedFilterSchool);}) : schsAll;
+
+    var $wrap=$('<div>').css({marginTop:'14px'});
+
+    if(!siteRows.length || !schsAll.length){
+      $wrap.append($('<div>').css({padding:'24px 8px',fontSize:'12px',color:'var(--tx2)'}).text('No schools in this Planning Guide’s Site Breakdown.'));
+      $panel.append($wrap); return;
+    }
+    if(!calRows.filter(function(c){return parseD(c.firstDay)&&parseD(c.lastDay);}).length){
+      $wrap.append($('<div>').css({padding:'24px 8px',fontSize:'12px',color:'var(--tx2)'}).text('No program calendars defined for this Planning Guide.'));
+      $panel.append($wrap); return;
+    }
+
+    var periodLbl = viewMode==='week'?weekRangeLabel():(viewMode==='month'?monthRangeLabel():fmtD(getCurDate()));
+    $wrap.append($('<div>').css({fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',color:'#6c757d',marginBottom:'10px'}).text('Schedule Matrix · '+periodLbl));
+
+    var anyMatrix=false;
+
+    visCals.forEach(function(cal){
+      var origIdx=cal.idx;
+      var cr=calRows[origIdx]; if(!cr) return;
+      var fd=parseD(cr.firstDay), ld=parseD(cr.lastDay); if(!fd||!ld||fd>ld) return;
+      var datesInRange=vDates.filter(function(d){ var dd=new Date(d.getFullYear(),d.getMonth(),d.getDate()); return dd>=fd && dd<=ld; });
+
+      visSchs.forEach(function(sch){
+        var si=sch.idx;
+        var insts=roleInstances(si);
+
+        // Total hours over the visible period + SD usage for the header
+        var totalHours=0, sdIdsSeen={}, inRangeCount=0;
+        datesInRange.forEach(function(d){
+          var r=resolveDay(si, origIdx, d); inRangeCount++;
+          var key = r.sd ? r.sd.id : '__none__'; sdIdsSeen[key]=(sdIdsSeen[key]||0)+1;
+          if(!r.noHours) r.blocks.forEach(function(b){ totalHours += b.hrsEach*b.count; });
+        });
+        // Special Day label only when uniform across all in-range visible dates (covers Day view)
+        var sdLabel='', seenKeys=Object.keys(sdIdsSeen);
+        if(inRangeCount>0 && seenKeys.length===1 && seenKeys[0]!=='__none__'){ var _sd=getSdById(g.id, seenKeys[0]); if(_sd) sdLabel=_sd.name; }
+
+        anyMatrix=true;
+        var $mx=$('<div>').css({marginBottom:'22px',border:'1px solid #e3e7ec',borderRadius:'10px',overflow:'hidden',background:'#fff'});
+
+        // Header: School — ● Calendar — {Special Day}  ·  N hours
+        // The color circle belongs to the CALENDAR, so it sits right before the calendar name.
+        var $h=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'9px 12px',background:'#f7f9fc',borderBottom:'1px solid #e9ecef',flexWrap:'wrap'});
+        var $title=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',flexWrap:'wrap',fontSize:'12px',fontWeight:'700',color:'#212529'});
+        $title.append($('<span>').text(sch.name+' —'));
+        $title.append($('<span>').css({width:'10px',height:'10px',borderRadius:'50%',background:cal.color||'#cfd6df',border:'1px solid rgba(0,0,0,.15)',flexShrink:'0',display:'inline-block'}));
+        $title.append($('<span>').text(cal.name+(sdLabel?(' — '+sdLabel):'')));
+        $h.append($title);
+        $h.append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'#0d6efd',marginLeft:'auto'}).text(hrsLabel(totalHours)));
+        $mx.append($h);
+
+        if(!insts.length){
+          $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('No staffed roles (all counts are 0) for this school.'));
+        } else if(!datesInRange.length){
+          $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('This calendar has no days in the selected '+viewMode+'.'));
+        } else if(viewMode==='day'){
+          $mx.append(buildDayGrid(si, origIdx, datesInRange[0], insts));
+        } else {
+          $mx.append(buildPeriodTable(si, origIdx, datesInRange, insts));
+        }
+        $wrap.append($mx);
+      });
+    });
+
+    if(!anyMatrix){
+      $wrap.append($('<div>').css({padding:'18px 8px',fontSize:'12px',color:'var(--tx2)'}).text('No matrices to display for the current filters and time period.'));
+    }
+    $panel.append($wrap);
+
+    // ── DAY view: roles × 6am–midnight timeline (same look as the Availability day grid) ──
+    // Everything (pinned label column + 6am→midnight hours) lives in ONE horizontal-scroll
+    // container so the full range is always reachable inside the narrow details panel.
+    function buildDayGrid(si, origIdx, dateObj, insts){
+      var dayRes=resolveDay(si, origIdx, dateObj);
+      var byRole={}; dayRes.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
+
+      var LBLW=184, STAFFW=46, ROLEW=LBLW-STAFFW;
+      var $scrollWrap=$('<div>').css({overflowX:'auto',overflowY:'hidden',width:'100%'});
+      var $outer=$('<div>').css({position:'relative',width:(LBLW+TW)+'px'}); // wider than the panel → scrolls
+
+      // Header row: sticky label spacer + hour labels (6 AM … 11 PM, grid ends at midnight)
+      var $hdrRow=$('<div>').css({display:'flex',height:'36px'});
+      var $hSpacer=$('<div>').css({position:'sticky',left:'0',zIndex:'6',flexShrink:'0',width:LBLW+'px',height:'36px',display:'flex',alignItems:'stretch',background:'var(--bg2)',borderRight:'1px solid var(--bd2)',borderBottom:'1px solid var(--bd2)'});
+      $hSpacer.append($('<div>').css({width:ROLEW+'px',display:'flex',alignItems:'center',padding:'0 8px',fontSize:'9.5px',fontWeight:'700',color:'#495057',whiteSpace:'nowrap'}).text('Role'));
+      $hSpacer.append($('<div>').css({width:STAFFW+'px',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',fontSize:'9.5px',fontWeight:'700',color:'#495057',whiteSpace:'nowrap',borderLeft:'1px solid var(--bd2)'}).text('#'));
+      $hdrRow.append($hSpacer);
+      var $hdr=$('<div>').css({display:'flex',width:TW+'px',height:'36px',borderBottom:'1px solid var(--bd2)',background:'var(--bg2)'});
+      for(var hh=SH; hh<SH+NHRS; hh++) $hdr.append($('<div class="hour-cell">').text(hlbl(hh)));
+      $hdrRow.append($hdr);
+      $outer.append($hdrRow);
+
+      // Body rows: each role-instance = sticky label + hour cells with an absolutely-positioned block
+      insts.forEach(function(inst,ri){
+        var firstOfRole = ri>0 && insts[ri-1].roleKey !== inst.roleKey;
+        var $row=$('<div>').css({display:'flex',height:RH+'px',borderTop: ri===0?'none':(firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)')});
+        var $lbl=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:LBLW+'px',height:RH+'px',display:'flex',alignItems:'stretch',background:ri%2?'#fff':'#fafafa',borderRight:'1px solid var(--bd2)'});
+        $lbl.append($('<div>').css({width:ROLEW+'px',display:'flex',alignItems:'center',padding:'0 8px',fontSize:'11px',fontWeight:'600',color:'#343a40',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',inst.roleLabel).text(inst.roleLabel));
+        $lbl.append($('<div>').css({width:STAFFW+'px',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',fontSize:'11px',fontWeight:'700',color:'#495057',borderLeft:'1px solid var(--bd2)'}).text(inst.num));
+        $row.append($lbl);
+        var $cells=$('<div>').css({display:'flex',width:TW+'px',position:'relative'});
+        for(var c=0;c<NHRS;c++) $cells.append($('<div>').addClass('grid-cell'+(c%2===0?' alt':'')).css({cursor:'default'}));
+        var b=byRole[inst.roleKey];
+        if(b){
+          var ds=decH(b.start), de=decH(b.end);
+          if(ds!=null&&de!=null&&de>ds){
+            var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=RH-8;
+            var $el=$('<div class="sched-block">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',background:'#e7f1ff',borderColor:'#9ec5fe',color:'#0a4ea8',cursor:'default'});
+            $el.append($('<div class="block-title">').text(inst.roleLabel+' #'+inst.num));
+            var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
+            $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
+            $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(b.hrsEach)));
+            if(b.status) $l2.append($('<span class="block-status" style="margin-left:5px;font-weight:800;">').css({fontSize:'9px',color:b.status.color}).text(b.status.text));
+            $el.append($l2);
+            $el.attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
+            $cells.append($el);
+          }
+        }
+        $row.append($cells);
+        $outer.append($row);
+      });
+
+      $scrollWrap.append($outer);
+      return $scrollWrap;
+    }
+
+    // ── WEEK / MONTH view: roles × day columns with read-only time chips ──
+    function buildPeriodTable(si, origIdx, dates, insts){
+      var dayCols=dates.map(function(d){
+        var r=resolveDay(si, origIdx, d);
+        var byRole={}; r.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
+        return {date:d, noHours:r.noHours, sd:r.sd, byRole:byRole};
+      });
+      var DOWS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var $scroll=$('<div>').css({overflowX:'auto'});
+      var $tbl=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px',width:'100%'});
+      var $thead=$('<thead>'); var $hr=$('<tr>');
+      var $roleTh=$('<th>').css({position:'sticky',left:'0',zIndex:'2',background:'#f7f9fc',border:'1px solid #e9ecef',padding:'0',minWidth:'194px',fontWeight:'700',color:'#495057'});
+      var $roleThIn=$('<div>').css({display:'flex',alignItems:'stretch'});
+      $roleThIn.append($('<div>').css({flex:'1 1 auto',minWidth:'0',padding:'5px 8px',textAlign:'left',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text('Role'));
+      $roleThIn.append($('<div>').css({flexShrink:'0',width:'46px',padding:'5px 4px',textAlign:'center',borderLeft:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('#'));
+      $roleTh.append($roleThIn); $hr.append($roleTh);
+      dayCols.forEach(function(col){
+        var d=col.date, isWknd=(d.getDay()===0||d.getDay()===6);
+        var $th=$('<th>').css({border:'1px solid #e9ecef',padding:'4px 6px',textAlign:'center',minWidth:'74px',background:isWknd?'#eef3fa':'#f7f9fc',color:isWknd?'#3d5a80':'#495057',fontWeight:'600',whiteSpace:'nowrap'});
+        $th.append($('<div>').css({fontSize:'9px',textTransform:'uppercase',letterSpacing:'.03em'}).text(DOWS[d.getDay()]));
+        $th.append($('<div>').css({fontSize:'11px',fontWeight:'700'}).text((d.getMonth()+1)+'/'+d.getDate()));
+        if(col.sd) $th.append($('<div>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'70px'}).text(col.sd.name));
+        $hr.append($th);
+      });
+      $thead.append($hr); $tbl.append($thead);
+      var $tbody=$('<tbody>');
+      insts.forEach(function(inst,ri){
+        var firstOfRole = ri>0 && insts[ri-1].roleKey !== inst.roleKey;
+        var sepTop = firstOfRole ? '2px solid #cdd4dc' : null;
+        var $tr=$('<tr>');
+        var $rTd=$('<td>').css({position:'sticky',left:'0',zIndex:'1',background:ri%2?'#fff':'#fafafa',border:'1px solid #e9ecef',padding:'4px 0',minWidth:'194px',verticalAlign:'middle'});
+        if(sepTop) $rTd.css('borderTop', sepTop);
+        var $rTdIn=$('<div>').css({display:'flex',alignItems:'center'});
+        var $roleCell=$('<div>').css({flex:'1 1 auto',minWidth:'0',padding:'0 8px',overflow:'hidden'});
+        $roleCell.append($('<span>').css({display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'600',color:'#343a40'}).attr('title',inst.roleLabel).text(inst.roleLabel));
+        var $numCell=$('<div>').css({flexShrink:'0',width:'46px',textAlign:'center',padding:'0 4px',fontWeight:'700',color:'#495057',borderLeft:'1px solid #eef1f4'}).text(inst.num);
+        $rTdIn.append($roleCell).append($numCell);
+        $rTd.append($rTdIn); $tr.append($rTd);
+        dayCols.forEach(function(col){
+          var isWknd=(col.date.getDay()===0||col.date.getDay()===6);
+          var $td=$('<td>').css({border:'1px solid #eef1f4',padding:'3px 4px',textAlign:'center',verticalAlign:'middle',background:isWknd?'#fbfcfe':'#fff'});
+          if(sepTop) $td.css('borderTop', sepTop);
+          var b=col.byRole[inst.roleKey];
+          if(col.noHours){
+            $td.append($('<span>').css({fontSize:'8px',color:'#adb5bd'}).text('—'));
+          } else if(b){
+            var ds=decH(b.start), de=decH(b.end);
+            var $chip=$('<div>').css({display:'inline-block',maxWidth:'172px',background:'#e7f1ff',border:'1px solid #9ec5fe',color:'#0a4ea8',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
+            $chip.append($('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(inst.roleLabel+' #'+inst.num));
+            var $l2=$('<div>');
+            $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
+            $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(b.hrsEach)));
+            if(b.status) $l2.append($('<span>').css({marginLeft:'4px',fontWeight:'800',color:b.status.color}).text(b.status.text));
+            $chip.append($l2);
+            $chip.attr('title', inst.roleLabel+' #'+inst.num+' · '+fmtT(ds)+'–'+fmtT(de)+' · '+fmtHrs(b.hrsEach)+(b.status?(' · '+b.status.text):''));
+            $td.append($chip);
+          } else {
+            $td.append($('<span>').css({fontSize:'8px',color:'#ced4da'}).text('·'));
+          }
+          $tr.append($td);
+        });
+        $tbody.append($tr);
+      });
+      $tbl.append($tbody);
+      $scroll.append($tbl);
+      return $scroll;
+    }
+  }
+
+  // Select a guide in Schedule mode → sync list, panel, filters, URL
+  function selectSchedGuide(g, replaceUrl){
+    selectedGuideId = g ? g.id : null;
+    // A different guide invalidates filters that don't belong to it
+    schedValidateFilters(g);
+    renderSchedGuideList();
+    populateSchedFilters(g);
+    renderSchedulePanel(g);
+    schedUpdateURL(!!replaceUrl);
+  }
+
+  // Filtered guide list for Schedule mode (uses its own search text)
+  function getSchedFilteredGuides(){
+    var q=schedSearchFilter.toLowerCase().trim();
+    if(!q) return PLANNING_GUIDES.slice();
+    return PLANNING_GUIDES.filter(function(g){ return g.name.toLowerCase().includes(q); });
+  }
+
+  // Render the guide list into the left column (mirrors the Planning Guides list)
+  function renderSchedGuideList(){
+    var $scroll=$('#staff-list-scroll').empty();
+    var guides=getSchedFilteredGuides();
+    if(!guides.length){ $scroll.append($('<div style="padding:12px;font-size:12px;color:var(--tx2);">').text('No guides found')); return; }
+    guides.forEach(function(gObj){
+      var isSelected=gObj.id===selectedGuideId;
+      var $row=$('<div class="staff-row" style="position:relative;">').css({cursor:'pointer',background:isSelected?'#e8f1ff':''});
+      var _status=(guideDetails[String(gObj.id)]&&guideDetails[String(gObj.id)].status)||'';
+      var _sc=_status&&PG_STATUSES[_status]?PG_STATUSES[_status]:null;
+      var $info=$('<div class="staff-info">').append(
+        $('<div class="staff-name">').css(isSelected?{fontWeight:'700',color:'var(--blue)'}:{}).text(gObj.name)
+      );
+      if(_status&&_sc){
+        $info.append($('<div>').css({fontSize:'9px',fontWeight:'600',marginTop:'2px',lineHeight:'1.3',color:_sc.color}).text(_status));
+      }
+      $info.append($('<div>').css({fontSize:'9px',color:'var(--tx2)',marginTop:'1px',lineHeight:'1.3'}).text('id: '+gObj.id));
+      $row.append($info);
+      if(isSelected) $row.addClass('selected');
+      $row.on('mouseenter',function(){if(!isSelected)$(this).css('background','#f0f6ff');})
+          .on('mouseleave',function(){if(!isSelected)$(this).css('background','');});
+      $row.on('click',function(){ selectSchedGuide(gObj,false); });
+      $scroll.append($row);
+    });
+  }
+
+  function rScheduleMode(){
+    // Hide the staff-timeline schedule UI — Schedule mode is now guide-driven
+    $('#timeline-header,#grid-body,#week-container').hide();
+    $('#timeline-area').hide();
+    $('#summary-bar').hide();
+    $('#blocks-layer').empty();
+
+    // Left column: start directly with the Search Guides field (no header label).
+    $('#staff-col-header').empty().hide();
+
+    var $search=$('#staff-search').val(schedSearchFilter).attr('placeholder','Search Guides…');
+    $search.off('input.sched input.pg').on('input.sched',function(){
+      schedSearchFilter=$(this).val().trim();
+      renderSchedGuideList();
+    });
+
+    $('#staff-col').show();
+    $('#planning-panel').hide().css('display','none');
+    $('#people-panel').hide();
+    $('#schedule-panel').css({display:'flex',flexDirection:'column'});
+
+    // Restore selection + filters from the URL (planning_guide / school / calendar)
+    try{
+      var params=new URLSearchParams(window.location.search);
+      var gid=params.get('planning_guide');
+      if(gid){
+        var found=PLANNING_GUIDES.find(function(g){return g.id===gid;});
+        if(found) selectedGuideId=found.id;
+      }
+      var sParam=params.get('school'), cParam=params.get('calendar');
+      if(sParam!==null) schedFilterSchool=sParam;
+      if(cParam!==null) schedFilterCalendar=cParam;
+
+      // Resolve the starting date ONCE per schedule-mode entry. If the URL omits the `day`
+      // parameter, default to today (user's local date); otherwise honor the URL day. After
+      // this first pass the date is owned by the nav controls, so we don't re-read it on the
+      // re-renders triggered by Day/Week/Month or prev/next.
+      if(!_schedDateInit){
+        var vParam=params.get('view');
+        if(vParam==='week'||vParam==='month'||vParam==='day') viewMode=vParam;
+        var dayParam=params.get('day');
+        if(dayParam){
+          var dp=String(dayParam).split('-');
+          if(dp.length===3){
+            var dy=parseInt(dp[0]), dm=parseInt(dp[1])-1, dd=parseInt(dp[2]);
+            if(!isNaN(dy)&&!isNaN(dm)&&!isNaN(dd)){ viewYear=dy; viewMonth=dm; viewDay=dd; }
+          }
+        } else {
+          var _today=new Date();
+          viewYear=_today.getFullYear(); viewMonth=_today.getMonth(); viewDay=_today.getDate();
+        }
+        _schedDateInit=true;
+      }
+    }catch(e){}
+
+    var selGuide=selectedGuideId?PLANNING_GUIDES.find(function(g){return g.id===selectedGuideId;}):null;
+
+    // Keep the Day/Week/Month toggle + date navigation in sync (matrix supports all three views).
+    // Runs after the date is resolved so it reflects today's default on first entry.
+    $('#btn-day,#btn-week,#btn-month').removeClass('active');
+    $('#btn-'+viewMode).addClass('active');
+    if(viewMode==='week'){ $('#date-label').text(weekRangeLabel()); $('#today-badge').removeClass('active'); }
+    else if(viewMode==='month'){ $('#date-label').text(monthRangeLabel()); $('#today-badge').removeClass('active'); }
+    else {
+      $('#date-label').text(fmtD(getCurDate()));
+      var _now=new Date();
+      $('#today-badge').toggleClass('active', viewYear===_now.getFullYear()&&viewMonth===_now.getMonth()&&viewDay===_now.getDate());
+    }
+
+    // Drop any URL filter values that don't belong to the selected guide, then re-sync the URL
+    schedValidateFilters(selGuide);
+    renderSchedGuideList();
+    populateSchedFilters(selGuide);
+    renderSchedulePanel(selGuide);
+    schedUpdateURL(true); // replaceState: normalize the URL without adding history noise
   }
 
 
@@ -4648,104 +5410,111 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(dayKey) updateCalendarCellHours($td,dateKey,dayKey);
     }
 
-    function updateCalendarCellHours($td,dateKey,dayKey){
-      var $hrs=$td.find('.cal-hours');
-      if(!$hrs.length) return;
-      var abWeek=$td.closest('tr').attr('data-ab-week')||'';
-      var calOrigIdx=$td.closest('tr').attr('data-cal-orig-idx');
-      calOrigIdx=(calOrigIdx!==undefined&&calOrigIdx!==null&&calOrigIdx!=='') ? parseInt(calOrigIdx) : null;
-      var _gd=guideDetails[String(g.id)]||{};
-      var _slots=_gd.staffingHoursSlots||{};
-      var _baseSH=_gd.staffingHours||{};
-      var _siteRows=_gd.siteRows||[];
-      var _roles=getRoles(g.id);
-      var _wkPart=abWeek?abWeek:'';
-      var _ciPart=(sopts.byCalendar&&calOrigIdx!==null)?calOrigIdx:null;
-      var _anyOpt=sopts.bySchool||sopts.byCalendar||sopts.alternateWeeks;
-
-      function _slotKeyC(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
-      // Local adjusted-hours helper (calcAdjustedHours lives in the staffing-section scope and
-      // isn't visible here). Computes raw start→end hours minus any non-billable meal break.
-      function _calcAdj(d){
-        if(!d||!d.start||!d.end) return 0;
-        var sp=d.start.split(':'),ep=d.end.split(':');
-        var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0), em=parseInt(ep[0])*60+(parseInt(ep[1])||0);
-        if(em<=sm) return 0;
-        var raw=Math.round((em-sm)/60*100)/100;
-        if(d.brk && d.brk.type==='nonbillable'){
-          var mins=parseInt(d.brk.mins)||0;
-          raw=Math.round((raw-mins/60)*100)/100;
-          if(raw<0) raw=0;
-        }
-        return raw;
+    // Pure adjusted-hours helper (defined once, reused for every cell). Computes raw
+    // start→end hours minus any non-billable meal break.
+    function _calcAdjHrs(d){
+      if(!d||!d.start||!d.end) return 0;
+      var sp=d.start.split(':'),ep=d.end.split(':');
+      var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0), em=parseInt(ep[0])*60+(parseInt(ep[1])||0);
+      if(em<=sm) return 0;
+      var raw=Math.round((em-sm)/60*100)/100;
+      if(d.brk && d.brk.type==='nonbillable'){
+        var mins=parseInt(d.brk.mins)||0;
+        raw=Math.round((raw-mins/60)*100)/100;
+        if(raw<0) raw=0;
       }
-      // Returns the staffing data object {role:{day:{start,end,brk}}} for a school context.
-      // bySchool ON → that school's own slot; bySchool OFF → the shared aggregate slot
-      // (or the base staffingHours table when no option modes are enabled).
+      return raw;
+    }
+    // Build a reusable per-guide calc context: invariants + an O(1) Special-Day lookup map.
+    // Built ONCE per recalc pass and shared across all cells (instead of recomputing per cell).
+    function buildCalcCtx(){
+      var _gd=guideDetails[String(g.id)]||{};
+      var sds=getSpecialDays(g.id);
+      var sdMap={}; sds.forEach(function(s){ sdMap[s.id]=s; });
+      return {
+        slots:_gd.staffingHoursSlots||{},
+        baseSH:_gd.staffingHours||{},
+        siteRows:_gd.siteRows||[],
+        roles:getRoles(g.id),
+        anyOpt:sopts.bySchool||sopts.byCalendar||sopts.alternateWeeks,
+        sdMap:sdMap,
+        schoolIdxs:getSchoolIndices()
+      };
+    }
+
+    function updateCalendarCellHours($td,dateKey,dayKey,ctx){
+      var el=$td[0]||$td;
+      var hrsEl=el.querySelector('.cal-hours');
+      if(!hrsEl) return;
+      ctx=ctx||buildCalcCtx();
+      // Read week/calendar context straight off the cell (no closest('tr') DOM traversal)
+      var abWeek=el.getAttribute('data-ab-week')||'';
+      var calOrigIdxRaw=el.getAttribute('data-cal-orig-idx');
+      var calOrigIdx=(calOrigIdxRaw!==null&&calOrigIdxRaw!=='')?parseInt(calOrigIdxRaw):null;
+      var _slots=ctx.slots, _baseSH=ctx.baseSH, _siteRows=ctx.siteRows, _roles=ctx.roles;
+      var _anyOpt=ctx.anyOpt, _sdMap=ctx.sdMap, schoolIdxs=ctx.schoolIdxs;
+      var _wkPart=abWeek||'';
+      var _ciPart=(sopts.byCalendar&&calOrigIdx!==null)?calOrigIdx:null;
+
+      // Staffing data for a school context — own slot (bySchool on) or shared aggregate slot.
       function _slotFor(si){
         if(!_anyOpt) return _baseSH;
         var siReal=(si==='_none_')?null:si;
-        var key=_slotKeyC(sopts.bySchool?siReal:null, _ciPart, _wkPart);
+        var key=(sopts.bySchool&&siReal!==null?'s'+siReal:'')+(_ciPart!==null?'c'+_ciPart:'')+_wkPart;
         return _slots[key]||{};
       }
-      // Computes one school's total hours for the day: its OWN staff counts (from siteRows)
-      // times the adjusted hours of its resolved column (its Special Day column, or weekday).
+      // One school's total hours: its OWN counts × adjusted hours of its resolved column.
       function schoolDayHours(si, srcKey){
         var slot=_slotFor(si);
         var sRow=(si==='_none_'||si==null)?null:_siteRows[si];
         var t=0;
-        _roles.forEach(function(role){
+        for(var ri=0;ri<_roles.length;ri++){
+          var role=_roles[ri];
           var ck=role.isCoach?'coaches_'+role.key:role.key;
           var cnt;
           if(sRow) cnt=parseInt(sRow[ck])||0;
-          else {
-            // No per-school row (no schools configured): sum counts across all rows, or 0
-            cnt=0; _siteRows.forEach(function(r){ if(r) cnt+=parseInt(r[ck])||0; });
-          }
-          if(!cnt) return;
-          var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
-          var h=_calcAdj(d);
-          if(h&&h>0) t+=h*cnt;
-        });
+          else { cnt=0; for(var j=0;j<_siteRows.length;j++){ if(_siteRows[j]) cnt+=parseInt(_siteRows[j][ck])||0; } }
+          if(!cnt) continue;
+          var rd=slot[role.key]; var d=(rd&&rd[srcKey])||null;
+          if(!d) continue;
+          var h=_calcAdjHrs(d);
+          if(h>0) t+=h*cnt;
+        }
         return t;
       }
 
-      var schoolIdxs=getSchoolIndices();
       var total=0;
-
       if(schoolIdxs[0]==='_none_'){
-        // No schools configured — single implicit context
-        var sdId0=getMarkerSdId(dateKey,'_none_');
-        var sd0=sdId0?getSdById(g.id,sdId0):null;
+        var sd0=_sdMap[getMarkerSdId(dateKey,'_none_')];
         if(!(sd0&&sd0.noHours)){
           var srcKey0=(sd0&&!sd0.noHours)?sd0.id:dayKey;
           total=schoolDayHours('_none_',srcKey0);
         }
       } else {
-        // Per-school: each school uses ITS OWN Special Day column (or weekday), with its OWN
-        // counts. A No Hours Special Day contributes 0 for that school only. This is correct
-        // whether bySchool is on (own slot) or off (shared aggregate slot, own counts).
-        schoolIdxs.forEach(function(si){
-          var sdId=getMarkerSdId(dateKey,si);
-          var sd=sdId?getSdById(g.id,sdId):null;
-          if(sd&&sd.noHours) return; // this school contributes 0 hours
+        for(var si2=0;si2<schoolIdxs.length;si2++){
+          var schoolI=schoolIdxs[si2];
+          var sd=_sdMap[getMarkerSdId(dateKey,schoolI)];
+          if(sd&&sd.noHours) continue; // this school contributes 0 hours
           var srcKey=(sd&&!sd.noHours)?sd.id:dayKey;
-          total+=schoolDayHours(si,srcKey);
-        });
+          total+=schoolDayHours(schoolI,srcKey);
+        }
       }
 
       total=Math.round(total*100)/100;
-      $hrs.text(total>0?(total+' hrs'):'');
+      hrsEl.textContent=total>0?(total+' hrs'):'';
     }
 
     function updateCalendarHours(){
-      $section.find('.cal-day-cell').each(function(){
-        var $td=$(this);
-        var dateKey=$td.attr('data-date-key');
-        var dayKey=$td.attr('data-day-key');
-        if(!dateKey||!dayKey) return;
-        updateCalendarCellHours($td,dateKey,dayKey);
-      });
+      // Build the calc context ONCE and reuse it for every cell in this pass.
+      var ctx=buildCalcCtx();
+      var cells=$section[0]?$section[0].querySelectorAll('.cal-day-cell'):[];
+      for(var i=0;i<cells.length;i++){
+        var c=cells[i];
+        var dateKey=c.getAttribute('data-date-key');
+        var dayKey=c.getAttribute('data-day-key');
+        if(!dateKey||!dayKey) continue;
+        updateCalendarCellHours(c,dateKey,dayKey,ctx);
+      }
     }
 
     // Build one calendar block per valid calendarRow
@@ -4828,7 +5597,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
           var _dayKeyMap=['mon','tue','wed','thu','fri','sat','sun'];
           var _dayKey=_dayKeyMap[di];
-          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey}).css({
+          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx}).css({
             border:BDR,padding:'3px 4px',textAlign:'left',verticalAlign:'top',
             height:'40px',minWidth:'66px',position:'relative',
             background:cellBg,
@@ -5448,6 +6217,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       return $f;
     }
+
+    // ── HubSpot Deal (full-width, appears before the District / Price per Hour row) ──
+    var $hubspotField=$('<div style="grid-column:1 / -1;">');
+    $hubspotField.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text('HubSpot Deal'));
+    var _savedHubspot=getGuideDetail(g.id).hubspotDeal||'';
+    var $hubspotInp=$('<input type="text" class="form-control form-control-sm" placeholder="Enter HubSpot deal…" style="font-size:12px;max-width:360px;">').val(_savedHubspot);
+    $hubspotInp.on('input',function(){ setGuideDetail(g.id,'hubspotDeal',$(this).val()); });
+    $hubspotField.append($hubspotInp);
+    $cardBody.append($hubspotField);
 
     $distField.append(buildDistrictField());
     $cardBody.append($distField);
@@ -6264,37 +7042,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // 3. Sync Staffing Hours — scope to $sfSec to avoid full-panel DOM scan
       var $sfSec=$('#staffing-section-'+g.id);
       if($sfSec.length){
-        _roles.forEach(function(role){
-          var ck=role.isCoach?'coaches_'+role.key:role.key;
-          var val=t[ck]||'';
-          $sfSec.find('.count-cell[data-role="'+role.key+'"],.count-cell-u[data-role="'+role.key+'"]').text(val);
-        });
+        var sfEl=$sfSec[0];
+        // Single pass: set every count cell from the tallied totals
+        var countCells=sfEl.querySelectorAll('.count-cell[data-role],.count-cell-u[data-role]');
+        for(var ci=0;ci<countCells.length;ci++){
+          var cc=countCells[ci]; var rk=cc.getAttribute('data-role');
+          var role0=null; for(var ri0=0;ri0<_roles.length;ri0++){ if(_roles[ri0].key===rk){ role0=_roles[ri0]; break; } }
+          if(!role0) continue;
+          var ck0=role0.isCoach?'coaches_'+role0.key:role0.key;
+          cc.textContent=t[ck0]||'';
+        }
 
-        // 4. Recalc total-hrs cells — build hrs lookup first to avoid per-cell jQuery finds
-        _roles.forEach(function(role){
-          var ck=role.isCoach?'coaches_'+role.key:role.key;
-          var cnt=t[ck]||0;
-          // Collect hours values once per role
-          var hrsMap={};
-          $sfSec.find('.hrs-cell[data-role="'+role.key+'"],.hrs-cell-u[data-role="'+role.key+'"]').each(function(){
-            hrsMap[$(this).attr('data-day')]=parseFloat($(this).text())||0;
-          });
-          $sfSec.find('.total-hrs-cell[data-role="'+role.key+'"],.total-hrs-cell-u[data-role="'+role.key+'"]').each(function(){
-            var dk=$(this).attr('data-day');
-            var hVal=hrsMap[dk]||0;
-            $(this).text(hVal&&cnt?(Math.round(hVal*cnt*100)/100):'');
-          });
-        });
+        // 4. Recalc total-hrs cells. One pass to read all hrs values into a {role|day} map,
+        //    one pass to write all total-hrs cells — instead of 2 scans per role.
+        var hrsMap={};
+        var hrsCells=sfEl.querySelectorAll('.hrs-cell[data-role],.hrs-cell-u[data-role]');
+        for(var hi=0;hi<hrsCells.length;hi++){
+          var hc=hrsCells[hi];
+          hrsMap[hc.getAttribute('data-role')+'|'+hc.getAttribute('data-day')]=parseFloat(hc.textContent)||0;
+        }
+        var countByRole={}; _roles.forEach(function(role){ countByRole[role.key]=t[role.isCoach?'coaches_'+role.key:role.key]||0; });
+        var totCells=sfEl.querySelectorAll('.total-hrs-cell[data-role],.total-hrs-cell-u[data-role]');
+        for(var ti=0;ti<totCells.length;ti++){
+          var tc=totCells[ti]; var trk=tc.getAttribute('data-role');
+          var hVal=hrsMap[trk+'|'+tc.getAttribute('data-day')]||0;
+          var cnt2=countByRole[trk]||0;
+          tc.textContent=(hVal&&cnt2)?(Math.round(hVal*cnt2*100)/100):'';
+        }
 
-        // 5. Show/hide conditional roles
-        _roles.forEach(function(role){
-          if(!role.isCoach){
-            var cnt=t[role.key]||0;
-            $sfSec.find('tr[data-role-group="'+role.key+'"]').toggle(cnt>0);
-          }
-        });
+        // (Role rows stay always-visible/editable regardless of count — no show/hide here.)
 
-        // 6. Debounce the recalcAll cascade (footer totals + calendar hours)
+        // 5. Debounce the recalcAll cascade (footer totals + calendar hours)
         if(_updateTotalRafId) cancelAnimationFrame(_updateTotalRafId);
         _updateTotalRafId=requestAnimationFrame(function(){
           _updateTotalRafId=null;
@@ -7363,38 +8141,47 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Show/hide view controls — hidden in people mode
     $('.view-toggle,.date-nav').toggle(m!=='people');
     $('#summary-bar').toggle(m!=='people');
-    // Hide people panel when leaving people mode; restore timeline when entering schedule/avail
+    // Hide people panel when leaving people mode
     if(m!=='people'){
       $('#people-panel').hide().css('display','none');
-      // Only clear selectedPersonId when going to schedule/availability (not just planning)
-      if(m!=='planning') selectedPersonId = null;
+      if(m!=='planning'&&m!=='schedule') selectedPersonId = null;
     }
+    // Planning panel hidden outside planning mode
     if(m!=='planning'){
       $('#planning-panel').hide().css('display','none');
-      // Only clear selectedGuideId when going to schedule/availability (not just staff)
-      if(m!=='people') selectedGuideId = null;
     }
-    if(m!=='people'&&m!=='planning'){
-      // Ensure timeline-area is visible so render() can populate it
+    // Schedule panel hidden outside schedule mode
+    if(m!=='schedule'){
+      $('#schedule-panel').hide().css('display','none');
+      _schedDateInit=false; // re-resolve the starting date (URL day / today) on next entry
+    }
+    // selectedGuideId drives BOTH Planning and Schedule modes — only clear it when
+    // switching to a guide-agnostic mode (People or Availability).
+    if(m==='people'||m==='availability') selectedGuideId = null;
+
+    if(m==='availability'){
+      // Availability still uses the staff timeline
+      $('#timeline-area').show();
+      $('#timeline-header,#grid-body').show();
+    } else if(m!=='people'&&m!=='planning'&&m!=='schedule'){
       $('#timeline-area').show();
       $('#timeline-header,#grid-body').show();
     }
-    // Show/hide school+discipline filters and overlay checkbox
-    $('.filter-item').toggle(m==='schedule');
-    syncOverlayCheckVisibility();
-    $('#filter-reset').toggle(m==='schedule' && !!(filterSchool||filterProg));
-    if(m==='availability'){
-      filterSchool=''; filterProg='';
-      $('#filter-school').val(''); $('#filter-prog').val('');
-    }
+    // Filter bar: legacy School/Discipline filters only in availability's old path is gone;
+    // Schedule mode shows the guide-driven Calendars/Schools filters instead.
+    $('#filter-school').closest('.filter-item').hide();
+    $('#filter-prog').closest('.filter-item').hide();
+    updateSchedFilterVisibility(); // schedule filters only when a guide is selected
+    $('#filter-reset').toggle(m==='schedule' && !!selectedGuideId && (schedFilterSchool!==''||schedFilterCalendar!==''));
+    availOverlay=false;
     // Remove week container so it rebuilds cleanly for the new mode
     $('#week-container').remove();
     // Empty the blocks layer so no stale schedule/avail blocks linger
     $('#blocks-layer').empty();
-    // Immediately show/hide summary bar
-    $('#summary-bar').toggle(m === 'schedule');
-    // Push a history entry for this mode change (after state is set, before render)
-    updateURL(false);
+    // Summary bar not used in the guide-driven schedule mode
+    $('#summary-bar').toggle(false);
+    // Schedule mode owns its own URL sync (planning_guide / school / calendar)
+    if(m!=='schedule') updateURL(false);
     render(false);
   }
 
