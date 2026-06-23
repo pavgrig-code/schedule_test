@@ -2938,6 +2938,66 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // ══════════════════════════════════════════════════════════════════════════
   var scheduleAssignments = {}; // shiftKey -> staffId
 
+  // ── Schedule conflict detection ──────────────────────────────────────────────
+  // Registry of the shifts currently rendered in the Schedule matrix (rebuilt each full
+  // render). Each entry holds the shift's date + decimal start/end + the element hosting its
+  // staff name. A conflict = the SAME assigned staff on the SAME date with OVERLAPPING time
+  // (touching endpoints don't overlap, matching the app's Math.max(starts) < Math.min(ends)).
+  // Only the staff NAME turns red (#E24B4A); avatar, block size/position are untouched.
+  var _shiftRegistry = []; // { shiftKey, dateStr, start, end, $host }
+
+  // Persistent per-shift details (NOT cleared each render) so the staff-search dropdown can show a
+  // candidate's OTHER overlapping assignments — including shifts in a different Planning Guide or a
+  // view that isn't currently on screen. Assignments are in-session only, so any assigned shift was
+  // rendered at some point and its details captured here. shiftKey -> details.
+  var _assignmentDetails = {}; // shiftKey -> { dateStr, start, end, schoolName, calendarName, roleLabel, num, guideId, guideName }
+
+  function _recomputeConflicts(){
+    var byStaff = {};
+    _shiftRegistry.forEach(function(s){
+      var sid = scheduleAssignments[s.shiftKey];
+      if(sid==null) return;
+      (byStaff[sid] = byStaff[sid] || []).push(s);
+    });
+    var conflict = {};
+    Object.keys(byStaff).forEach(function(sid){
+      var a = byStaff[sid];
+      for(var i=0;i<a.length;i++){
+        for(var j=i+1;j<a.length;j++){
+          if(a[i].dateStr===a[j].dateStr && a[i].start!=null && a[i].end!=null && a[j].start!=null && a[j].end!=null
+             && Math.max(a[i].start,a[j].start) < Math.min(a[i].end,a[j].end)){
+            conflict[a[i].shiftKey]=true; conflict[a[j].shiftKey]=true;
+          }
+        }
+      }
+    });
+    _shiftRegistry.forEach(function(s){
+      var $nm = s.$host.find('.shift-staff-name');
+      if(!$nm.length) return;
+      if(conflict[s.shiftKey]){ $nm.css('color','#E24B4A').attr('title','Schedule conflict'); }
+      else { $nm.css('color','').removeAttr('title'); }
+    });
+  }
+
+  // For the staff-search dropdown: every OTHER shift assigned to staffId that overlaps the current
+  // shift (same date + overlapping time). Returns compact summary strings:
+  //   "9:00 AM – 12:00 PM · School 1 · Calendar 1 · TK/K #1"   (+ " · Planning Guide: X" if a different guide)
+  function _overlapDetailsFor(staffId, curKey, curDet){
+    var out = [];
+    if(!curDet || curDet.start==null || curDet.end==null) return out;
+    Object.keys(scheduleAssignments).forEach(function(k){
+      if(k===curKey) return;
+      if(String(scheduleAssignments[k])!==String(staffId)) return;
+      var d = _assignmentDetails[k]; if(!d) return;
+      if(d.dateStr!==curDet.dateStr || d.start==null || d.end==null) return;
+      if(!(Math.max(d.start,curDet.start) < Math.min(d.end,curDet.end))) return; // strict overlap (touching ≠ overlap)
+      var summary = fmtT(d.start)+' \u2013 '+fmtT(d.end)+' \u00b7 '+(d.schoolName||'—')+' \u00b7 '+(d.calendarName||'—')+' \u00b7 '+(d.roleLabel||'Role')+' #'+d.num;
+      if(d.guideId!==curDet.guideId && d.guideName) summary += ' \u00b7 Planning Guide: '+d.guideName;
+      out.push(summary);
+    });
+    return out;
+  }
+
   function _staffIdxById(sid){ for(var i=0;i<STAFF.length;i++){ if(String(STAFF[i].id)===String(sid)) return i; } return -1; }
 
   // Mini avatar matching Staff mode (round, AVATAR_COLORS, initials, white bold) — sized to fit a shift line.
@@ -2970,11 +3030,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var st = STAFF[idx];
       var $main=$('<span>').attr('title', st.n+' — click to change').css({display:'flex',alignItems:'center',gap:'4px',flex:'1 1 auto',minWidth:'0',cursor:'pointer'});
       $main.append(_shiftAvatar(st.n, idx, compact?14:16));
-      $main.append($('<span>').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
+      $main.append($('<span>').addClass('shift-staff-name').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
       $main.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
       var $rm=$('<span>').attr('title','Remove staff').css({flexShrink:'0',cursor:'pointer',opacity:'.5',fontWeight:'700',lineHeight:'1',padding:'0 1px',fontSize:'12px'}).html('&times;');
       $rm.on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.5');});
-      $rm.on('click',function(e){ e.stopPropagation(); delete scheduleAssignments[shiftKey]; renderShiftAssign($host,$block,shiftKey,placeholderText,compact); });
+      $rm.on('click',function(e){ e.stopPropagation(); delete scheduleAssignments[shiftKey]; renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); });
       $host.append($main).append($rm);
       $host.removeAttr('title');
     } else {
@@ -2996,20 +3056,32 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     var $pop=$('<div>').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #cdd6e0',borderRadius:'6px',
       boxShadow:'0 6px 22px rgba(20,30,50,.16)',maxHeight:'230px',overflowY:'auto',padding:'4px',fontSize:'11px'});
-    function place(){ var r=$inp[0].getBoundingClientRect(); var w=Math.max(190,r.width);
+    function place(){ var r=$inp[0].getBoundingClientRect(); var w=Math.max(250,r.width);
       $pop.css({left:Math.max(6,Math.min(r.left,window.innerWidth-w-6))+'px',top:(r.bottom+4)+'px',width:w+'px'}); }
     var onScroll=function(){ place(); };
     function close(){ $pop.remove(); window.removeEventListener('scroll',onScroll,true); window.removeEventListener('resize',onScroll); }
     function revert(){ close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
-    function commit(s){ scheduleAssignments[shiftKey]=s.id; close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
+    function commit(s){ scheduleAssignments[shiftKey]=s.id; close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); }
     function refresh(){
+      var curKey=shiftKey, curDet=_assignmentDetails[shiftKey];
       var q=$inp.val().trim().toLowerCase(); $pop.empty();
       var list=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
       if(!list.length){ $pop.append($('<div>').css({padding:'8px 10px',color:'#868e96'}).text('No staff found')); return; }
       list.slice(0,12).forEach(function(s){
         var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 8px',borderRadius:'4px',cursor:'pointer'});
         $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 24));
-        $r.append($('<span>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529'}).text(s.n));
+        var $info=$('<div>').css({minWidth:'0',flex:'1 1 auto'});
+        $info.append($('<div>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529',fontWeight:'600',lineHeight:'1.3'}).text(s.n));
+        var ov=_overlapDetailsFor(s.id, curKey, curDet);
+        if(ov.length){
+          ov.slice(0,2).forEach(function(txt){
+            $info.append($('<div>').attr('title',txt).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(txt));
+          });
+          if(ov.length>2){
+            $info.append($('<div>').attr('title',ov.join('\n')).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',marginTop:'1px',fontStyle:'italic'}).text('+'+(ov.length-2)+' more overlapping'));
+          }
+        }
+        $r.append($info);
         $r.on('mouseenter',function(){$(this).css('background','#eef3fb');}).on('mouseleave',function(){$(this).css('background','transparent');});
         $r.on('mousedown',function(e){ e.preventDefault(); commit(s); });
         $pop.append($r);
@@ -3073,6 +3145,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Planning Guide's Calendar + Staffing Hours data. Hours match the Calendar breakdown
   // popup exactly (same resolution: per-school Special Day column, Week A/B, byCalendar).
   function renderScheduleMatrices(g, $panel){
+    _shiftRegistry.length = 0; // rebuilt as shifts are rendered below; conflicts recomputed at the end
     var det = getGuideDetail(g.id);
     var sopts = det.staffingOpts || {alternateWeeks:false,bySchool:false,byCalendar:false};
     var sfSlots = det.staffingHoursSlots || {};
@@ -3214,9 +3287,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         } else if(!datesInRange.length){
           $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('This calendar has no days in the selected '+viewMode+'.'));
         } else if(viewMode==='day'){
-          $mx.append(buildDayGrid(si, origIdx, datesInRange[0], insts));
+          $mx.append(buildDayGrid(si, origIdx, datesInRange[0], insts, sch.name, cal.name));
         } else {
-          $mx.append(buildPeriodTable(si, origIdx, datesInRange, insts));
+          $mx.append(buildPeriodTable(si, origIdx, datesInRange, insts, sch.name, cal.name));
         }
         $wrap.append($mx);
       });
@@ -3226,11 +3299,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $wrap.append($('<div>').css({padding:'18px 8px',fontSize:'12px',color:'var(--tx2)'}).text('No matrices to display for the current filters and time period.'));
     }
     $panel.append($wrap);
+    _recomputeConflicts(); // mark any overlapping same-staff assignments (red name) now the matrix is built
 
     // ── DAY view: roles × 6am–midnight timeline (same look as the Availability day grid) ──
     // Everything (pinned label column + 6am→midnight hours) lives in ONE horizontal-scroll
     // container so the full range is always reachable inside the narrow details panel.
-    function buildDayGrid(si, origIdx, dateObj, insts){
+    function buildDayGrid(si, origIdx, dateObj, insts, schoolName, calendarName){
       var dayRes=resolveDay(si, origIdx, dateObj);
       var byRole={}; dayRes.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
 
@@ -3269,6 +3343,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $line1=$('<div class="block-title">');
             renderShiftAssign($line1, $el, shiftKey, inst.roleLabel+' #'+inst.num, false);
             $el.append($line1);
+            _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(dateObj), start:ds, end:de, $host:$line1});
+            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name};
             var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
             $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
             $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(b.hrsEach)));
@@ -3287,7 +3363,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
 
     // ── WEEK / MONTH view: roles × day columns with read-only time chips ──
-    function buildPeriodTable(si, origIdx, dates, insts){
+    function buildPeriodTable(si, origIdx, dates, insts, schoolName, calendarName){
       var dayCols=dates.map(function(d){
         var r=resolveDay(si, origIdx, d);
         var byRole={}; r.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
@@ -3338,6 +3414,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $line1=$('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',minWidth:'0'});
             renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
             $chip.append($line1);
+            _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(col.date), start:ds, end:de, $host:$line1});
+            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name};
             var $l2=$('<div>');
             $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
             $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(b.hrsEach)));
