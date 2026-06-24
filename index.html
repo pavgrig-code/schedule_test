@@ -39,6 +39,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .mode-toggle{display:flex;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:2px;gap:2px;margin-right:8px;}
 .mode-btn{padding:4px 13px;border-radius:6px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;}
 .mode-btn.active{background:#fff;color:var(--tx);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+/* Subtle separator between the Planning/Schedule group and Staff. Inset hairline — soft, not heavy. */
+.mode-divider{align-self:center;flex:0 0 auto;width:1px;height:15px;background:#c4cacf;border-radius:1px;margin:0 3px;pointer-events:none;}
 /* Availability status switch */
 .avail-switch{display:flex;gap:0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-bottom:13px;}
 .avail-opt{flex:1;padding:7px 4px;border:none;font-size:11px;font-weight:500;cursor:pointer;background:var(--bg3);color:var(--tx2);text-align:center;transition:all .12s;border-right:1px solid var(--bd);}
@@ -143,6 +145,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .sched-block.dragging{cursor:grabbing;z-index:100;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.18);}
 .sched-block.resizing{z-index:100;}
 .sched-block.dimmed{opacity:.2;pointer-events:none;}
+
+/* Schedule-mode shift staff-remove "x": hidden until its shift block (day block or week/month chip)
+   is hovered; nudges to full strength on direct hover. Opacity-only so block size never changes. */
+.shift-x{opacity:0;flex:0 0 auto;transition:opacity .12s ease;}
+.sched-block:hover .shift-x,.sched-chip:hover .shift-x{opacity:.5;}
+.sched-block:hover .shift-x:hover,.sched-chip:hover .shift-x:hover{opacity:1;}
 
 .block-title{font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;position:relative;z-index:2;flex-shrink:0;}
 .block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
@@ -350,6 +358,7 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
     <div class="mode-toggle">
       <button class="mode-btn" id="btn-planning">Planning Guides</button>
       <button class="mode-btn" id="btn-schedule">Schedule</button>
+      <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-people">Staff</button>
       <button class="mode-btn" id="btn-availability">Availability</button>
     </div>
@@ -1196,6 +1205,10 @@ $(function(){
 
   /* ── render ── */
   const AVATAR_COLORS=['#4f83cc','#43a87a','#c2606e','#d08a3a','#6c8f3e','#7b6fd4','#c4623a','#7a8c9e','#b05090','#3a9faa'];
+  // Shared status colors — the single source of truth for Break / Billable / Non-Billable wherever
+  // they appear (Staffing Hours table + dropdown, Schedule shift blocks, tooltips, etc.). Softer
+  // than the old keyword colors but still distinct. Change here to restyle every status app-wide.
+  const STATUS_COLORS={ break:'#f95656', nonbillable:'#5555b5', billable:'#308930' };
   function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
 
   // Build YYYY-MM-DD from the current view date integers — zero ambiguity
@@ -1603,6 +1616,8 @@ $(function(){
 
   function render(replace){
     _invalidateStaffCache();
+    // Non-Schedule modes use these controls in the toolbar; bring them back if Schedule mode borrowed them.
+    if(pageMode!=='schedule') _restoreSchedControlsToToolbar();
     // Planning Guides mode
     if(pageMode==='planning'){
       $('#timeline-area').hide(); $('#summary-bar').hide();
@@ -3007,8 +3022,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       letterSpacing:'.02em',userSelect:'none',background:AVATAR_COLORS[(absIdx<0?0:absIdx)%AVATAR_COLORS.length]}).text(initials(name));
   }
 
-  // Render the shift first-line control into $host: assigned staff (avatar+name+remove) or the
-  // clickable "{Role} #{num}" placeholder. compact=true for the narrow week/month chip.
   // Assigned vs. unassigned shift styling. Changes COLOR/BORDER-STYLE only (border width is kept
   // identical), so block size, line positions, and matrix layout never change. Status markers keep
   // their own green/blue/red. Unassigned = subtle warm bg + dashed muted border + muted label.
@@ -3028,14 +3041,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     _styleShift($block, idx>=0, compact);
     if(idx>=0){
       var st = STAFF[idx];
-      var $main=$('<span>').attr('title', st.n+' — click to change').css({display:'flex',alignItems:'center',gap:'4px',flex:'1 1 auto',minWidth:'0',cursor:'pointer'});
+      var $main=$('<span>').attr('title', st.n+' — click to change').css({display:'flex',alignItems:'center',gap:'4px',flex:'0 1 auto',minWidth:'0',maxWidth:'100%',cursor:'pointer'});
       $main.append(_shiftAvatar(st.n, idx, compact?14:16));
-      $main.append($('<span>').addClass('shift-staff-name').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
-      $main.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
-      var $rm=$('<span>').attr('title','Remove staff').css({flexShrink:'0',cursor:'pointer',opacity:'.5',fontWeight:'700',lineHeight:'1',padding:'0 1px',fontSize:'12px'}).html('&times;');
-      $rm.on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.5');});
+      $main.append($('<span>').addClass('shift-staff-name').css({flex:'0 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
+      var $rm=$('<span>').addClass('shift-x').attr('title','Remove staff').css({cursor:'pointer',fontWeight:'700',lineHeight:'1',padding:'0 1px',fontSize:(compact?'11px':'12px')}).html('&times;');
       $rm.on('click',function(e){ e.stopPropagation(); delete scheduleAssignments[shiftKey]; renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); });
-      $host.append($main).append($rm);
+      $main.append($rm);
+      $main.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
+      $host.append($main);
       $host.removeAttr('title');
     } else {
       var $lbl=$('<span>').attr('title', placeholderText+' — click to assign staff').css({flex:'1 1 auto',minWidth:'0',cursor:'pointer',color:'#9d8a66',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(placeholderText);
@@ -3064,14 +3077,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function commit(s){ scheduleAssignments[shiftKey]=s.id; close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); }
     function refresh(){
       var curKey=shiftKey, curDet=_assignmentDetails[shiftKey];
+      var assignedId=scheduleAssignments[shiftKey];
       var q=$inp.val().trim().toLowerCase(); $pop.empty();
       var list=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
+      // Empty search → float the currently-assigned staff to the top so it's easy to confirm or keep.
+      if(!q && assignedId!=null){
+        var ai=list.findIndex(function(s){ return String(s.id)===String(assignedId); });
+        if(ai>0){ list.unshift(list.splice(ai,1)[0]); }
+      }
       if(!list.length){ $pop.append($('<div>').css({padding:'8px 10px',color:'#868e96'}).text('No staff found')); return; }
       list.slice(0,12).forEach(function(s){
-        var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 8px',borderRadius:'4px',cursor:'pointer'});
+        var isCur=(assignedId!=null && String(s.id)===String(assignedId)); // currently assigned to THIS shift
+        var baseBg=isCur?'#e7f1ff':'transparent', hoverBg=isCur?'#d8e8fd':'#eef3fb';
+        var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 8px',borderRadius:'4px',cursor:'pointer',background:baseBg,boxShadow:isCur?'inset 3px 0 0 #7fb0e8':'none'});
         $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 24));
         var $info=$('<div>').css({minWidth:'0',flex:'1 1 auto'});
-        $info.append($('<div>').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529',fontWeight:'600',lineHeight:'1.3'}).text(s.n));
+        var $nameLine=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',minWidth:'0'});
+        $nameLine.append($('<span>').css({flex:'0 1 auto',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529',fontWeight:'600',lineHeight:'1.3'}).text(s.n));
+        if(isCur){ $nameLine.append($('<span>').attr('title','Currently assigned to this shift').css({flex:'0 0 auto',fontSize:'9px',fontWeight:'600',color:'#3f7fc8'}).text('\u2713 Assigned')); }
+        $info.append($nameLine);
         var ov=_overlapDetailsFor(s.id, curKey, curDet);
         if(ov.length){
           ov.slice(0,2).forEach(function(txt){
@@ -3082,7 +3106,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
         }
         $r.append($info);
-        $r.on('mouseenter',function(){$(this).css('background','#eef3fb');}).on('mouseleave',function(){$(this).css('background','transparent');});
+        $r.on('mouseenter',function(){$(this).css('background',hoverBg);}).on('mouseleave',function(){$(this).css('background',baseBg);});
         $r.on('mousedown',function(e){ e.preventDefault(); commit(s); });
         $pop.append($r);
       });
@@ -3095,11 +3119,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $inp.focus();
   }
 
+  // The Day/Week/Month toggle (.view-toggle) and date navigation (.date-nav) are shared toolbar
+  // controls (Schedule + Availability modes). In Schedule mode they're relocated into the details
+  // panel header; this moves the actual DOM nodes back to the toolbar (preserving their handlers)
+  // for every other mode, and is called before the panel is emptied so they're never destroyed.
+  function _restoreSchedControlsToToolbar(){
+    var $tb=$('.toolbar'); if(!$tb.length) return;
+    var $vt=$('.view-toggle'), $dn=$('.date-nav');
+    if($vt.length && !$vt.parent().is($tb)) $tb.append($vt); // re-append in order → sits after .mode-toggle
+    if($dn.length && !$dn.parent().is($tb)) $tb.append($dn);
+  }
+
   function renderSchedulePanel(g){
     // Tear down any portalled calendar-filter menu before rebuilding
     var prev=$('#filter-calendar-dd').data('cleanup'); if(typeof prev==='function') prev();
+    _restoreSchedControlsToToolbar(); // move borrowed controls out before empty() so they aren't destroyed
     var $panel=$('#schedule-panel').empty();
     if(!g){
+      // No guide selected → instructional state only; hide the borrowed Day/Week/Month + date-nav
+      // controls (they were restored to the toolbar above) and show no matrix or stale data.
+      $('.view-toggle,.date-nav').hide();
       $panel.append($('<div>').css({display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx2)',textAlign:'center',padding:'40px 20px'})
         .append($('<div>').css({fontSize:'14px',fontWeight:'600',marginBottom:'6px',color:'#495057'}).text('No Planning Guide selected'))
         .append($('<div>').css({fontSize:'12px'}).text('Select a Planning Guide from the list to view its schedule.')));
@@ -3120,6 +3159,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     $hdr.append($avatar,$nameWrap);
     $panel.append($hdr);
+
+    // Day/Week/Month controls + date navigation — relocated here, directly under the guide header
+    // and its divider, above the matrix. (DOM nodes are moved, so all existing handlers/behavior and
+    // URL/date/filter sync are preserved.)
+    var $ctrls=$('<div class="sched-controls-row">').css({display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap',rowGap:'8px'});
+    $ctrls.append($('.view-toggle')).append($('.date-nav'));
+    $panel.append($ctrls);
+    $('.view-toggle,.date-nav').show(); // ensure visible (a prior no-guide render may have hidden them)
 
     // Filters — directly under the header. Decide visibility first, attach the row to the DOM,
     // THEN build the dropdowns (the custom calendar dropdown needs its container in the document).
@@ -3162,13 +3209,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function calcAdjH(d){ var raw=calcH(d.start,d.end); if(raw===null)return null; if(d.brk&&d.brk.type==='nonbillable'){ var mins=parseInt(d.brk.mins)||0; var adj=Math.round((raw-mins/60)*100)/100; return adj<0?0:adj; } return raw; }
     // Billable / Non-Billable / Break-alert status for a staffing cell. Mirrors the
     // Staffing Hours break label EXACTLY (same thresholds + colors green/blue/red);
-    // only the wording is expanded for Schedule mode ("Non-Billable (30m)" vs "-30m").
+    // only the wording differs for Schedule mode. The non-billable case shows ONLY the meal-break
+    // length, e.g. "(30m)" — the word "Non-Billable" is intentionally omitted (adjusted hours
+    // already exclude the break). Billable shows "Billable"; Break alert shows "Break".
     // Break alert = a shift longer than 5h with no meal break configured.
     function brkStatus(d){
-      if(d.brk && d.brk.type==='billable')    return {text:'Billable', color:'green'};
-      if(d.brk && d.brk.type==='nonbillable') return {text:'Non-Billable ('+(parseInt(d.brk.mins)||0)+'m)', color:'blue'};
+      if(d.brk && d.brk.type==='billable')    return {text:'Billable', color:STATUS_COLORS.billable};
+      if(d.brk && d.brk.type==='nonbillable') return {text:'('+(parseInt(d.brk.mins)||0)+'m)', color:STATUS_COLORS.nonbillable};
       var raw=calcH(d.start,d.end);
-      if(raw!==null && raw>5)                 return {text:'Break', color:'red'};
+      if(raw!==null && raw>5)                 return {text:'Break', color:STATUS_COLORS.break};
       return null;
     }
     function decH(hhmm){ if(!hhmm)return null; var p=hhmm.split(':'); return parseInt(p[0])+(parseInt(p[1]||'0')/60); }
@@ -3214,7 +3263,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return;
         var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
         var h=calcAdjH(d); if(!h||h<=0) return;
-        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:brkStatus(d)});
+        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:brkStatus(d), brk:d.brk});
       });
       return {noHours:false, sd:sd, blocks:out};
     }
@@ -3242,9 +3291,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $panel.append($wrap); return;
     }
 
-    var periodLbl = viewMode==='week'?weekRangeLabel():(viewMode==='month'?monthRangeLabel():fmtD(getCurDate()));
-    $wrap.append($('<div>').css({fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',color:'#6c757d',marginBottom:'10px'}).text('Schedule Matrix · '+periodLbl));
-
     var anyMatrix=false;
 
     visCals.forEach(function(cal){
@@ -3264,20 +3310,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var key = r.sd ? r.sd.id : '__none__'; sdIdsSeen[key]=(sdIdsSeen[key]||0)+1;
           if(!r.noHours) r.blocks.forEach(function(b){ totalHours += b.hrsEach*b.count; });
         });
-        // Special Day label only when uniform across all in-range visible dates (covers Day view)
-        var sdLabel='', seenKeys=Object.keys(sdIdsSeen);
-        if(inRangeCount>0 && seenKeys.length===1 && seenKeys[0]!=='__none__'){ var _sd=getSdById(g.id, seenKeys[0]); if(_sd) sdLabel=_sd.name; }
+        // Special Day label + color only when uniform across all in-range visible dates (covers Day view)
+        var sdLabel='', sdColor='', seenKeys=Object.keys(sdIdsSeen);
+        if(inRangeCount>0 && seenKeys.length===1 && seenKeys[0]!=='__none__'){ var _sd=getSdById(g.id, seenKeys[0]); if(_sd){ sdLabel=_sd.name; sdColor=_sd.color||'#ffffff'; } }
 
         anyMatrix=true;
         var $mx=$('<div>').css({marginBottom:'22px',border:'1px solid #e3e7ec',borderRadius:'10px',overflow:'hidden',background:'#fff'});
 
-        // Header: School — ● Calendar — {Special Day}  ·  N hours
-        // The color circle belongs to the CALENDAR, so it sits right before the calendar name.
+        // Header: School ●(calendar) Calendar  ●(special day) Special Day   ·  N hours
+        // Each color circle sits immediately before the name it belongs to. The Special Day circle
+        // uses the Special Day's own source-of-truth color (getSdById → sd.color), matched to the
+        // style used for Special Day circles elsewhere (Calendar cells, Special Days dropdown).
         var $h=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'9px 12px',background:'#f7f9fc',borderBottom:'1px solid #e9ecef',flexWrap:'wrap'});
         var $title=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',flexWrap:'wrap',fontSize:'12px',fontWeight:'700',color:'#212529'});
-        $title.append($('<span>').text(sch.name+' —'));
+        $title.append($('<span>').text(sch.name));
         $title.append($('<span>').css({width:'10px',height:'10px',borderRadius:'50%',background:cal.color||'#cfd6df',border:'1px solid rgba(0,0,0,.15)',flexShrink:'0',display:'inline-block'}));
-        $title.append($('<span>').text(cal.name+(sdLabel?(' — '+sdLabel):'')));
+        $title.append($('<span>').text(cal.name));
+        if(sdLabel){
+          $title.append($('<span>').css({width:'10px',height:'10px',borderRadius:'50%',background:sdColor||'#ffffff',border:'1px solid rgb(180,180,180)',flexShrink:'0',display:'inline-block'}));
+          $title.append($('<span>').text(sdLabel));
+        }
+        // Day view has no date column to tint, so mark "today" with a subtle pill when the
+        // selected day is the actual current date (week/month tint today's column instead).
+        if(viewMode==='day' && isTodayDate(getCurDate())){
+          $title.append($('<span>').css({fontSize:'9px',fontWeight:'700',color:'#1565d8',background:'#e3edfb',border:'1px solid #aecbf0',borderRadius:'10px',padding:'1px 7px',letterSpacing:'.03em',flexShrink:'0'}).text('Today'));
+        }
         $h.append($title);
         $h.append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'#0d6efd',marginLeft:'auto'}).text(hrsLabel(totalHours)));
         $mx.append($h);
@@ -3379,11 +3436,27 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $roleThIn.append($('<div>').css({flexShrink:'0',width:'46px',padding:'5px 4px',textAlign:'center',borderLeft:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('#'));
       $roleTh.append($roleThIn); $hr.append($roleTh);
       dayCols.forEach(function(col){
-        var d=col.date, isWknd=(d.getDay()===0||d.getDay()===6);
-        var $th=$('<th>').css({border:'1px solid #e9ecef',padding:'4px 6px',textAlign:'center',minWidth:'74px',background:isWknd?'#eef3fa':'#f7f9fc',color:isWknd?'#3d5a80':'#495057',fontWeight:'600',whiteSpace:'nowrap'});
+        var d=col.date, isWknd=(d.getDay()===0||d.getDay()===6), isTod=isTodayDate(d);
+        var $th=$('<th>').css({border:'1px solid #e9ecef',borderLeft:isTod?'2px solid #7faae2':'1px solid #e9ecef',borderRight:isTod?'2px solid #7faae2':'1px solid #e9ecef',padding:'4px 6px',textAlign:'center',minWidth:'74px',background:isTod?'#e3edfb':(isWknd?'#eef3fa':'#f7f9fc'),color:isWknd?'#3d5a80':'#495057',fontWeight:'600',whiteSpace:'nowrap'});
         $th.append($('<div>').css({fontSize:'9px',textTransform:'uppercase',letterSpacing:'.03em'}).text(DOWS[d.getDay()]));
-        $th.append($('<div>').css({fontSize:'11px',fontWeight:'700'}).text((d.getMonth()+1)+'/'+d.getDate()));
-        if(col.sd) $th.append($('<div>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'70px'}).text(col.sd.name));
+        $th.append($('<div>').css({fontSize:'11px',fontWeight:'700',color:isTod?'#1565d8':''}).text((d.getMonth()+1)+'/'+d.getDate()));
+        if(col.sd){
+          var $sdLbl=$('<div>').css({display:'flex',alignItems:'center',justifyContent:'center',gap:'3px',marginTop:'1px'});
+          $sdLbl.append($('<span>').css({width:'7px',height:'7px',borderRadius:'50%',background:col.sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',flexShrink:'0',display:'inline-block'}));
+          $sdLbl.append($('<span>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'60px'}).text(col.sd.name));
+          $th.append($sdLbl);
+        }
+        // Clickable day header → jump to Day view for this date (guide + valid filters preserved via render/schedUpdateURL)
+        (function(dd,od,hb){
+          $th.css('cursor','pointer').attr('title','Switch to Day view for '+(dd.getMonth()+1)+'/'+dd.getDate());
+          $th.on('mouseenter',function(){$(this).css('background',hb);}).on('mouseleave',function(){$(this).css('background',od);});
+          $th.on('click',function(){
+            viewYear=dd.getFullYear(); viewMonth=dd.getMonth(); viewDay=dd.getDate();
+            viewMode='day';
+            $('#btn-day').addClass('active'); $('#btn-week,#btn-month').removeClass('active');
+            render();
+          });
+        })(d, (isTod?'#e3edfb':(isWknd?'#eef3fa':'#f7f9fc')), (isTod?'#d4e2f8':(isWknd?'#e2eaf6':'#eaeff6')));
         $hr.append($th);
       });
       $thead.append($hr); $tbl.append($thead);
@@ -3401,15 +3474,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $rTdIn.append($roleCell).append($numCell);
         $rTd.append($rTdIn); $tr.append($rTd);
         dayCols.forEach(function(col){
-          var isWknd=(col.date.getDay()===0||col.date.getDay()===6);
-          var $td=$('<td>').css({border:'1px solid #eef1f4',padding:'3px 4px',textAlign:'center',verticalAlign:'middle',background:isWknd?'#fbfcfe':'#fff'});
+          var isWknd=(col.date.getDay()===0||col.date.getDay()===6), isTod=isTodayDate(col.date);
+          var $td=$('<td>').css({border:'1px solid #eef1f4',borderLeft:isTod?'2px solid #7faae2':'1px solid #eef1f4',borderRight:isTod?'2px solid #7faae2':'1px solid #eef1f4',padding:'3px 4px',textAlign:'center',verticalAlign:'middle',background:isTod?'#edf4fc':(isWknd?'#fbfcfe':'#fff')});
           if(sepTop) $td.css('borderTop', sepTop);
           var b=col.byRole[inst.roleKey];
           if(col.noHours){
             $td.append($('<span>').css({fontSize:'8px',color:'#adb5bd'}).text('—'));
           } else if(b){
             var ds=decH(b.start), de=decH(b.end);
-            var $chip=$('<div>').css({display:'inline-block',maxWidth:'172px',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
+            var $chip=$('<div class="sched-chip">').css({display:'inline-block',maxWidth:'172px',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(col.date)+'|'+inst.roleKey+'|'+inst.num;
             var $line1=$('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',minWidth:'0'});
             renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
@@ -3854,13 +3927,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var raw=calcHours(d2.start,d2.end);
         $lbl.off('click');
         if(d2.brk && d2.brk.type==='billable'){
-          $lbl.text('Billable').css('color','green').show();
+          $lbl.text('Billable').css('color',STATUS_COLORS.billable).show();
           $lbl.on('click',openDD);
         } else if(d2.brk && d2.brk.type==='nonbillable'){
-          $lbl.text('-'+(parseInt(d2.brk.mins)||0)+'m').css('color','blue').show();
+          $lbl.text('-'+(parseInt(d2.brk.mins)||0)+'m').css('color',STATUS_COLORS.nonbillable).show();
           $lbl.on('click',openDD);
         } else if(raw!==null && raw>5){
-          $lbl.text('Break').css('color','red').show();
+          $lbl.text('Break').css('color',STATUS_COLORS.break).show();
           $lbl.on('click',openDD);
         } else {
           $lbl.hide();
@@ -3870,7 +3943,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function buildDD(){
         $dd.empty();
         var curType=d2.brk?d2.brk.type:null;
-        var $billRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='billable'?'700':'400',color:curType==='billable'?'#1a7a1a':'#212529'}).text('Billable'+(curType==='billable'?'  \u2713':''));
+        var $billRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='billable'?'700':'400',color:curType==='billable'?STATUS_COLORS.billable:'#212529'}).text('Billable'+(curType==='billable'?'  \u2713':''));
         $billRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
         $billRow.on('click',function(e){
           e.stopPropagation();
@@ -3880,7 +3953,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         });
         $dd.append($billRow);
 
-        var $nonBillRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='nonbillable'?'700':'400',color:curType==='nonbillable'?'#0a4fa0':'#212529'}).text('Non-Billable'+(curType==='nonbillable'?'  \u2713':''));
+        var $nonBillRow=$('<div>').css({padding:'6px 8px',cursor:'pointer',borderRadius:'5px',fontWeight:curType==='nonbillable'?'700':'400',color:curType==='nonbillable'?STATUS_COLORS.nonbillable:'#212529'}).text('Non-Billable'+(curType==='nonbillable'?'  \u2713':''));
         $nonBillRow.on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');});
         $dd.append($nonBillRow);
 
@@ -5776,11 +5849,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
           var _dayKeyMap=['mon','tue','wed','thu','fri','sat','sun'];
           var _dayKey=_dayKeyMap[di];
+          var _isTodayCell=isTodayDate(day); // subtle today highlight = border ring only (no bg change)
           var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx}).css({
             border:BDR,padding:'3px 4px',textAlign:'left',verticalAlign:'top',
             height:'40px',minWidth:'66px',position:'relative',
             background:cellBg,
-            color:inRange?'#212529':'#ccc',fontSize:'9px'
+            color:inRange?'#212529':'#ccc',fontSize:'9px',
+            outline:_isTodayCell?'2px solid #7faae2':'', outlineOffset:_isTodayCell?'-2px':''
           });
 
           // Special day label(s)
