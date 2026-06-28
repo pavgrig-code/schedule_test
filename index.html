@@ -171,7 +171,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .edit-btn:hover{background:rgba(255,255,255,.9);}
 .now-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:15;pointer-events:none;}
 .now-dot{position:absolute;top:-4px;left:-4px;width:9px;height:9px;border-radius:50%;background:var(--red);}
-.tooltip{position:fixed;background:#fff;border:1px solid var(--bd);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--tx);pointer-events:none;z-index:9999;display:none;box-shadow:0 3px 14px rgba(0,0,0,.13);max-width:240px;line-height:1.6;}
+.tooltip{position:fixed;background:#fff;border:1px solid var(--bd);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--tx);pointer-events:none;z-index:9999;display:none;opacity:1;box-shadow:0 3px 14px rgba(0,0,0,.13);max-width:240px;line-height:1.6;}
 .add-btn{position:absolute;bottom:18px;left:18px;z-index:50;display:flex;align-items:center;gap:8px;padding:0 20px 0 14px;height:44px;background:var(--blue);color:#fff;border:none;border-radius:22px;cursor:pointer;box-shadow:0 4px 16px rgba(13,110,253,.35);transition:background .15s,transform .12s;font-size:14px;font-weight:600;white-space:nowrap;}
 .add-btn:hover{background:var(--blue2);transform:translateY(-1px);}
 .add-btn-icon{width:22px;height:22px;background:rgba(255,255,255,.22);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:300;line-height:1;}
@@ -668,7 +668,6 @@ $(function(){
 
   // Lookup helpers — return the object for a given name (or null)
 
-  function buildWeekTable(fs, days, isAvail){ if(isAvail) rAvailWeekView(); else rWeekView(); }
   /* ── event delegation: bound ONCE on the persistent #week-container ──
      Replaces thousands of per-cell / per-chip handlers created every render.
      Both the schedule (#week-table) and availability (#week-avail-table)
@@ -990,9 +989,7 @@ $(function(){
   }; // 'day' or 'week'
   let filterSchool='', filterProg='';
 
-  function todayIso(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-  function isoOffset(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
   const blocks=[
     {id:1,row:1,s:10,   e:13,   lbl:'Baseball',coach:'Aman Khan',      school:'Eastshore Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-06-30',color:0,staffType:'Coach'},
@@ -1086,12 +1083,6 @@ $(function(){
   }
 
   // Returns the row index in the FILTERED staff list for a given absolute STAFF index
-  function filteredRowOf(absRow){
-    var fs=getFilteredStaff();
-    var name=STAFF[absRow]?STAFF[absRow].n:'';
-    for(var i=0;i<fs.length;i++){ if(fs[i].n===name) return i; }
-    return -1;
-  }
 
   // Returns true if this block.coach is in the current filtered staff list
   function coachIsVisible(b){
@@ -1328,14 +1319,6 @@ $(function(){
     }
     return Math.round(total*60)/60;
   }
-  function calcAvailWeekOT(staffName){
-    var days=getViewDays(), totalOT=0;
-    for(var di=0;di<days.length;di++){
-      var h=calcAvailDayHoursOnDate(staffName, days[di]);
-      if(h>8) totalOT+=Math.round((h-8)*60)/60;
-    }
-    return Math.round(totalOT*60)/60;
-  }
   function calcAvailDayHours(staffName){
     return calcAvailDayHoursOnDate(staffName, new Date(viewYear, viewMonth, viewDay));
   }
@@ -1411,7 +1394,6 @@ $(function(){
   }
 
 
-  function getAvailStatusForBlock(n,s,e){var dow=new Date(viewYear,viewMonth,viewDay).getDay(),ds=viewDateStr(),fm=null;for(var i=0;i<availBlocks.length;i++){var a=availBlocks[i];if(a.coach!==n)continue;if(!a.days||a.days.indexOf(dow)===-1)continue;if(a.ds&&ds<a.ds)continue;if(a.de&&ds>a.de)continue;if(!fm)fm=a.status;if(a.s<e&&a.e>s)return a.status;}return fm;}
 
   function buildBlockTooltipHtml(b,hasOv,chipDow){
     var cd=chipDow>=0?chipDow:-1;
@@ -1428,11 +1410,8 @@ $(function(){
     return '<strong style="color:'+st.bd+'">'+st.label+'</strong>'+(b.coach?'<br><strong>'+b.coach+'</strong>':'')+'<br><span style="opacity:.7">'+dl+'</span><br><span style="opacity:.7">'+fmtT(b.s)+' – '+fmtT(b.e)+'</span><br><strong>'+fmtHrs(b.e-b.s)+'</strong><br><span style="opacity:.7">'+dr+'</span>'+(desc?'<br><span style="opacity:.7;font-size:11px;font-style:italic;">'+desc.slice(0,120)+(desc.length>120?'…':'')+'</span>':'');
   }
 
-  function attachTip($el,b,hasOv){var $t=$('#tooltip');$el.on('mouseenter',function(){$t.html(buildBlockTooltipHtml(b,hasOv)).show();}).on('mousemove',function(e){$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();});}
 
-  function attachChipTip($chip,b,chipDate){var $t=$('#tooltip'),dow=chipDate?chipDate.getDay():-1;$chip.on('mouseenter',function(){if(_suppressTooltip)return;$t.html(buildBlockTooltipHtml(b,false,dow)).show();}).on('mousemove',function(e){if(!_suppressTooltip)$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();_suppressTooltip=false;});}
 
-  function attachAvailChipTip($chip,b,chipDate){var $t=$('#tooltip'),dow=chipDate?chipDate.getDay():-1;$chip.on('mouseenter',function(){if(_suppressTooltip)return;$t.html(buildAvailTooltipHtml(b,dow)).show();}).on('mousemove',function(e){if(!_suppressTooltip)$t.css({left:e.clientX+14,top:e.clientY-10});}).on('mouseleave',function(){$t.hide();_suppressTooltip=false;});}
   var _suppressTooltip=false;
   function attachDrag($el,b){$el.on('mousedown',function(e){if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;e.preventDefault();var moved=false,sx=e.clientX,sy=e.clientY,os=b.s,dur=b.e-b.s;
     // Capture element's current visual position — avoids jump from filtered-row mismatch
@@ -1928,7 +1907,6 @@ $(function(){
 
   function showDeletePopup(){ deleteContext='schedule'; editedOnDow=new Date(viewYear,viewMonth,viewDay).getDay(); editedOnDs=viewDateStr(); $('#delete-popup-overlay').addClass('open'); }
 
-  function hideDeletePopup(){ $('#delete-popup-overlay').removeClass('open'); }
 
   function rNow(){$('#blocks-layer .now-line').remove();const now=new Date(),h=now.getHours()+now.getMinutes()/60;if(h<SH||h>SH+NHRS)return;$('#blocks-layer').append($('<div class="now-line">').css('left',(h-SH)*HW).append('<div class="now-dot">'));}
 
@@ -3296,18 +3274,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // length, e.g. "(30m)" — the word "Non-Billable" is intentionally omitted (adjusted hours
     // already exclude the break). Billable shows "Billable"; Break alert shows "Break".
     // Break alert = a shift longer than 5h with no meal break configured.
-    function brkStatus(d){
-      if(d.brk && d.brk.type==='billable')    return {text:'Billable', color:STATUS_COLORS.billable};
-      if(d.brk && d.brk.type==='nonbillable') return {text:'('+(parseInt(d.brk.mins)||0)+'m)', color:STATUS_COLORS.nonbillable};
-      var raw=calcH(d.start,d.end);
-      if(raw!==null && raw>5)                 return {text:'Break', color:STATUS_COLORS.break};
-      return null;
-    }
     function decH(hhmm){ if(!hhmm)return null; var p=hhmm.split(':'); return parseInt(p[0])+(parseInt(p[1]||'0')/60); }
     function slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
     function markerSdId(dateKey, si){ var m=det.calMarkers&&det.calMarkers[dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
     var DOWKEY=['sun','mon','tue','wed','thu','fri','sat'];
-    function hrsLabel(h){ var r=Math.round(h*100)/100; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+(r===1?' hour':' hours'); }
     function hrsShort(h){ var r=Math.round(h*100)/100; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+' hrs'; }
 
     // Visible-period dates (intersected per-calendar with its date range below)
@@ -4659,13 +4629,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var _t={}; ROLES.forEach(function(r){_t[r.countKey]=parseInt(sRow[r.countKey])||0;}); return _t;
         }
 
-        function comboLabel(si,sRow,ci,calRow,wk){
-          var parts=[];
-          if(sopts.bySchool){ var _sN='School '+(si+1); var _sL=(sRow&&(sRow.school||sRow.schoolAbbr))||''; parts.push(_sL?(_sN+'. '+_sL):_sN); }
-          if(sopts.byCalendar){ parts.push((calRow&&calRow.name&&calRow.name.trim())||('Calendar '+(ci+1))); }
-          if(_anyAltWk){ parts.push(wk==='a'?'Week A':'Week B'); }
-          return parts.join(' \u2013 ');
-        }
 
         function buildOneTable(shData,getCountsFn,sfxClass,isBillable){
           ROLES.forEach(function(r){ if(!shData[r.key]) shData[r.key]={}; DAYS.forEach(function(d){ if(!shData[r.key][d.k]) shData[r.key][d.k]={start:'',end:''}; }); });
@@ -4824,7 +4787,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Store {combo, shData, recalc} so the Copy-to action can reach any slot
         var _allRecalcs=[];   // {combo, shData, res}
         var _comboResults=[];
-        var _calOptsRendered={};  // ci -> true once this calendar's Options button is placed
 
         // Per-calendar Options control (Separate by School + Alternate Weeks A/B), keyed by Calendar ID.
         // Rendered once per calendar, next to the calendar name. Each calendar is independent.
@@ -6200,7 +6162,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Build slot key matching the unified slotKey(si, ci, wk) function
       function _slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
-      function _getSlot(si,ci,wk){ return _sfSlots[_slotKey2(si,ci,wk)]||{}; }
 
       var byCal=true;
       var byAB=_tipCo.alternateWeeks;
@@ -7262,6 +7223,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $bilChk.on('change',function(){
             calendarRows[bilRi].billable=$(this).is(':checked');
             _setBilLbl();
+            if($(this).is(':checked')) $('#mealbreak-tip').css('display','none'); // not relevant when Billable
             saveCalendarRows();
             rebuildCalSection();
             rebuildStaffingSection();
@@ -7278,11 +7240,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $tip=$('#mealbreak-tip');
           if(!$tip.length){
             $tip=$('<div class="tooltip" id="mealbreak-tip"></div>')
-              .css({position:'fixed', zIndex:2000000, display:'none', pointerEvents:'none'})
+              .css({position:'fixed', zIndex:2000000, display:'none', opacity:'1', pointerEvents:'none'})
               .appendTo('body');
           }
           var TIP_HTML='Over 5 hrs: 30 min break<br>Over 6 hrs: 60 min break';
           function showTip(){
+            if($bilChk.is(':checked')) return;   // Non-Billable only — meal breaks don't apply when Billable
             $tip.html(TIP_HTML).css('display','block');
             var r=$bilWrap[0].getBoundingClientRect();
             var th=$tip[0].offsetHeight||40;
