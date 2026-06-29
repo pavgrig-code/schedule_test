@@ -3651,11 +3651,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       start:_ssDecH(dd.start), end:_ssDecH(dd.end),
       hrsEach:h, status:billableStatus(raw, isBil), isBillable:isBil,
       calId:(_rdCalId!=null?_rdCalId:null),
-      calName:cr?((cr.name&&cr.name.trim())?cr.name:'(Unnamed calendar)'):'—',
+      calName:cr?((cr.name&&cr.name.trim())?cr.name:('Calendar '+(origIdx+1))):'—',   // blank name → "Calendar N" (origIdx+1 = row position in Program Calendars table), matching the convention used elsewhere
       calColor:cr?(cr.color||'#ffffff'):'#cfcfcf',
       firstDay:cr?cr.firstDay:'', lastDay:cr?cr.lastDay:'',
       roleLabel:role.label,
-      schoolName:(siteRow.school!=null?String(siteRow.school):'')   // live school name — picks up Site Breakdown renames immediately
+      schoolName:(String(siteRow.school||siteRow.schoolAbbr||'').trim()||('School '+(si+1)))   // live name → abbr → "School N" fallback (matches the unnamed-school convention used elsewhere); si+1 = current row position
     };
   }
 
