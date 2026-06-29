@@ -1484,7 +1484,7 @@ $(function(){
   /* ── URL state sync ── */
   function buildURLParams(){
     var params = new URLSearchParams();
-    params.set('section', pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'schedule')));
+    params.set('section', pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'site_schedule')));
     if(pageMode==='people'){
       if(selectedPersonId) params.set('staff_id', selectedPersonId);
     } else if(pageMode==='staff_schedule'){
@@ -1495,7 +1495,7 @@ $(function(){
       if(selectedGuideId) params.set('planning_guide', selectedGuideId);
     } else if(pageMode==='schedule'){
       // Guide-driven schedule: planning_guide + view/date + (school / calendar) filters
-      params.set('section','schedule');
+      params.set('section','site_schedule');
       if(selectedGuideId)          params.set('planning_guide', selectedGuideId);
       params.set('view', viewMode);
       params.set('day',  viewDateStr());
@@ -1597,7 +1597,7 @@ $(function(){
         var _sd=params.get('date');   // open the month containing the passed date and scroll to it
         if(_sd && /^\d{4}-\d{2}-\d{2}$/.test(_sd)){ var _dp=_sd.split('-'); _ssY=parseInt(_dp[0],10); _ssM=parseInt(_dp[1],10)-1; _ssScrollDate=_sd; }
       }
-    } else if(sec==='schedule'){
+    } else if(sec==='schedule'||sec==='site_schedule'){
       pageMode='schedule';
       // Restore guide + Calendars/Schools filters from the URL
       try{ var _sgid=params.get('planning_guide'); selectedGuideId=_sgid||null; }catch(e){ selectedGuideId=null; }
@@ -2522,23 +2522,7 @@ $(function(){
     $('#delete-popup-overlay').addClass('open');
   }
 
-  // WYSIWYG toolbar handler — shared by both schedule and availability editors
-  $(document).on('mousedown', '.wysiwyg-btn', function(e){
-    e.preventDefault(); // prevent blur on contenteditable
-    var cmd = $(this).data('cmd');
-    document.execCommand(cmd, false, null);
-    // Toggle active state for formatting buttons
-    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
-    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
-    $(this).closest('.wysiwyg-toolbar').find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
-  });
-  // Update toolbar active states on cursor move
-  $(document).on('keyup mouseup', '.wysiwyg-body', function(){
-    var $tb = $(this).closest('.wysiwyg-wrap').find('.wysiwyg-toolbar');
-    $tb.find('[data-cmd="bold"]').toggleClass('active', document.queryCommandState('bold'));
-    $tb.find('[data-cmd="italic"]').toggleClass('active', document.queryCommandState('italic'));
-    $tb.find('[data-cmd="underline"]').toggleClass('active', document.queryCommandState('underline'));
-  });
+  // (Duplicate WYSIWYG toolbar handler removed — it double-fired execCommand, toggling bold/italic/underline on then off.)
 
   $('#avail-modal-close').on('click',closeAvailModal);
   $('#avail-modal-overlay').on('click',function(e){if($(e.target).is('#avail-modal-overlay'))closeAvailModal();});
@@ -2831,11 +2815,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(schedFilterSchool && schedFilterCalendar && !_schedCalHasSchool(g, schedFilterCalendar, schedFilterSchool)) schedFilterCalendar='';
   }
 
-  // Build the schedule URL (section=schedule, planning_guide, school, calendar)
+  // Build the schedule URL (section=site_schedule; legacy section=schedule still accepted on load)
   function schedUpdateURL(replace){
     try{
       var p=new URLSearchParams();
-      p.set('section','schedule');
+      p.set('section','site_schedule');
       if(selectedGuideId) p.set('planning_guide',selectedGuideId);
       if(schedFilterSchool!=='')   p.set('school',  schedFilterSchool);
       if(schedFilterCalendar!=='') p.set('calendar',schedFilterCalendar);
@@ -3590,6 +3574,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // 6 AM–midnight grid (SH/NHRS/HW) + Billable/Non-Billable/Meal-break status text.
   var _ssY=null, _ssM=null, _ssRenderKey=null;     // displayed month (year, 0-based month); _ssRenderKey guards redundant rebuilds (e.g. search keystrokes)
   var _ssScrollDate=null;       // 'YYYY-MM-DD' to scroll into view after render (from a day URL param)
+  var _ssNowTimer=null;         // 1-minute ticker that nudges today's current-time line (created once)
+  // Lightweight: only repositions the existing red current-time line in today's row — no matrix re-render.
+  function _ssUpdateNowLine(){
+    if(pageMode!=='staff_schedule') return;                 // only relevant while Staff Schedule is on screen
+    var $line=$('#staff-schedule-panel .now-line');
+    if(!$line.length) return;                               // today isn't in the visible month — nothing to move
+    var nowH=new Date().getHours()+new Date().getMinutes()/60;
+    var nx=(nowH<SH)?0:((nowH>SH+NHRS)?(NHRS*HW):((nowH-SH)*HW));
+    $line.css('left', nx+'px');
+  }
 
   function _ssEnsureMonth(){ if(_ssY==null||_ssM==null){ var t=new Date(); _ssY=t.getFullYear(); _ssM=t.getMonth(); } }
   function _ssMonthLabel(){ return new Date(_ssY,_ssM,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
@@ -3660,7 +3654,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       calName:cr?((cr.name&&cr.name.trim())?cr.name:'(Unnamed calendar)'):'—',
       calColor:cr?(cr.color||'#ffffff'):'#cfcfcf',
       firstDay:cr?cr.firstDay:'', lastDay:cr?cr.lastDay:'',
-      roleLabel:role.label
+      roleLabel:role.label,
+      schoolName:(siteRow.school!=null?String(siteRow.school):'')   // live school name — picks up Site Breakdown renames immediately
     };
   }
 
@@ -3701,7 +3696,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(live.lastDay && d.dateStr>live.lastDay) return;
       var rec={
         dateStr:d.dateStr, start:live.start, end:live.end,
-        schoolName:d.schoolName||'', roleLabel:live.roleLabel||d.roleLabel||'', num:d.num,
+        schoolName:(live.schoolName!=null?live.schoolName:(d.schoolName||'')), roleLabel:live.roleLabel||d.roleLabel||'', num:d.num,
         calId:(live.calId!=null?live.calId:('name:'+(live.calName||'—'))),
         calName:live.calName, calColor:live.calColor,
         hrs:live.hrsEach, status:live.status,
@@ -3736,7 +3731,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $nav.append($navGroup,$mtot);
     $panel.append($nav);
     // Monthly Program Calendar list — filled after the week loop, once month totals are known
-    var $monthCals=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'5px 14px',padding:'0 2px',marginBottom:'12px',flexShrink:'0'});
+    var $monthCals=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'3px 12px',padding:'0 2px',marginBottom:'10px',flexShrink:'0'});
     $panel.append($monthCals);
 
     // Scroll container (vertical: weeks; horizontal: time)
@@ -3777,19 +3772,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Week separator header — label + week total, with a compact per-calendar list beneath
       var wl=MON3[wkStart.getMonth()]+' '+wkStart.getDate()+' – '+MON3[wkEnd.getMonth()]+' '+wkEnd.getDate();
       var $wh=$('<div>').css({position:'sticky',left:'0',zIndex:'5',width:totalW+'px',boxSizing:'border-box',background:'#eef2f7',borderTop:'2px solid #cdd4dc',borderBottom:'1px solid var(--bd2)',padding:'5px 10px'});
-      var $whTop=$('<div>').css({display:'flex',alignItems:'center',gap:'10px',fontSize:'10.5px',fontWeight:'700',color:'#495057'});
-      $whTop.append($('<span>').text('Week of '+wl));
-      if(weekTotal>0) $whTop.append($('<span>').css({color:'var(--blue)'}).text(fmtHrs(weekTotal)));
+      var $whTop=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',fontSize:'10.5px',fontWeight:'700',color:'#495057'});
+      // Week label = date range; combined total appended ONLY when 2+ calendars (a single calendar's own total already shows it)
+      var _wCombined=(calOrder.length>1)?fmtHrs(r2(weekTotal)):null;
+      $whTop.append($('<span>').css({whiteSpace:'nowrap'}).text(wl+(_wCombined?(': '+_wCombined):'')));
       $wh.append($whTop);
       if(calOrder.length){
-        var multi=calOrder.length>1;
-        var $cl=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'4px 10px',marginTop:'4px'});
+        var $cl=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'2px 9px',marginTop:'3px'});
         calOrder.forEach(function(ck){
-          var ca=calAgg[ck];
-          var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',maxWidth:'230px',fontSize:'10px',fontWeight:'600',color:'#495057'});
+          var ca=calAgg[ck]; var _wct=fmtHrs(r2(ca.hrs)); if(!_wct) return;   // skip calendars with no/zero hours
+          var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px',maxWidth:'230px',fontSize:'10px',fontWeight:'600',color:'#495057'});
           $chip.append($('<span>').css({width:'9px',height:'9px',flexShrink:'0',borderRadius:'50%',background:ca.color||'#ffffff',border:'1px solid rgba(0,0,0,.25)'}));
-          $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',ca.name).text(ca.name));
-          if(multi){ var _wct=fmtHrs(r2(ca.hrs)); if(_wct) $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('· '+_wct)); }
+          $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0'}).attr('title',ca.name).text(ca.name));
+          $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('- '+_wct));   // per-calendar week total ALWAYS shown
           $cl.append($chip);
         });
         $wh.append($cl);
@@ -3833,23 +3828,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       wkStart=addDays(wkStart,7);
     }
 
-    var _ssMonName=new Date(_ssY,_ssM,1).toLocaleDateString(undefined,{month:'long'});
-    var _mTot=fmtHrs(r2(monthTotal));   // fmtHrs returns null for 0/invalid — only label real hours
-    if(_mTot){ $mtot.text(_ssMonName+' total: '+_mTot); } else { $mtot.hide(); }
-    // Monthly Program Calendar list — only calendars that have shifts for this staff member this month
+    // Combined month total sits next to the month label ONLY when 2+ calendars (a single calendar's own total already shows it).
+    var _mCombined=fmtHrs(r2(monthTotal));
+    if(monthCalOrder.length>1 && _mCombined){ $mtot.text('Total: '+_mCombined); } else { $mtot.hide(); }
+    // Monthly Program Calendar list — each calendar shows its own month total; only calendars with shifts (and hours) appear
     if(monthCalOrder.length){
-      var _mMulti=monthCalOrder.length>1;
       monthCalOrder.forEach(function(ck){
-        var ca=monthCalAgg[ck];
-        var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',maxWidth:'260px',fontSize:'11px',fontWeight:'600',color:'#495057'});
+        var ca=monthCalAgg[ck]; var _ct=fmtHrs(r2(ca.hrs)); if(!_ct) return;   // skip calendars with no/zero hours
+        var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',maxWidth:'260px',fontSize:'11px',fontWeight:'600',color:'#495057'});
         $chip.append($('<span>').css({width:'10px',height:'10px',flexShrink:'0',borderRadius:'50%',background:ca.color||'#ffffff',border:'1px solid rgba(0,0,0,.25)'}));
-        $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',ca.name).text(ca.name));
-        if(_mMulti){ var _ct=fmtHrs(r2(ca.hrs)); if(_ct) $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('· '+_ct)); }
+        $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0'}).attr('title',ca.name).text(ca.name));
+        $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('- '+_ct));   // per-calendar month total ALWAYS shown
         $monthCals.append($chip);
       });
+      if(!$monthCals.children().length) $monthCals.remove();   // all calendars had zero hours — no placeholder space
     } else { $monthCals.remove(); }   // no calendars this month — drop the container entirely (no reserved blank space)
     $panel.append($scroll);
     if($scrollTarget){ setTimeout(function(){ try{ $scrollTarget[0].scrollIntoView({block:'center'}); }catch(e){} },30); }
+    if(!_ssNowTimer) _ssNowTimer=setInterval(_ssUpdateNowLine, 60000);   // keep today's current-time line moving (1-min tick, position-only)
   }
 
   function rScheduleMode(){
@@ -6441,7 +6437,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043'}).text(headerText));
       if(gObj && gObj.id){
         var _sp=new URLSearchParams();
-        _sp.set('section','schedule'); _sp.set('planning_guide', gObj.id); _sp.set('view','day'); _sp.set('day', isoDate(cellDate));
+        _sp.set('section','site_schedule'); _sp.set('planning_guide', gObj.id); _sp.set('view','day'); _sp.set('day', isoDate(cellDate));
         var _schedHref=window.location.pathname+'?'+_sp.toString();
         var $schedLink=$('<a>').attr({href:_schedHref,title:'Open this day in Schedule mode'}).css({
           display:'inline-flex',alignItems:'center',gap:'3px',marginLeft:'8px',flexShrink:'0',
