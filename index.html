@@ -2674,6 +2674,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 // Carry this calendar's Site Breakdown rows to its NEW Calendar ID
                 var _sbc=guideDetails[nid].siteRowsByCal;
                 if(_sbc && _oldCal!=null && _sbc[String(_oldCal)]!==undefined){ _sbc[String(r.calId)]=_sbc[String(_oldCal)]; delete _sbc[String(_oldCal)]; }
+                // Carry this calendar's Unscheduled Contracted Hours to its NEW Calendar ID
+                var _ubc=guideDetails[nid].unschedByCal;
+                if(_ubc && _oldCal!=null && _ubc[String(_oldCal)]!==undefined){ _ubc[String(r.calId)]=_ubc[String(_oldCal)]; delete _ubc[String(_oldCal)]; }
               });
               (guideDetails[nid].siteRows||[]).forEach(function(r){
                 if(!cdsForSchool(r.school, r.schoolAbbr)) r.schoolId=_genEntityId('sch_'); // regenerate non-CDS ids
@@ -3807,7 +3810,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(s2==null||e2==null||e2<=s2) return;
           var x=Math.max(0,(s2-SH))*HW, w=Math.max((e2-s2)*HW-4,62);
           var tip=sh.calName+'  •  '+_ssFmtT(s2)+' – '+_ssFmtT(e2)+'  •  '+fmtHrs(sh.hrs||0)+(sh.status&&sh.status.text?('  •  '+sh.status.text):'')+(sh.mealMins?('  •  '+sh.mealMins+'m meal break'):'')+(sh.schoolName?('\n'+sh.schoolName):'')+(sh.roleLabel?('  ·  '+sh.roleLabel):'');
-          var $blk=$('<div class="sched-block">').attr('title',tip).css({position:'absolute',left:x+'px',top:'4px',width:w+'px',minHeight:'32px',cursor:'default',overflow:'hidden',padding:'4px 7px',background:'#f7faff',border:'1px solid #d6e0ec',borderLeft:'3px solid '+(sh.status&&sh.status.color?sh.status.color:'#ced4da')});
+          var $blk=$('<div class="sched-block">').attr('title',tip).css({position:'absolute',left:x+'px',top:'4px',width:w+'px',minHeight:'32px',cursor:'default',overflow:'hidden',padding:'4px 7px',background:'#f7faff',border:'1px solid #d6e0ec',borderLeft:'3px solid '+(sh.calColor||'#ced4da')});   // left accent = Program Calendar color (live), not Billable/Non-Billable status
           $blk.append($('<div class="block-title">').css({fontWeight:'700'}).text((sh.schoolName||'')+(sh.roleLabel?' · '+sh.roleLabel:'')));
           var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
           $l2.append($('<span class="block-time">').text(_ssFmtT(s2)+' – '+_ssFmtT(e2)));
@@ -6824,9 +6827,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var rolesTdStyle={border:'1px solid #dee2e6',padding:'2px 3px',verticalAlign:'middle'};
 
     function rebuildAllFromRoles(){
-      // Rebuild Site Breakdown (all per-calendar cards) in place. renderSiteSection lives in this
+      // Rebuild Site Breakdown (all per-calendar cards) in place. renderCalGroupsSection lives in this
       // (showGuideDetail) scope; refreshTable is private to each buildSiteCard and not reachable here.
-      $('#site-section-'+g.id).replaceWith(renderSiteSection());
+      $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection());
       // Rebuild Staffing Hours
       var $newSf=buildStaffingSection(g);
       $('#staffing-section-'+g.id).replaceWith($newSf);
@@ -7227,7 +7230,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 popClose();
                 updateCalHeaders();
                 updateStaffingHeaders();
-                updateSiteHeaders();
+                updateSiteHeaders(); updateUnschedHeaders();
               });
               $grid.append($opt);
             });
@@ -7306,7 +7309,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   saveCalendarRows();
                   updateCalHeaders();
                   updateStaffingHeaders();
-                  updateSiteHeaders();
+                  updateSiteHeaders(); updateUnschedHeaders();
                 })(ri,v);
               })
               .appendTo($cnDd);
@@ -7320,7 +7323,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             saveCalendarRows();
             updateCalHeaders();
             updateStaffingHeaders();
-            updateSiteHeaders();
+            updateSiteHeaders(); updateUnschedHeaders();
             cnRender();
             if($cnDd.children().length){ cnPos(); $cnDd.show(); if(!_cnRaf) _cnRaf=requestAnimationFrame(cnTrack); }
             else cnClose();
@@ -7469,7 +7472,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           refreshCalSetupTable();
           rebuildCalSection();
           rebuildStaffingSection();
-          $('#site-section-'+g.id).replaceWith(renderSiteSection());
+          $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection());
         });})(ri);
         $delTd.append($delBtn);
         $tr.append($delTd);
@@ -7591,14 +7594,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       refreshCalSetupTable();
       rebuildCalSection();
       rebuildStaffingSection();
-      $('#site-section-'+g.id).replaceWith(renderSiteSection());
+      $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection());
     });
 
     $calSetupSection.insertBefore($rolesSdRow);
 
     // ── Site Breakdown section (one card per Program Calendar; rows keyed by Calendar ID) ──
     function buildSiteCard(calId, calLabel, calColor, isPrimary){
-    var $section=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;min-width:100%;">');
+    var $section=$('<div class="card shadow-sm rounded-2 mt-2 site-cal-card" style="overflow:visible;width:fit-content;min-width:100%;border:1px solid #e9ecef;border-left:3px solid '+(calColor||'#ffffff')+';">').attr('data-site-cal',String(calId));
 
     // Section header — "Site Breakdown" + this calendar's color circle and name
     var $secHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;display:flex;align-items:center;flex-wrap:wrap;">');
@@ -7609,7 +7612,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $section.append($secHd);
 
     // Per-calendar rows (keyed by Calendar ID). For the first calendar these ARE the legacy
-    // shared array that Staffing/Schedule currently read (renderSiteSection keeps them aliased).
+    // shared array that Staffing/Schedule currently read (renderCalGroupsSection keeps them aliased).
     var siteRows=siteRowsFor(g, calId);
 
     function saveSiteRows(){
@@ -8117,34 +8120,185 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // starts from today's data). The FIRST calendar's rows are aliased to the legacy shared
     // array, so the still-unwired consumers (Staffing/Schedule/tooltip) keep reading the primary
     // calendar exactly as before — no regression until Stage 2 wires them per-calendar.
-    function renderSiteSection(){
+    function renderCalGroupsSection(){
       ensureGuideEntityIds(g);
       var _det=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
       if(!_det.siteRows) _det.siteRows=[{school:''}];
       if(!_det.siteRowsByCal) _det.siteRowsByCal={};
+      if(!_det.unschedByCal) _det.unschedByCal={};
       var _cr=_det.calendarRows||[];
       var _migrated=_det._siteByCalMigrated; // first pass seeds every existing calendar from today's shared data; calendars added later start blank
       _cr.forEach(function(cr){ var k=String(cr.calId); if(_det.siteRowsByCal[k]) return; _det.siteRowsByCal[k]=_migrated?[{school:''}]:JSON.parse(JSON.stringify(_det.siteRows||[{school:''}])); });
       _det._siteByCalMigrated=true;
       if(_cr.length) _det.siteRows=_det.siteRowsByCal[String(_cr[0].calId)]; // first calendar === legacy shared array
-      var $siteWrap=$('<div>').attr('id','site-section-'+g.id);
-      if(!_cr.length){ $siteWrap.append(buildSiteCard(null,'Site Breakdown','#ffffff',true)); }
-      else { _cr.forEach(function(cr,ci){ $siteWrap.append(buildSiteCard(cr.calId,(cr.name&&cr.name.trim())||('Calendar '+(ci+1)),cr.color||'#ffffff',ci===0)); }); }
-      return $siteWrap;
+      var $wrapG=$('<div>').attr('id','calgroups-section-'+g.id);
+      if(!_cr.length){ $wrapG.append(buildSiteCard(null,'Site Breakdown','#ffffff',true)); return $wrapG; }
+      // One group per Program Calendar (tied by Calendar ID): Site Breakdown then Unallocated Hours, kept close together.
+      // Extra top margin between groups (vs the cards' own mt-2 within a group) so calendar groups are easy to tell apart.
+      _cr.forEach(function(cr,ci){
+        var calLabel=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
+        var calColor=cr.color||'#ffffff';
+        var $grp=$('<div class="cal-group">').attr('data-cal-group',String(cr.calId)).css({marginTop:ci===0?'0':'20px'});
+        $grp.append(buildSiteCard(cr.calId,calLabel,calColor,ci===0));
+        $grp.append(buildUnschedCard(cr.calId,calLabel,calColor));
+        $wrapG.append($grp);
+      });
+      return $wrapG;
     }
 
     // In-place header patch on calendar rename / recolor (mirrors updateStaffingHeaders — cheap).
     function updateSiteHeaders(){
-      var $ss=$('#site-section-'+g.id); if(!$ss.length) return;
+      var $ss=$('#calgroups-section-'+g.id); if(!$ss.length) return;
       var _cr=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calendarRows)||[];
       _cr.forEach(function(cr,ci){
         var lbl=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
         $ss.find('.site-cal-name[data-site-cal="'+cr.calId+'"]').text(lbl);
         $ss.find('.site-cal-circle[data-site-cal="'+cr.calId+'"]').css('background',cr.color||'#ffffff');
+        $ss.find('.site-cal-card[data-site-cal="'+cr.calId+'"]').css('border-left-color',cr.color||'#ffffff');
       });
     }
 
-    $wrap.append(renderSiteSection());
+    // ── Unscheduled Contracted Hours: per-calendar data + UI (keyed by Calendar ID) ──
+    function unschedForCal(calId){
+      var _det=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
+      if(!_det.unschedByCal) _det.unschedByCal={};
+      var k=String(calId);
+      if(!_det.unschedByCal[k]) _det.unschedByCal[k]={unalloc:'',rows:[]};
+      if(!Array.isArray(_det.unschedByCal[k].rows)) _det.unschedByCal[k].rows=[];
+      return _det.unschedByCal[k];
+    }
+    function saveUnsched(){ setGuideDetail(g.id,'unschedByCal',(guideDetails[String(g.id)]||{}).unschedByCal); }
+    function _unNumFilter(v,allowDec){
+      v=String(v==null?'':v);
+      if(allowDec){ v=v.replace(/[^0-9.]/g,''); var p=v.split('.'); if(p.length>2) v=p[0]+'.'+p.slice(1).join(''); }
+      else { v=v.replace(/[^0-9]/g,''); }
+      return v;
+    }
+    function _unFmtTotal(hrsPer,staff){
+      var h=parseFloat(hrsPer), s=parseInt(staff,10);
+      if(!isFinite(h)||!isFinite(s)) return '';
+      var t=h*s;
+      if(!(t>0)) return '';
+      return String(Math.round(t*100)/100);
+    }
+
+    // One Unscheduled Contracted Hours card per Program Calendar (mirrors buildSiteCard's section/header).
+    function buildUnschedCard(calId, calLabel, calColor){
+      var $section=$('<div class="card shadow-sm rounded-2 mt-2 unsched-cal-card" style="overflow:visible;width:fit-content;min-width:100%;border:1px solid #e9ecef;border-left:3px solid '+(calColor||'#ffffff')+';">').attr('data-unsched-cal',String(calId));
+      var data=unschedForCal(calId);
+      // Header: "Unallocated Hours [field] | {circle} {Calendar Name}"
+      // nowrap so the row stays on one line; the calendar name truncates so the field stays visible.
+      var $secHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;display:flex;align-items:center;flex-wrap:nowrap;overflow:hidden;">');
+      // Label + compact Unallocated field (first segment) — fixed, never shrinks
+      var $unallocInp=$('<input type="text" autocomplete="off" inputmode="decimal">').css({
+        width:'50px',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',
+        fontSize:'12px',padding:'2px 6px',outline:'none',boxSizing:'border-box',
+        boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',textAlign:'right'
+      }).val(data.unalloc||'');
+      $unallocInp.on('input',function(){ var f=_unNumFilter(this.value,true); if(f!==this.value) this.value=f; data.unalloc=f; saveUnsched(); });
+      $secHd.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'7px',flexShrink:'0',whiteSpace:'nowrap'})
+        .append($('<span class="fw-bold text-dark" style="font-size:12px;">').text('Unallocated Hours'))
+        .append($unallocInp) );
+      // Calendar segment (divider + circle + name) — shrinks and ellipsizes the name when space is tight
+      $secHd.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',minWidth:'0',flexShrink:'1',overflow:'hidden'})
+        .append($('<span class="unsched-cal-circle">').attr('data-unsched-cal',String(calId)).css({width:'10px',height:'10px',borderRadius:'50%',background:calColor||'#ffffff',border:'1px solid rgb(180,180,180)',flexShrink:'0',display:'inline-block'}))
+        .append($('<span class="unsched-cal-name">').attr('data-unsched-cal',String(calId)).css({fontSize:'12px',fontWeight:'600',color:'#495057',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(calLabel)) );
+      $section.append($secHd);
+
+      var $body=$('<div class="px-0 py-0">');
+
+      // Allocated Hours table — uses the EXACT inline styles from the Site Breakdown table (header, cells, inputs, focus, read-only).
+      // Column widths only: every column except Notes is compact (width:1% + nowrap → shrinks to content); Notes keeps the remaining flexible width.
+      // The allocated table (header + rows) is rendered into this holder ONLY when rows exist.
+      var $tableHolder=$('<div>');
+      $body.append($tableHolder);
+
+      function refreshTable(){
+        $tableHolder.empty();
+        if(!data.rows.length) return;   // no table, no header, no spacing when there are no allocated rows
+        var $scroll=$('<div style="overflow-x:auto;">');
+        var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+        var $thead=$('<thead>'); var $hr=$('<tr>');
+        // [label, compact?] — compact columns shrink to content; Notes keeps the remaining width.
+        [['Date',1],['# of Hrs/Staff',1],['# of Staff',1],['Total, Hrs',1],['Notes',0],['Del',1]].forEach(function(col){
+          var thCss={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
+          if(col[1]) thCss.width='1%';
+          $hr.append($('<th>').css(thCss).text(col[0]));
+        });
+        $thead.append($hr); $tbl.append($thead);
+        var $tbody=$('<tbody>'); $tbl.append($tbody);
+        data.rows.forEach(function(row,ri){
+          var $tr=$('<tr>').css(ri%2===1?{background:'#fafafa'}:{});
+          // Total, Hrs — read-only calculated field (exactly Site Breakdown's calculated total cell + input)
+          var $totInp=$('<input type="text" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'36px',fontWeight:'600',color:'#495057'}).val(_unFmtTotal(row.hrsPer,row.staff));
+          function recalc(){ $totInp.val(_unFmtTotal(data.rows[ri].hrsPer,data.rows[ri].staff)); }
+          // Focus/blur — exactly Site Breakdown's editable-input behavior (white bg + blue focus ring)
+          function applyEditFocus($inp){
+            $inp.on('focus',function(){$(this).css({background:'#fff','border-color':'#0d6efd','boxShadow':'inset 0 1px 2px rgba(0,0,0,.04), 0 0 0 2px rgba(13,110,253,.12)'});})
+                .on('blur',function(){$(this).css({background:'#f7f9fc','border-color':'#dde3ea','boxShadow':'inset 0 1px 2px rgba(0,0,0,.06)'});});
+          }
+          // Date — calendar picker (same #f7f9fc bordered widget as First/Last Day) in an editable (#f2f4f8) cell; compact width
+          var $dateTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'1%',whiteSpace:'nowrap'});
+          var $dp=mkDatePicker(row.date||'',function(v){ data.rows[ri].date=v; saveUnsched(); },{width:'108px'});
+          $dateTd.append($dp);
+          // # of Hrs/Staff (decimals) — exactly Site Breakdown's numeric cell + input; compact width
+          var $hpsTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'1%',whiteSpace:'nowrap'});
+          var $hpsInp=$('<input type="text" autocomplete="off" inputmode="decimal">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.hrsPer||'');
+          applyEditFocus($hpsInp);
+          $hpsInp.on('input',function(){ var f=_unNumFilter(this.value,true); if(f!==this.value) this.value=f; data.rows[ri].hrsPer=f; recalc(); saveUnsched(); });
+          $hpsTd.append($hpsInp);
+          // # of Staff (integer) — exactly Site Breakdown's numeric cell + input; compact width
+          var $stTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'1%',whiteSpace:'nowrap'});
+          var $stInp=$('<input type="text" autocomplete="off" inputmode="numeric">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.staff||'');
+          applyEditFocus($stInp);
+          $stInp.on('input',function(){ var f=_unNumFilter(this.value,false); if(f!==this.value) this.value=f; data.rows[ri].staff=f; recalc(); saveUnsched(); });
+          $stTd.append($stInp);
+          // Total cell (#f0f4f8) holding the read-only input; compact width
+          var $totTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8',width:'1%',whiteSpace:'nowrap'});
+          $totTd.append($totInp);
+          // Notes — exactly Site Breakdown's name cell + input (text variant); FLEXIBLE column (no width:1%) — takes the remaining width
+          var $notesTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',minWidth:'160px'});
+          var $notesInp=$('<input type="text" autocomplete="off">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',outline:'none',padding:'2px 6px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.notes||'');
+          applyEditFocus($notesInp);
+          $notesInp.on('input',function(){ data.rows[ri].notes=this.value; saveUnsched(); });
+          $notesTd.append($notesInp);
+          // Del — exactly Site Breakdown's Del cell + button; compact width
+          var $delBtn=$('<button type="button" title="Delete row">').text('Del').css({background:'#fff1f0',border:'1px solid #ffccc7',borderRadius:'5px',cursor:'pointer',color:'#cf1322',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'3px 8px',whiteSpace:'nowrap',minWidth:'36px'});
+          $delBtn.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});});
+          $delBtn.on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
+          $delBtn.on('click',function(){ data.rows.splice(ri,1); saveUnsched(); refreshTable(); });
+          var $delTd=$('<td>').css({border:'1px solid #dee2e6',padding:'4px 6px',textAlign:'center',verticalAlign:'middle',background:'#fafafa',whiteSpace:'nowrap',width:'1%'}).append($delBtn);
+          $tr.append($dateTd,$hpsTd,$stTd,$totTd,$notesTd,$delTd);
+          $tbody.append($tr);
+        });
+        $scroll.append($tbl); $tableHolder.append($scroll);
+      }
+      refreshTable();
+
+      // + Allocated Hours button (same style as + Add Role / + Add School)
+      var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 12px;">').text('+ Allocated Hours');
+      $addBtn.on('click',function(){ data.rows.push({date:'',hrsPer:'',staff:'',notes:''}); saveUnsched(); refreshTable(); });
+      $body.append($addBtn);
+
+      $section.append($body);
+      return $section;
+    }
+
+    // Build the Unscheduled Contracted Hours area: one card per Program Calendar, keyed by Calendar ID.
+
+    // In-place header patch on calendar rename / recolor / reorder (mirrors updateSiteHeaders).
+    function updateUnschedHeaders(){
+      var $us=$('#calgroups-section-'+g.id); if(!$us.length) return;
+      var _cr=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calendarRows)||[];
+      _cr.forEach(function(cr,ci){
+        var lbl=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
+        $us.find('.unsched-cal-name[data-unsched-cal="'+cr.calId+'"]').text(lbl);
+        $us.find('.unsched-cal-circle[data-unsched-cal="'+cr.calId+'"]').css('background',cr.color||'#ffffff');
+        $us.find('.unsched-cal-card[data-unsched-cal="'+cr.calId+'"]').css('border-left-color',cr.color||'#ffffff');
+      });
+    }
+
+    $wrap.append(renderCalGroupsSection());
     var $staffSection=buildStaffingSection(g);
     var $calSection=buildCalendarSection(g);
     $('#planning-panel').empty().append($wrap,$staffSection,$calSection);
