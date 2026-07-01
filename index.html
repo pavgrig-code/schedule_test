@@ -6645,24 +6645,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var wi=Math.round((toMonday(dateObj).getTime()-toMonday(fd).getTime())/(7*86400000));
       return (wi%2===0)?'a':'b';
     }
-    function dayHours(si, origIdx, cr, dateObj, siteRow, _co, _billable){
-      var dateKey=isoD(dateObj);
-      var dayKey=DOWKEY[dateObj.getDay()];
-      var wk=_co.alternateWeeks?(abWeekFor(cr,dateObj,_co)||'a'):'';
-      var slot=sfSlots[slotKey2(_co.bySchool?si:null, (origIdx!=null?origIdx:null), wk)]||{};
-      var sdId=markerSdId((cr?cr.calId:null), dateKey, si);
-      var sd=sdId?getSdById(g.id, sdId):null;
-      if(sd && sd.noHours) return 0;
-      var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
-      var tot=0;
-      roles.forEach(function(role){
-        var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return;
-        var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
-        var h=adjForBillable(calcH(d.start,d.end),_billable); if(!h||h<=0) return;
-        tot+=h*cnt;
-      });
-      return tot;
-    }
+    // (per-day hours logic is inlined + optimized directly into the per-school loop below)
     function fmtH(h){ var r=Math.round(h*100)/100; if(!isFinite(r)) r=0; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+' hrs'; }
 
     var $container=$('<div>').attr('id','summary-section-'+g.id);
@@ -6687,9 +6670,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var calColor=cr.color||'#cfd6df';
       var schools=(calId!=null)?siteRowsFor(g,calId):(det.siteRows||[]);
 
+      var _calId2=(calId!=null)?calId:null;
+      var _mkPrefix=String(_calId2)+'|';
+      var _cmAll=det.calMarkers||{};
+      var _hasMarks=false; for(var _mkK in _cmAll){ if(_mkK.indexOf(_mkPrefix)===0){ _hasMarks=true; break; } }
+      var _ci2=(origIdx!=null?origIdx:null), _isAB=!!_co.alternateWeeks, _adjCache={};
+      // Memoize adjForBillable(calcH(start,end)) per distinct time span (billable is constant for this calendar).
+      function _adjH(tm){ if(!tm) return 0; var _hk=tm.start+'|'+tm.end; var v=(_hk in _adjCache)?_adjCache[_hk]:(_adjCache[_hk]=adjForBillable(calcH(tm.start,tm.end),_billable)); return (v>0)?v:0; }
       var schoolTotals=schools.map(function(sr,si){
-        var tot=0, d=new Date(fd);
-        while(d<=ld){ tot+=dayHours(si, origIdx, cr, d, sr, _co, _billable); d=addDays(d,1); }
+        // Hoist slot(s) once per school (constant across days unless Week A/B alternates); pre-collect >0-count roles.
+        var _sBase=_isAB?null:(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'')]||{});
+        var _sA=_isAB?(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'a')]||{}):null;
+        var _sB=_isAB?(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'b')]||{}):null;
+        var _active=[]; roles.forEach(function(role){ var c=parseInt(sr[role.countKey])||0; if(c) _active.push({k:role.key,c:c}); });
+        var tot=0;
+        if(!_hasMarks && !_isAB && _active.length){
+          // Fast path (no Special Days, no Week A/B): each weekday recurs identically, so compute
+          // per-weekday hours once and multiply by how many of each weekday fall in [fd, ld] — O(7).
+          var _dowH=[0,0,0,0,0,0,0];
+          for(var _di=0;_di<7;_di++){ var _dk=DOWKEY[_di], _hh=0; for(var _ri=0;_ri<_active.length;_ri++){ var _ar=_active[_ri], _rd=_sBase[_ar.k]; if(_rd){ var _v=_adjH(_rd[_dk]); if(_v>0) _hh+=_v*_ar.c; } } _dowH[_di]=_hh; }
+          var _N=Math.round((ld.getTime()-fd.getTime())/86400000)+1, _base=Math.floor(_N/7), _rem=_N%7, _fdDow=fd.getDay();
+          for(var _j=0;_j<7;_j++){ tot+=_dowH[(_fdDow+_j)%7]*(_base+(_j<_rem?1:0)); }
+        } else {
+          // General path (Special Day markers and/or Week A/B): evaluate each day in range.
+          var d=new Date(fd);
+          while(d<=ld){
+            var srcKey=DOWKEY[d.getDay()];
+            var slot=_isAB?(((abWeekFor(cr,d,_co)||'a')==='a')?_sA:_sB):_sBase;
+            if(_hasMarks){
+              var sdId=markerSdId(_calId2, isoD(d), si);
+              if(sdId){ var sd=getSdById(g.id, sdId); if(sd){ if(sd.noHours){ d=addDays(d,1); continue; } srcKey=sd.id; } }
+            }
+            for(var _ri2=0;_ri2<_active.length;_ri2++){ var _ar2=_active[_ri2], _rd2=slot[_ar2.k]; if(!_rd2) continue; var _h2=_adjH(_rd2[srcKey]); if(_h2>0) tot+=_h2*_ar2.c; }
+            d=addDays(d,1);
+          }
+        }
         return { num:si+1, name:(sr.school||sr.schoolAbbr||'').trim()||('School '+(si+1)), hours:(isFinite(tot)?tot:0) };
       });
       var calTotal=schoolTotals.reduce(function(a,s){return a+s.hours;},0);
