@@ -3230,7 +3230,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Break alert = a shift longer than 5h with no meal break configured.
     function decH(hhmm){ if(!hhmm)return null; var p=hhmm.split(':'); return parseInt(p[0])+(parseInt(p[1]||'0')/60); }
     function slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
-    function markerSdId(dateKey, si){ var m=det.calMarkers&&det.calMarkers[dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
+    function markerSdId(calId, dateKey, si){ var m=det.calMarkers&&det.calMarkers[String(calId)+'|'+dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
     var DOWKEY=['sun','mon','tue','wed','thu','fri','sat'];
     function hrsShort(h){ var r=Math.round(h*100)/100; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+' hrs'; }
 
@@ -3265,7 +3265,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var ci=(origIdx!=null)?origIdx:null;
       var wk=byAB?(abWeek||'a'):'';
       var slot = anyOpt ? (sfSlots[slotKey2(_rdCo.bySchool?si:null, ci, wk)]||{}) : (det.staffingHours||{});
-      var sdId=markerSdId(dateKey, si);
+      var sdId=markerSdId(_rdCalId, dateKey, si);
       var sd=sdId?getSdById(g.id, sdId):null;
       if(sd && sd.noHours) return {noHours:true, sd:sd, blocks:[]};
       var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
@@ -3632,7 +3632,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function toMonday(d){ var dow=d.getDay(); return addDays(d, dow===0?-6:1-dow); }
     function calcH(s,e){ if(!s||!e)return null; var sp=s.split(':'),ep=e.split(':'); var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0),em=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em>sm?(Math.round((em-sm)/60*100)/100):null; }
     function slotKey2(_si,ci,wk){ return (_si!==null?'s'+_si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
-    function markerSdId(dateKey,_si){ var m=det.calMarkers&&det.calMarkers[dateKey]; return (m&&m.schools)?(m.schools[String(_si)]||null):null; }
+    function markerSdId(calId, dateKey,_si){ var m=det.calMarkers&&det.calMarkers[String(calId)+'|'+dateKey]; return (m&&m.schools)?(m.schools[String(_si)]||null):null; }
     function abWeekFor(oIdx,dObj){
       var cr=calRows[oIdx];
       var _co=(cr&&cr.calId!=null)?calStaffOpts(g,cr.calId):null;
@@ -3652,7 +3652,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var ci=(origIdx!=null)?origIdx:null;
     var wk=_rdCo.alternateWeeks?(abWeek||'a'):'';
     var slot=sfSlots[slotKey2(_rdCo.bySchool?si:null, ci, wk)]||{};
-    var sdId=markerSdId(dateKey, si);
+    var sdId=markerSdId(_rdCalId, dateKey, si);
     var sd=sdId?getSdById(guideId, sdId):null;
     if(sd && sd.noHours) return null;                        // Special Day with no hours
     var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
@@ -5560,7 +5560,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(!guideDetails[String(g.id)].calMarkers) guideDetails[String(g.id)].calMarkers={};
     var markers=guideDetails[String(g.id)].calMarkers;
 
-    // Migrate markers to the per-school shape: markers[dateKey] = {schools:{schoolIdxStr: sdId}}
+    // Migrate markers to the per-school shape: markers[calId+'|'+dateKey] = {schools:{schoolIdxStr: sdId}}
     // Old shapes handled: {type:'holiday'|'noSchool'|'minDay'} and {sdId:'sd-xxx'} (single, all-schools)
     (function(){
       var sds=getSpecialDays(g.id);
@@ -5585,14 +5585,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // Returns the sdId applied to a given school index (or '_none_' when there are no schools) for a date.
     // schoolIdx may be a number or the string '_none_'.
-    function getMarkerSdId(dateKey, schoolIdx){
-      var m=markers[dateKey];
+    function getMarkerSdId(calId, dateKey, schoolIdx){
+      var m=markers[String(calId)+'|'+dateKey];
       if(!m||!m.schools) return null;
       return m.schools[String(schoolIdx)]||null;
     }
     // Returns {sdId: count} of all distinct Special Days applied across schools for a date.
-    function getMarkerSdCounts(dateKey){
-      var m=markers[dateKey];
+    function getMarkerSdCounts(calId, dateKey){
+      var m=markers[String(calId)+'|'+dateKey];
       var counts={};
       if(!m||!m.schools) return counts;
       Object.keys(m.schools).forEach(function(k){
@@ -5731,6 +5731,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _amCalIdxRaw=($td&&$td.attr)?$td.attr('data-cal-orig-idx'):null;
       var _amCalIdx=(_amCalIdxRaw!=null&&_amCalIdxRaw!=='')?parseInt(_amCalIdxRaw):null;
       var _amCalRow=(_amCalIdx!=null)?(guideDetails[String(g.id)].calendarRows||[])[_amCalIdx]:null;
+      var _amCalId=(_amCalRow&&_amCalRow.calId!=null)?_amCalRow.calId:null;
       var _siteRowsNow=(_amCalRow&&_amCalRow.calId!=null)?siteRowsFor(g,_amCalRow.calId):((guideDetails[String(g.id)].siteRows)||[]);
       var schoolIdxs=getSchoolIndices(_amCalIdx);   // [0,1,2,…] or ['_none_'] for THIS calendar
       var showSchoolList=_siteRowsNow.length>1;
@@ -5738,7 +5739,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ── Staged draft of per-school Special Day selections (committed only on Apply) ──
       // _draft[schoolIdxStr] = sdId | undefined
       var _draft={};
-      schoolIdxs.forEach(function(si){ var v=getMarkerSdId(dateKey,si); if(v) _draft[String(si)]=v; });
+      schoolIdxs.forEach(function(si){ var v=getMarkerSdId(_amCalId, dateKey,si); if(v) _draft[String(si)]=v; });
       var _dirty=false;
 
       // Live registries for in-place updates
@@ -5865,10 +5866,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $applyBtn.on('click',function(e){
         e.stopPropagation();
         // Commit the draft to the real markers
-        if(!markers[dateKey]) markers[dateKey]={schools:{}};
-        markers[dateKey].schools={};
-        Object.keys(_draft).forEach(function(k){ if(_draft[k]) markers[dateKey].schools[k]=_draft[k]; });
-        if(!Object.keys(markers[dateKey].schools).length) delete markers[dateKey];
+        var _mk=String(_amCalId)+'|'+dateKey;
+        if(!markers[_mk]) markers[_mk]={schools:{}};
+        markers[_mk].schools={};
+        Object.keys(_draft).forEach(function(k){ if(_draft[k]) markers[_mk].schools[k]=_draft[k]; });
+        if(!Object.keys(markers[_mk].schools).length) delete markers[_mk];
         refreshCell($td,dateKey,inRange,false);
         refreshSummary(g);  // Special Day markers change staffing hours → keep Summary in sync
         closeCtx();
@@ -5914,7 +5916,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function refreshCell($td,dateKey,inRange,isWknd){
       var _rcCalIdxRaw=($td&&$td.attr)?$td.attr('data-cal-orig-idx'):null;
       var _rcCalIdx=(_rcCalIdxRaw!=null&&_rcCalIdxRaw!=='')?parseInt(_rcCalIdxRaw):null;
-      var sdCounts=getMarkerSdCounts(dateKey);
+      var _rcCalRow=(_rcCalIdx!=null)?(guideDetails[String(g.id)].calendarRows||[])[_rcCalIdx]:null;
+      var _rcCalId=(_rcCalRow&&_rcCalRow.calId!=null)?_rcCalRow.calId:null;
+      var sdCounts=getMarkerSdCounts(_rcCalId, dateKey);
       var sdIds=Object.keys(sdCounts);
       var baseBg=inRange?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
 
@@ -6020,6 +6024,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _ciPart=(calOrigIdx!==null)?calOrigIdx:null;
       // Per-calendar Site Breakdown: this cell sums over ITS OWN calendar's schools/counts.
       var _ccCalRow=(calOrigIdx!=null)?(ctx.calRows||[])[calOrigIdx]:null;
+      var _ccCalId=(_ccCalRow&&_ccCalRow.calId!=null)?_ccCalRow.calId:null;
       var _cellBillable=calRowBillable(_ccCalRow);
       var _ccCo=(_ccCalRow&&_ccCalRow.calId!=null)?calStaffOpts(g,_ccCalRow.calId):{bySchool:false,alternateWeeks:false};
       if(_ccCalRow && _ccCalRow.calId!=null){
@@ -6056,7 +6061,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       var total=0;
       if(schoolIdxs[0]==='_none_'){
-        var sd0=_sdMap[getMarkerSdId(dateKey,'_none_')];
+        var sd0=_sdMap[getMarkerSdId(_ccCalId, dateKey,'_none_')];
         if(!(sd0&&sd0.noHours)){
           var srcKey0=(sd0&&!sd0.noHours)?sd0.id:dayKey;
           total=schoolDayHours('_none_',srcKey0);
@@ -6064,7 +6069,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       } else {
         for(var si2=0;si2<schoolIdxs.length;si2++){
           var schoolI=schoolIdxs[si2];
-          var sd=_sdMap[getMarkerSdId(dateKey,schoolI)];
+          var sd=_sdMap[getMarkerSdId(_ccCalId, dateKey,schoolI)];
           if(sd&&sd.noHours) continue; // this school contributes 0 hours
           var srcKey=(sd&&!sd.noHours)?sd.id:dayKey;
           total+=schoolDayHours(schoolI,srcKey);
@@ -6156,7 +6161,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var isWknd=di>=5;
           var inRange=day>=fd&&day<=ld;
           var dateKey=isoDate(day);
-          var sdCounts0=getMarkerSdCounts(dateKey);
+          var sdCounts0=getMarkerSdCounts(calRow.calId, dateKey);
           var sdIds0=Object.keys(sdCounts0);
           var baseBg=inRange?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
           // A single Special Day gets the solid whole-cell background ONLY when it applies to
@@ -6206,7 +6211,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $td.css('cursor','pointer');
             $td.attr('data-orig-bg', cellBg);  // used by hideCalTooltip to restore bg
             $td.append($('<div class="cal-hours">').css({fontSize:'11px',fontWeight:'600',color:'#3c4043',lineHeight:'1.2',marginTop:'2px'}));
-            (function(dk, dateKey2, _baseBg2){
+            (function(dk, dateKey2, _baseBg2, _tipCalId2){
               var _thisHasPopup=false;
               var _hoverClass=isWknd?'cal-hovered-wknd':'cal-hovered';
               $td.on('mouseenter',function(){
@@ -6214,7 +6219,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 // Apply hover via CSS class — never touch inline background
                 $td.addClass(_hoverClass);
                 // Always read markers live — recompute the cell's current bg for restore-on-leave
-                var _liveSdCounts=getMarkerSdCounts(dateKey2);
+                var _liveSdCounts=getMarkerSdCounts(_tipCalId2, dateKey2);
                 var _liveSdIds=Object.keys(_liveSdCounts);
                 var _liveSingleSd=(_liveSdIds.length===1)?getSdById(g.id,_liveSdIds[0]):null;
                 var _currentBg=_liveSingleSd?_liveSingleSd.color:_baseBg2;
@@ -6239,7 +6244,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   _thisHasPopup=false;
                 }
               });
-            })(_dayKey, dateKey, baseBg);
+            })(_dayKey, dateKey, baseBg, calRow.calId);
           }
 
           // "…" action button (in-range only)
@@ -6385,6 +6390,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var byAB=_tipCo.alternateWeeks;
       var _anyOpt3=true;
       var ciForTip=(calOrigIdx!==null)?calOrigIdx:null;
+      var _tipCalId=(_tipCalRow&&_tipCalRow.calId!=null)?_tipCalRow.calId:null;
       var wkForTip=byAB?(abWeek||'a'):'';
 
       var rows=[];
@@ -6398,14 +6404,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Resolve a school's own applicable column: its assigned Special Day's id (when that SD has
       // hours) or the regular weekday key when no SD is applied or the SD has no hours.
       function resolveSchoolKey(si){
-        var sdId=getMarkerSdId(dateKeyForTip,si);
+        var sdId=getMarkerSdId(_tipCalId, dateKeyForTip,si);
         var sd=sdId?getSdById(gObj.id,sdId):null;
         return {sd:sd, srcKey:(sd&&!sd.noHours)?sd.id:dayKey, noHours:!!(sd&&sd.noHours)};
       }
 
       // Is any Special Day applied to any school on this date?
       var _anySDApplied=false;
-      if(_siteRows.length) _siteRows.forEach(function(sr,si){ if(getMarkerSdId(dateKeyForTip,si)) _anySDApplied=true; });
+      if(_siteRows.length) _siteRows.forEach(function(sr,si){ if(getMarkerSdId(_tipCalId, dateKeyForTip,si)) _anySDApplied=true; });
 
       // Break down by school (School + Special Day columns) when Separate-by-School is enabled
       // OR any Special Day is applied to a subset of schools on this date.
@@ -6630,7 +6636,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function toMonday(d){ var dow=d.getDay(); return addDays(d, dow===0?-6:1-dow); }
     function calcH(s,e){ if(!s||!e)return null; var sp=s.split(':'),ep=e.split(':'); var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0),em=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em>sm?(Math.round((em-sm)/60*100)/100):null; }
     function slotKey2(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
-    function markerSdId(dateKey, si){ var m=det.calMarkers&&det.calMarkers[dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
+    function markerSdId(calId, dateKey, si){ var m=det.calMarkers&&det.calMarkers[String(calId)+'|'+dateKey]; return (m&&m.schools)?(m.schools[String(si)]||null):null; }
     var DOWKEY=['sun','mon','tue','wed','thu','fri','sat'];
     function abWeekFor(cr, dateObj, _co){
       if(!_co||!_co.alternateWeeks) return '';
@@ -6644,7 +6650,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dayKey=DOWKEY[dateObj.getDay()];
       var wk=_co.alternateWeeks?(abWeekFor(cr,dateObj,_co)||'a'):'';
       var slot=sfSlots[slotKey2(_co.bySchool?si:null, (origIdx!=null?origIdx:null), wk)]||{};
-      var sdId=markerSdId(dateKey, si);
+      var sdId=markerSdId((cr?cr.calId:null), dateKey, si);
       var sd=sdId?getSdById(g.id, sdId):null;
       if(sd && sd.noHours) return 0;
       var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
@@ -7214,7 +7220,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 $calSec.find('.cal-day-cell').each(function(){
                   var $cell=$(this);
                   var dk2=$cell.attr('data-date-key');
-                  var m=_markers[dk2];
+                  var _cidx2raw=$cell.attr('data-cal-orig-idx');
+                  var _cid2=(_cidx2raw!=null&&_cidx2raw!=='')?(((guideDetails[String(g.id)].calendarRows||[])[parseInt(_cidx2raw)]||{}).calId):null;
+                  var m=_markers[String(_cid2)+'|'+dk2];
                   if(!m||!m.schools) return;
                   var counts={}; Object.keys(m.schools).forEach(function(k){ var id=m.schools[k]; if(id) counts[id]=(counts[id]||0)+1; });
                   if(!counts[_sdId]) return; // this SD isn't applied on this cell
@@ -8265,8 +8273,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(_oldLen>0){
         var _cm=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calMarkers)||null;
         if(_cm){
-          Object.keys(_cm).forEach(function(dateKey){
-            var m=_cm[dateKey];
+          Object.keys(_cm).forEach(function(_mkKey){
+            if(_mkKey.indexOf(String(calId)+'|')!==0) return;  // only THIS Program Calendar's markers
+            var m=_cm[_mkKey];
             if(!m||!m.schools) return;
             // Determine the Special Day applied to each existing school for this date
             var sharedSdId=null, allSame=true;
