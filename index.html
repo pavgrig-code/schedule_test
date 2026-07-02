@@ -590,6 +590,14 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
 <script>
 
 $(function(){
+  // jQuery 3.x does not fire a 'remove' event on element teardown by default, which left every
+  // ".on('remove', …)" cleanup handler in this file as dead code — body-appended menus, tooltips, and
+  // dropdown portals were orphaned and accumulated on each section rebuild (rebuilds happen on nearly every
+  // structural edit). Registering the special event makes those handlers run when their element is removed
+  // via .remove()/.empty()/.replaceWith(), so the portals are torn down instead of leaking.
+  if(jQuery.event && jQuery.event.special && !jQuery.event.special.remove){
+    jQuery.event.special.remove={ remove:function(o){ if(o&&o.handler){ o.handler.call(this,{type:'remove'}); } } };
+  }
   const HW=90,RH=68,SH=6,NHRS=18,TW=HW*NHRS;
   const DN=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -5731,7 +5739,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _ctxAnchor=null; // {x,y,$dots} or {$td} used to recompute position on scroll/resize
     function closeCtx(){
       $ctxMenu.hide();
-      $('.sch-pick-pop').remove(); // remove any per-school Special Day picker popups
+      $('.sch-pick-pop, .cc-pick-pop').remove(); // remove any per-school Special Day picker popups (individual + combined)
       $(document).off('click._cal_ctx').off('contextmenu._cal_ctx');
       $(window).off('scroll._cal_ctx resize._cal_ctx');
       $('#planning-panel').off('scroll._cal_ctx');
@@ -6976,6 +6984,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $cwrap.append($('<span>').css({fontWeight:'700',fontSize:'10px',color:'#3c4043'}).text(calName));
         $chtd.append($cwrap); $chr.append($chtd); $tb.append($chr);
 
+        // School list for THIS calendar — only when it is not broken down by school (its rows carry no
+        // School column), so each calendar shows exactly its own schools for the day. Blank → "School N".
+        if(!gp.bySchool){
+          var _grpSites=(cr.calId!=null)?siteRowsFor(gObj,cr.calId):(((guideDetails[String(gObj.id)]||{}).siteRows)||[]);
+          if(_grpSites.length){
+            var $slr=$('<tr>');
+            var $sltd=$('<td>').attr('colspan',_ncol).css({padding:'0 6px 3px 22px'});
+            var $slw=$('<div class="cal-tip-schoollist">').css({lineHeight:'1.4'});
+            _grpSites.forEach(function(sr,si){
+              var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
+              $slw.append($('<div>').css({fontSize:'9px',color:'#6c757d',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm));
+            });
+            $sltd.append($slw); $slr.append($sltd); $tb.append($slr);
+          }
+        }
+
         if(!rows.length){
           var $er=$('<tr>').css({background:'#ffffff'});
           $er.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day'));
@@ -7180,6 +7204,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $titleRow.append($schedLink);
       }
       $hdrPad.append($titleRow);
+
+      // School list — shown only when the breakdown has NO School column (aggregate / not separated by
+      // school), so users can still see which schools are folded into the combined hours. Blank names fall
+      // back to "School N". When a School column is present the schools already show, so this is skipped.
+      if(!bySchool && _siteRows.length){
+        var $schoolList=$('<div class="cal-tip-schoollist">').css({marginBottom:'6px',lineHeight:'1.45'});
+        _siteRows.forEach(function(sr,si){
+          var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
+          $schoolList.append($('<div>').css({fontSize:'10px',color:'#5f6368',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm));
+        });
+        $hdrPad.append($schoolList);
+      }
 
       // Column width distribution (shared by header, body, and footer tables)
       // bySchool adds a Special Day column right after School Name.
