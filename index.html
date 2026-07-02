@@ -1239,26 +1239,55 @@ $(function(){
   // Shared status colors — the single source of truth for Break / Billable / Non-Billable wherever
   // they appear (Staffing Hours table + dropdown, Schedule shift blocks, tooltips, etc.). Softer
   // than the old keyword colors but still distinct. Change here to restyle every status app-wide.
+  // ── Configurable Non-Billable meal-break settings (per Program Calendar, keyed by Calendar ID) ──
+  // Each Program Calendar may carry a `mealBreaks` array of {hours, mins}: once a shift runs OVER `hours`,
+  // deduct `mins` minutes. The HIGHEST matching threshold wins. When a calendar has no valid settings the
+  // defaults below apply: over 5h → deduct 30 min, over 10h → deduct 60 min. There are no hardcoded
+  // thresholds anywhere else — every meal-break deduction flows through these helpers.
+  var DEFAULT_MEAL_BREAKS=[{hours:5,mins:30},{hours:10,mins:60}];
+  function getCalMealBreaks(calRow){
+    var mb=calRow&&calRow.mealBreaks;
+    if(Array.isArray(mb)){
+      var valid=mb.filter(function(r){ return r&&!isNaN(parseFloat(r.hours))&&!isNaN(parseInt(r.mins)); });
+      if(valid.length) return valid;
+    }
+    return DEFAULT_MEAL_BREAKS; // missing or invalid → safe fallback to the defaults
+  }
+  // Meal-break minutes to deduct for a shift of `rawHours` under a given calendar's settings (highest
+  // matching threshold). rawHours must be strictly greater than a row's `hours` for that row to apply.
+  function mealBreakMinsForCal(calRow, rawHours){
+    if(rawHours==null) return 0;
+    var rows=getCalMealBreaks(calRow), best=null;
+    rows.forEach(function(r){ var h=parseFloat(r.hours), m=parseInt(r.mins); if(isNaN(h)||isNaN(m)) return; if(rawHours>h && (best===null||h>best.h)) best={h:h,m:m}; });
+    return best?best.m:0;
+  }
   const STATUS_COLORS={ break:'#f95656', nonbillable:'#5555b5', billable:'#308930' };
-  // ── Per-calendar Billable rule + automatic meal-break formula ──────────────────────────────
   // A calendar is Billable unless its `billable` flag is explicitly false (default = Billable).
   function calRowBillable(calRow){ return !calRow || calRow.billable!==false; }
-  // Default meal break (minutes) for a shift of `rawHours`: >6h → 60, >5h → 30, ≤5h → 0.
-  function mealBreakMinsFor(rawHours){ if(rawHours==null) return 0; if(rawHours>6) return 60; if(rawHours>5) return 30; return 0; }
-  // Adjusted hours given the calendar's Billable flag: Billable keeps the full Start→End duration;
-  // Non-Billable subtracts the formula meal break.
-  function adjForBillable(rawHours, isBillable){
+  // Second argument may be a Program Calendar row (preferred — uses that calendar's meal-break settings) OR
+  // a plain isBillable boolean (legacy callers — uses the default settings). This keeps every existing call
+  // site working while letting sites that have the calendar row apply its configurable Non-Billable Settings.
+  function _mbResolve(calRowOrBool){
+    var calRow=(calRowOrBool&&typeof calRowOrBool==='object')?calRowOrBool:null;
+    return { calRow:calRow, isBillable: calRow?calRowBillable(calRow):(calRowOrBool!==false) };
+  }
+  function mealBreakMinsFor(rawHours){ return mealBreakMinsForCal(null, rawHours); } // default-settings formula
+  // Adjusted hours: a Billable calendar keeps the full Start→End duration; a Non-Billable calendar subtracts
+  // its configured meal break.
+  function adjForBillable(rawHours, calRowOrBool){
     if(rawHours==null) return null;
-    if(isBillable) return rawHours;
-    var adj=Math.round((rawHours - mealBreakMinsFor(rawHours)/60)*100)/100;
+    var r=_mbResolve(calRowOrBool);
+    if(r.isBillable) return rawHours;
+    var adj=Math.round((rawHours - mealBreakMinsForCal(r.calRow, rawHours)/60)*100)/100;
     return adj<0?0:adj;
   }
   // Status chip for a shift: "Billable" (only when ≥5h), "(30m)"/"(60m)", or null.
   // Billable shifts under 5 hours intentionally show no label (just start/end/total hours).
-  function billableStatus(rawHours, isBillable){
+  function billableStatus(rawHours, calRowOrBool){
     if(rawHours==null) return null;
-    if(isBillable) return rawHours<5 ? null : {text:'Billable', color:STATUS_COLORS.billable};
-    var mins=mealBreakMinsFor(rawHours);
+    var r=_mbResolve(calRowOrBool);
+    if(r.isBillable) return rawHours<5 ? null : {text:'Billable', color:STATUS_COLORS.billable};
+    var mins=mealBreakMinsForCal(r.calRow, rawHours);
     if(mins>0) return {text:'('+mins+'m)', color:STATUS_COLORS.nonbillable};
     return null;
   }
@@ -3288,8 +3317,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return;
         var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
         var _raw=calcH(d.start,d.end);
-        var h=adjForBillable(_raw,_rdBillable); if(!h||h<=0) return;
-        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:billableStatus(_raw,_rdBillable)});
+        var h=adjForBillable(_raw,(origIdx!=null?calRows[origIdx]:null)); if(!h||h<=0) return;
+        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:billableStatus(_raw,(origIdx!=null?calRows[origIdx]:null))});
       });
       return {noHours:false, sd:sd, blocks:out};
     }
@@ -3673,10 +3702,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return null;          // role not staffed for this school
     var dd=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
     var raw=calcH(dd.start, dd.end);
-    var h=adjForBillable(raw, isBil); if(!h||h<=0) return null;                  // no hours configured
+    var h=adjForBillable(raw, cr); if(!h||h<=0) return null;                  // no hours configured
     return {
       start:_ssDecH(dd.start), end:_ssDecH(dd.end),
-      hrsEach:h, status:billableStatus(raw, isBil), isBillable:isBil,
+      hrsEach:h, status:billableStatus(raw, cr), isBillable:isBil,
       calId:(_rdCalId!=null?_rdCalId:null),
       calName:cr?((cr.name&&cr.name.trim())?cr.name:('Calendar '+(origIdx+1))):'—',   // blank name → "Calendar N" (origIdx+1 = row position in Program Calendars table), matching the convention used elsewhere
       calColor:cr?(cr.color||'#ffffff'):'#cfcfcf',
@@ -6264,7 +6293,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0), em=parseInt(ep[0])*60+(parseInt(ep[1])||0);
       if(em<=sm) return 0;
       var raw=Math.round((em-sm)/60*100)/100;
-      var adj=adjForBillable(raw, isBillable!==false);
+      var adj=adjForBillable(raw, isBillable);
       return adj==null?0:adj;
     }
     // Build a reusable per-guide calc context: invariants + an O(1) Special-Day lookup map.
@@ -6329,7 +6358,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(!cnt) continue;
           var rd=slot[role.key]; var d=(rd&&rd[srcKey])||null;
           if(!d) continue;
-          var h=_calcAdjHrs(d,_cellBillable);
+          var h=_calcAdjHrs(d,_ccCalRow);
           if(h>0) t+=h*cnt;
         }
         return t;
@@ -6418,14 +6447,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
         } else {
           cell.style.background=baseBg;
-          // One marker per Program Calendar / Special Day combination
+          // One marker per Program Calendar / Special Day combination — matches the individual calendar
+          // view's styling: a Special Day-coloured pill showing the label with the number of schools in that
+          // calendar assigned the Special Day (e.g. "Min Day (1)"). Circle carries the Program Calendar colour.
           actives.forEach(function(ac){
             var calNm=(ac.cr.name&&ac.cr.name.trim())||('Calendar '+(ac.oi+1));
             Object.keys(ac.counts).forEach(function(sdId){
               var sd=getSdById(g.id,sdId); if(!sd) return;
               var cnt=ac.counts[sdId];
-              var label=sdName(sd,sds.indexOf(sd))+(cnt>1?(' ('+cnt+')'):'');
-              var $m=$('<div>').css({display:'flex',alignItems:'center',gap:'3px',fontSize:'8px',fontWeight:'600',color:'#495057',whiteSpace:'nowrap',overflow:'hidden'}).attr('title',calNm+': '+label);
+              var label=sdName(sd,sds.indexOf(sd))+' ('+cnt+')';
+              var $m=$('<div>').css({display:'flex',alignItems:'center',gap:'3px',fontSize:'8px',fontWeight:'700',borderRadius:'2px',padding:'2px 4px',background:sd.color||'#ffffff',color:'#495057',lineHeight:'1.2',marginBottom:'1px',whiteSpace:'nowrap',overflow:'hidden'}).attr('title',calNm+': '+label);
               $m.append($('<span>').css({width:'7px',height:'7px',borderRadius:'50%',background:ac.cr.color||'#ffffff',border:'1px solid rgb(180,180,180)',display:'inline-block',flexShrink:'0'}));
               $m.append($('<span>').css({overflow:'hidden',textOverflow:'ellipsis'}).text(label));
               $wrap.append($m);
@@ -6842,7 +6873,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function calcAdjH(d){
         var raw=calcH(d.start,d.end);
         if(raw===null) return null;
-        return adjForBillable(raw,_tipBillable);
+        return adjForBillable(raw,_tipCalRow);
       }
       function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
       var ROLES2=rolesToStaffingRoles(getRoles(gObj.id)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; });
@@ -6927,6 +6958,88 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     // ── Combined-View hover breakdown: each active calendar's rows in sequence + a combined total ──
     // Adds a School column when ANY active calendar is split by school (blank for calendars that aren't).
+    // ── Breakdown section-header helpers ──
+    // These replace the per-row "School" and "Special Day" columns with a compact subheader shown ONCE above
+    // each section (e.g. "Lincoln Elementary | Min Day"). Blank school names fall back to "School N"; Special
+    // Day labels use the app's standard names via sdName().
+    function _tipSdLabel(gid, sd){ return sd ? sdName(sd, getSpecialDays(gid).indexOf(sd)) : ''; }
+    function _tipSchoolNameFor(siteRows, si){
+      var sr=(siteRows&&si!=null)?siteRows[si]:null;
+      return (sr&&sr.school&&sr.school.trim())||(sr&&sr.schoolAbbr)||('School '+((si|0)+1));
+    }
+    function _tipSectionLabel(gid, siteRows, schoolIdx, sd){
+      var parts=[];
+      if(schoolIdx!=null) parts.push(_tipSchoolNameFor(siteRows, schoolIdx));
+      if(sd) parts.push(_tipSdLabel(gid, sd));
+      return parts.join(' | ');
+    }
+    // A full-width subheader row (colspan) styled as a compact section header inside the breakdown table.
+    // A compact section subheader. Each school name is shown on its OWN line with no colour circle before it.
+    // When a Special Day applies it is shown on its own line with the Special Day colour circle placed
+    // immediately before the Special Day label (never before a school name). schoolNames: array of strings.
+    function _tipSectionHeaderRow(schoolNames, sd, sdLabel, ncol, indentPx){
+      var $r=$('<tr>');
+      var $td=$('<td>').attr('colspan',ncol).css({padding:'4px 6px 3px '+(indentPx||6)+'px',background:'#f4f6f8',borderTop:'1px solid #e9ecef'});
+      (schoolNames||[]).forEach(function(nm){
+        $td.append($('<div>').css({fontWeight:'700',fontSize:'9.5px',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:'1.4'}).text(nm));
+      });
+      if(sd){
+        var $sd=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',fontWeight:'700',fontSize:'9.5px',color:'#3c4043',lineHeight:'1.4'});
+        $sd.append($('<span>').css({width:'8px',height:'8px',background:sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}));
+        $sd.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(sdLabel||''));
+        $td.append($sd);
+      }
+      $r.append($td);
+      return $r;
+    }
+    // Returns the shared Special Day object if EVERY school group has the SAME non-null Special Day; else null.
+    // (Different Special Days, or some schools with none, → null → keep the school-level breakdown.)
+    function _tipSharedSd(schoolGroups){
+      if(!schoolGroups||!schoolGroups.length) return null;
+      var first=schoolGroups[0].sd;
+      if(!first) return null;
+      for(var i=0;i<schoolGroups.length;i++){ var s=schoolGroups[i].sd; if(!s||s.id!==first.id) return null; }
+      return first;
+    }
+    // True only if every school group has the SAME set of (role, start, end) rows (counts may differ), so the
+    // schools can be summed into one shared breakdown without losing detail. If staffing hours differ by school
+    // the signatures differ → not combinable → the school-level breakdown is kept. No-hours rows compare equal.
+    function _tipRowsCombinable(schoolGroups){
+      function sig(rows){ return rows.map(function(r){ return r.noHoursNote?'__NH__':(r.label+'\u0001'+r.start+'\u0001'+r.end); }).sort().join('\u0002'); }
+      var s0=sig(schoolGroups[0].rows);
+      for(var i=1;i<schoolGroups.length;i++){ if(sig(schoolGroups[i].rows)!==s0) return false; }
+      return true;
+    }
+    // Combine per-school rows into aggregate rows keyed by (role, start, end); sum counts and totals. Each
+    // school contributes exactly once, so hours are never double-counted. Returns {rows, anyReal}.
+    function _tipCombineSchoolRows(schoolGroups){
+      var map={}, order=[], anyReal=false;
+      schoolGroups.forEach(function(gp){ gp.rows.forEach(function(r){
+        if(r.noHoursNote) return;
+        anyReal=true;
+        var k=r.label+'\u0001'+r.start+'\u0001'+r.end;
+        if(!(k in map)){ map[k]={label:r.label,start:r.start,end:r.end,hours:r.hours,cnt:0,total:0}; order.push(k); }
+        map[k].cnt+=(parseInt(r.cnt)||0);
+        map[k].total+=(r.total||0);
+      }); });
+      return {rows:order.map(function(k){ var m=map[k]; m.total=Math.round(m.total*100)/100; return m; }), anyReal:anyReal};
+    }
+    // Partition per-school groups into groups that share the SAME Special Day AND identical (role,start,end)
+    // rows (counts may differ). Schools with identical schedule + Special Day state are merged into ONE shared
+    // breakdown; schools that genuinely differ keep their own. Order follows first appearance. This is what
+    // prevents repeated identical tables when e.g. 2 of 3 schools have no Special Day and the same schedule.
+    function _tipSignatureGroups(schoolGroups){
+      var out=[], map={};
+      (schoolGroups||[]).forEach(function(g2){
+        var sdPart=g2.sd?('sd:'+g2.sd.id):'none';
+        var rowSig=g2.rows.map(function(r){ return r.noHoursNote?'__NH__':(r.label+'\u0001'+r.start+'\u0001'+r.end); }).slice().sort().join('\u0002');
+        var k=sdPart+'\u0003'+rowSig;
+        if(!(k in map)){ map[k]={sd:g2.sd, schoolIdxs:[], groups:[]}; out.push(map[k]); }
+        map[k].schoolIdxs.push(g2.schoolIdx); map[k].groups.push(g2);
+      });
+      return out;
+    }
+
     function showCombinedCalTooltip($td, dayKey, gObj, cellDate){
       if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){ _tipAnchor.removeClass('cal-hovered cal-hovered-wknd'); _tipCellBg=null; }
       _tipAnchor=$td;
@@ -6946,9 +7059,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       if(!groups.length){ hideCalTooltip(); return; }
 
-      var showSchoolCol = groups.some(function(gp){ return gp.bySchool; });
-      var showSDCol = groups.some(function(gp){ return gp.rows.some(function(r){ return !!r.sd; }); });
-
       $calTip.empty();
       var FULL_DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
       var FULL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -6963,11 +7073,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $scroll=$('<div>').css({overflowY:'auto',maxHeight:'320px'});
       var $tbl=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px',width:'100%'});
 
-      var cols=[];
-      if(showSchoolCol) cols.push({label:'School',align:'left'});
-      if(showSDCol) cols.push({label:'Special Day',align:'left'});
-      cols.push({label:'Role',align:'left'},{label:'Start',align:'center'},{label:'End',align:'center'},{label:'Hrs',align:'center'},{label:'Count',align:'center'},{label:'Total',align:'center'});
-      var _ncol=cols.length;
+      var cols=[{label:'Role',align:'left'},{label:'Start',align:'center'},{label:'End',align:'center'},{label:'Hrs',align:'center'},{label:'Count',align:'center'},{label:'Total',align:'center'}];
+      var _ncol=cols.length; // School & Special Day are now per-section subheaders, not columns
       var $thead=$('<thead>'), $hrow=$('<tr>');
       cols.forEach(function(c){ $hrow.append($('<th>').css({padding:'3px 6px',fontWeight:'600',color:'#6c757d',textAlign:c.align,whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',background:'#ffffff',position:'sticky',top:'0'}).text(c.label)); });
       $thead.append($hrow); $tbl.append($thead);
@@ -6976,18 +7083,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       groups.forEach(function(gp){
         var cr=gp.calRow, oi=gp.origIdx, rows=gp.rows;
         var calName=(cr.name&&cr.name.trim())||('Calendar '+(oi+1));
-        // Calendar section header row (color circle + name), spanning all columns
+        // Group bySchool rows by school, then decide whether all schools share ONE Special Day and combine
+        // cleanly — if so, collapse into a single shared section instead of one section per school.
+        var _grpSites=(cr.calId!=null)?siteRowsFor(gObj,cr.calId):(((guideDetails[String(gObj.id)]||{}).siteRows)||[]);
+        var _schoolGroups=null, _sharedSd=null, _collapse=false;
+        if(gp.bySchool){
+          _schoolGroups=[]; var _cbi={};
+          rows.forEach(function(r){ var k=String(r.schoolIdx); if(!(k in _cbi)){ _cbi[k]={schoolIdx:r.schoolIdx,sd:r.sd,rows:[]}; _schoolGroups.push(_cbi[k]); } _cbi[k].rows.push(r); });
+          _sharedSd=_tipSharedSd(_schoolGroups);
+          _collapse=!!(_sharedSd && _schoolGroups.length>1 && _tipRowsCombinable(_schoolGroups));
+        }
+
+        // Calendar section header (color circle + name). When collapsing, the shared Special Day label is
+        // placed next to the calendar name (with its own colour) instead of being repeated next to each school.
         var $chr=$('<tr>');
         var $chtd=$('<td>').attr('colspan',_ncol).css({padding:'5px 6px 3px',borderTop:oi===groups[0].origIdx?'0':'1px solid #e9ecef'});
-        var $cwrap=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px'});
+        var $cwrap=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',flexWrap:'wrap'});
         $cwrap.append($('<span>').css({width:'9px',height:'9px',borderRadius:'50%',background:cr.color||'#ffffff',border:'1px solid rgb(180,180,180)',display:'inline-block',flexShrink:'0'}));
         $cwrap.append($('<span>').css({fontWeight:'700',fontSize:'10px',color:'#3c4043'}).text(calName));
+        if(_collapse){
+          $cwrap.append($('<span>').css({color:'#adb5bd',fontWeight:'400',fontSize:'10px'}).text('|'));
+          $cwrap.append($('<span>').css({width:'8px',height:'8px',background:_sharedSd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}));
+          $cwrap.append($('<span>').css({color:'#495057',fontWeight:'700',fontSize:'9px'}).text(_tipSdLabel(gObj.id,_sharedSd)));
+        }
         $chtd.append($cwrap); $chr.append($chtd); $tb.append($chr);
 
-        // School list for THIS calendar — only when it is not broken down by school (its rows carry no
-        // School column), so each calendar shows exactly its own schools for the day. Blank → "School N".
-        if(!gp.bySchool){
-          var _grpSites=(cr.calId!=null)?siteRowsFor(gObj,cr.calId):(((guideDetails[String(gObj.id)]||{}).siteRows)||[]);
+        // School list — for an aggregate calendar (existing) OR a collapsed shared-Special-Day calendar, list
+        // every affected school once, under the calendar name and above the shared breakdown. Blank → "School N".
+        if(!gp.bySchool || _collapse){
           if(_grpSites.length){
             var $slr=$('<tr>');
             var $sltd=$('<td>').attr('colspan',_ncol).css({padding:'0 6px 3px 22px'});
@@ -7006,20 +7129,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $tb.append($er);
         }
         var sub=0, parity=0;
-        rows.forEach(function(r){
+        function _combRoleRow(r){
           var $row=$('<tr>').css({background:(parity++%2)?'#f9fafb':'#ffffff'});
-          if(showSchoolCol) $row.append($('<td>').css({padding:'3px 6px',color:'#6c757d',fontSize:'9.5px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.school||''));
-          if(showSDCol){
-            var $sdTd=$('<td>').css({padding:'3px 6px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'});
-            if(r.sd){
-              var sdIdxR=getSpecialDays(gObj.id).indexOf(r.sd);
-              var $w=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px'});
-              $w.append($('<span>').css({width:'8px',height:'8px',background:r.sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}));
-              $w.append($('<span>').css({fontSize:'9.5px',color:'#495057'}).text(sdName(r.sd,sdIdxR)));
-              $sdTd.append($w);
-            } else { $sdTd.append($('<span>').css({fontSize:'9.5px',color:'#adb5bd',fontStyle:'italic'}).text('Regular Day')); }
-            $row.append($sdTd);
-          }
           $row.append($('<td>').css({padding:'3px 6px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057'}).text(r.start));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057'}).text(r.end));
@@ -7028,7 +7139,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.noHoursNote?'0':r.total));
           $tb.append($row);
           sub+=(r.total||0);
-        });
+        }
+        if(_collapse){
+          // One shared breakdown for all schools that share the Special Day (summed by role/time — no double
+          // count). A no-hours Special Day (e.g. Holiday) shows a single "No staffing hours this day" note.
+          var _comb=_tipCombineSchoolRows(_schoolGroups);
+          if(_comb.anyReal){ _comb.rows.forEach(_combRoleRow); }
+          else {
+            var $enr=$('<tr>').css({background:'#ffffff'});
+            $enr.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day'));
+            $tb.append($enr);
+          }
+        } else if(gp.bySchool){
+          // Schools differ overall, but schools that share the SAME Special Day AND identical hours are merged
+          // into ONE shared breakdown (e.g. 2 of 3 schools have no Special Day and the same schedule → one
+          // table listing both, not two identical tables). Schools that genuinely differ keep their own section.
+          _tipSignatureGroups(_schoolGroups).forEach(function(sg){
+            if(sg.groups.length===1){
+              var g2=sg.groups[0];
+              $tb.append(_tipSectionHeaderRow([_tipSchoolNameFor(_grpSites,g2.schoolIdx)], g2.sd, g2.sd?_tipSdLabel(gObj.id,g2.sd):'', _ncol, 22));
+              g2.rows.forEach(_combRoleRow);
+            } else {
+              $tb.append(_tipSectionHeaderRow(sg.schoolIdxs.map(function(si){ return _tipSchoolNameFor(_grpSites, si); }), sg.sd, sg.sd?_tipSdLabel(gObj.id,sg.sd):'', _ncol, 22));
+              var _cmb=_tipCombineSchoolRows(sg.groups);
+              if(_cmb.anyReal){ _cmb.rows.forEach(_combRoleRow); }
+              else { var $enr3=$('<tr>').css({background:'#ffffff'}); $enr3.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day')); $tb.append($enr3); }
+            }
+          });
+        } else {
+          // Aggregate calendar: optional Special Day subheader (e.g. single school with an SD), then role rows.
+          var _aggSd2=rows.length?rows[0].sd:null;
+          if(_aggSd2) $tb.append(_tipSectionHeaderRow([], _aggSd2, _tipSdLabel(gObj.id,_aggSd2), _ncol, 22));
+          rows.forEach(_combRoleRow);
+        }
         sub=Math.round(sub*100)/100; grand+=sub;
         var $subr=$('<tr>').css({background:'#eef2f7'});
         $subr.append($('<td>').attr('colspan',_ncol-1).css({padding:'4px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text(calName+' Subtotal'));
@@ -7082,7 +7225,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function calcAdjH(d){
         var raw=calcH(d.start,d.end);
         if(raw===null) return null;
-        return adjForBillable(raw,_tipBillable);
+        return adjForBillable(raw,_tipCalRow);
       }
       function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
       var ROLES2=rolesToStaffingRoles(getRoles(gObj.id)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; });
@@ -7219,7 +7362,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Column width distribution (shared by header, body, and footer tables)
       // bySchool adds a Special Day column right after School Name.
-      var colWidths=bySchool?['16%','16%','16%','12%','12%','9%','9%','10%']:['28%','16%','16%','12%','12%','16%'];
+      var colWidths=['28%','16%','16%','12%','12%','16%']; // School & Special Day are now section subheaders, not columns
 
       function applyColWidths($tbl){
         var $cg=$('<colgroup>');
@@ -7231,9 +7374,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $tHdr=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
       applyColWidths($tHdr);
       var $hrow=$('<tr>');
-      var cols=bySchool?['School','Special Day','Role','Start','End','Hrs','Count','Total']:['Role','Start','End','Hrs','Count','Total'];
+      var cols=['Role','Start','End','Hrs','Count','Total'];
       cols.forEach(function(h,i){
-        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=(bySchool?4:1)?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',overflow:'hidden',textOverflow:'ellipsis'}).text(h));
+        $hrow.append($('<th>').css({padding:'2px 5px',fontWeight:'600',color:'#6c757d',textAlign:i>=1?'center':'left',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',overflow:'hidden',textOverflow:'ellipsis'}).text(h));
       });
       $tHdr.append($('<thead>').append($hrow));
       $hdrPad.append($tHdr);
@@ -7242,7 +7385,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ── Scrollable detail rows ──
       var $scroll=$('<div>').css({overflowY:'auto',maxHeight:'240px',padding:'0 12px'});
       var $tb=$('<tbody>');
-      var _totalColspan=bySchool?7:5; // columns before the Total column (for subtotal layout)
+      var _totalColspan=5; // columns before the Total column (for subtotal layout)
 
       // Emits a subtotal row for a school (only when it has hours > 0)
       function appendSubtotal(schoolName, subtotal){
@@ -7253,53 +7396,48 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tb.append($sub);
       }
 
-      var _lastSchool=null;
-      var _schoolSubtotal=0;
       var _rowParity=0;
-      rows.forEach(function(r,ri){
-        var isNewSchool=bySchool && r.school !== _lastSchool;
-        // When a new school begins, close out the previous school's subtotal first
-        if(bySchool && isNewSchool && ri>0){
-          appendSubtotal(_lastSchool, _schoolSubtotal);
-          _schoolSubtotal=0;
-        }
-        if(bySchool) _lastSchool=r.school;
-        var $row=$('<tr>').css({background:(_rowParity++%2)?'#f9fafb':'#fff'});
-        if(isNewSchool && ri>0) $row.css('border-top','2px solid #adb5bd');
-        var cells=bySchool?
-          [$('<td>').css({padding:'3px 5px',color:'#6c757d',fontSize:'9.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.school),
-           (function(){
-             var $sdTd=$('<td>').css({padding:'3px 5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'});
-             if(r.sd){
-               var sdIdxR=getSpecialDays(gObj.id).indexOf(r.sd);
-               var $wrap=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px'});
-               $wrap.append($('<span>').css({width:'8px',height:'8px',background:r.sd.color||'#ffffff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'}));
-               $wrap.append($('<span>').css({fontSize:'9.5px',color:'#495057'}).text(sdName(r.sd,sdIdxR)));
-               $sdTd.append($wrap);
-             } else {
-               // No Special Day for this school → subtle "Regular Day"
-               $sdTd.append($('<span>').css({fontSize:'9.5px',color:'#adb5bd',fontStyle:'italic'}).text('Regular Day'));
-             }
-             return $sdTd;
-           })(),
-           $('<td>').css({padding:'3px 5px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.noHoursNote?'0':r.hours),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.cnt),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.noHoursNote?'0':r.total)]:
-          [$('<td>').css({padding:'3px 5px',color:'#212529',fontWeight:'500',overflow:'hidden',textOverflow:'ellipsis'}).text(r.label),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.hours),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.cnt),
-           $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.total)];
-        cells.forEach(function($c){ $row.append($c); });
-        $tb.append($row);
-        if(bySchool) _schoolSubtotal += (r.total||0);
-      });
-      // Close out the last school's subtotal
-      if(bySchool) appendSubtotal(_lastSchool, _schoolSubtotal);
+      function _roleCells(r){
+        return [
+          $('<td>').css({padding:'3px 5px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label),
+          $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.start),
+          $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.end),
+          $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.noHoursNote?'0':r.hours),
+          $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057'}).text(r.cnt),
+          $('<td>').css({padding:'3px 5px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.noHoursNote?'0':r.total)
+        ];
+      }
+      if(bySchool){
+        // Group rows by school, then merge schools that share the SAME Special Day AND identical hours into
+        // one shared breakdown (so 2 schools with no Special Day and the same schedule show one table, not
+        // two). Schools that genuinely differ keep their own "School | Special Day" section + subtotal.
+        var _grp=[], _byIdx={};
+        rows.forEach(function(r){ var k=String(r.schoolIdx); if(!(k in _byIdx)){ _byIdx[k]={schoolIdx:r.schoolIdx,sd:r.sd,rows:[]}; _grp.push(_byIdx[k]); } _byIdx[k].rows.push(r); });
+        function _indivRoleRows(rws){ var sub=0; rws.forEach(function(r){ var $row=$('<tr>').css({background:(_rowParity++%2)?'#f9fafb':'#fff'}); _roleCells(r).forEach(function($c){ $row.append($c); }); $tb.append($row); sub+=(r.total||0); }); return sub; }
+        _tipSignatureGroups(_grp).forEach(function(sg){
+          if(sg.groups.length===1){
+            var gp=sg.groups[0];
+            $tb.append(_tipSectionHeaderRow([_tipSchoolNameFor(_siteRows,gp.schoolIdx)], gp.sd, gp.sd?_tipSdLabel(gObj.id,gp.sd):'', 6, 6));
+            appendSubtotal(_tipSchoolNameFor(_siteRows,gp.schoolIdx), _indivRoleRows(gp.rows));
+          } else {
+            var _iNames=sg.schoolIdxs.map(function(si){ return _tipSchoolNameFor(_siteRows, si); });
+            $tb.append(_tipSectionHeaderRow(_iNames, sg.sd, sg.sd?_tipSdLabel(gObj.id,sg.sd):'', 6, 6));
+            var _cmb=_tipCombineSchoolRows(sg.groups), _sub=0;
+            if(_cmb.anyReal){ _sub=_indivRoleRows(_cmb.rows); }
+            else { var $nr=$('<tr>'); $nr.append($('<td>').attr('colspan',6).css({padding:'3px 5px 3px 6px',color:'#9aa0a6',fontStyle:'italic',fontSize:'10px'}).text('No hours')); $tb.append($nr); }
+            appendSubtotal(_iNames.join(', '), _sub);
+          }
+        });
+      } else {
+        // Aggregate: one section. Show a Special Day subheader if one applies (e.g. single school with an SD).
+        var _aggSd=rows.length?rows[0].sd:null;
+        if(_aggSd) $tb.append(_tipSectionHeaderRow([], _aggSd, _tipSdLabel(gObj.id,_aggSd), 6, 6));
+        rows.forEach(function(r){
+          var $row=$('<tr>').css({background:(_rowParity++%2)?'#f9fafb':'#fff'});
+          _roleCells(r).forEach(function($c){ $row.append($c); });
+          $tb.append($row);
+        });
+      }
       var $tBody=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'}).append($tb);
       applyColWidths($tBody);
       $scroll.append($tBody);
@@ -7307,7 +7445,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // ── Fixed Total footer ──
       var grand=Math.round(rows.reduce(function(s,r){return s+r.total;},0)*100)/100;
-      var colspan=bySchool?7:5;
+      var colspan=5;
       var $footPad=$('<div>').css({padding:'0 12px 10px 12px',borderTop:'2px solid #dee2e6',marginTop:'0'});
       var $tFoot=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px'});
       applyColWidths($tFoot);
@@ -7396,7 +7534,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _hasMarks=false; for(var _mkK in _cmAll){ if(_mkK.indexOf(_mkPrefix)===0){ _hasMarks=true; break; } }
       var _ci2=(origIdx!=null?origIdx:null), _isAB=!!_co.alternateWeeks, _adjCache={};
       // Memoize adjForBillable(calcH(start,end)) per distinct time span (billable is constant for this calendar).
-      function _adjH(tm){ if(!tm) return 0; var _hk=tm.start+'|'+tm.end; var v=(_hk in _adjCache)?_adjCache[_hk]:(_adjCache[_hk]=adjForBillable(calcH(tm.start,tm.end),_billable)); return (v>0)?v:0; }
+      function _adjH(tm){ if(!tm) return 0; var _hk=tm.start+'|'+tm.end; var v=(_hk in _adjCache)?_adjCache[_hk]:(_adjCache[_hk]=adjForBillable(calcH(tm.start,tm.end),cr)); return (v>0)?v:0; }
       var schoolTotals=schools.map(function(sr,si){
         // Hoist slot(s) once per school (constant across days unless Week A/B alternates); pre-collect >0-count roles.
         var _sBase=_isAB?null:(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'')]||{});
@@ -8082,6 +8220,85 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     calendarRows.forEach(function(r){ if(!r.color) r.color='#ffffff'; if(r.pricePerHour===undefined||r.pricePerHour===null||r.pricePerHour==='') r.pricePerHour='86.00'; if(r.billable===undefined) r.billable=true; });
 
     function saveCalendarRows(){ setGuideDetail(g.id,'calendarRows',calendarRows); }
+    // Non-Billable Settings dropdown — the configurable meal-break table for one Program Calendar. Opens
+    // under the gear, edits a draft, and on Save writes calRow.mealBreaks (kept by Calendar ID with the row,
+    // so duplicate/delete/reload all follow the calendar). Recomputes every dependent view on Save.
+    function openNBSettings(calRow, anchorEl){
+      $('.nb-settings-dd').remove();
+      var _init=getCalMealBreaks(calRow);
+      var draft=_init.map(function(r){ return {hours:String(r.hours), mins:String(r.mins)}; });
+      var _snapshot=JSON.stringify(draft), $saveBtn=null;
+      function _dirty(){ return JSON.stringify(draft)!==_snapshot; }
+      function markDirty(){ if($saveBtn) $saveBtn.css('display', _dirty()?'inline-block':'none'); }
+      function _confirmDiscard(){ try{ return window.confirm('Discard unsaved Non-Billable Settings changes?'); }catch(e){ return true; } }
+
+      var $dd=$('<div class="nb-settings-dd">').css({position:'fixed',zIndex:'1000000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 20px rgba(0,0,0,.16)',padding:'10px 12px',fontSize:'12px',minWidth:'240px',maxWidth:'320px'});
+      $dd.append($('<div>').css({fontWeight:'700',fontSize:'12px',color:'#212529',marginBottom:'8px'}).text('Non-Billable Settings'));
+
+      var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+      var $thead=$('<thead>').append($('<tr>').append(
+        $('<th>').css({textAlign:'left',padding:'2px 4px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Hours'),
+        $('<th>').css({textAlign:'left',padding:'2px 4px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef'}).text('Meal Breaks, Total (min)'),
+        $('<th>').css({width:'44px',borderBottom:'1px solid #e9ecef'})
+      ));
+      var $tb=$('<tbody>');
+      $tbl.append($thead).append($tb);
+
+      function numInput(val, decimals){
+        var $i=$('<input type="text">').attr('inputmode', decimals?'decimal':'numeric').val(val).css({width:'100%',boxSizing:'border-box',fontSize:'11px',padding:'2px 4px',border:'1px solid #ced4da',borderRadius:'4px',textAlign:'center'});
+        $i.on('input',function(){ var v=$(this).val(); if(decimals){ v=v.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1'); } else { v=v.replace(/[^0-9]/g,''); } if(v!==$(this).val()) $(this).val(v); });
+        return $i;
+      }
+      function renderRows(){
+        $tb.empty();
+        draft.forEach(function(rowObj, idx){
+          var $tr=$('<tr>');
+          var $hIn=numInput(rowObj.hours, true);  $hIn.on('input',function(){ rowObj.hours=$(this).val(); markDirty(); });
+          var $mIn=numInput(rowObj.mins, false);  $mIn.on('input',function(){ rowObj.mins=$(this).val(); markDirty(); });
+          var $del=$('<button type="button" title="Delete">').text('Del').css({background:'#fff1f0',border:'1px solid #ffccc7',borderRadius:'5px',cursor:'pointer',color:'#cf1322',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'3px 7px',whiteSpace:'nowrap'});
+          $del.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});}).on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
+          $del.on('click',function(){ draft.splice(idx,1); renderRows(); markDirty(); });
+          $tr.append($('<td>').css({padding:'2px 3px'}).append($hIn));
+          $tr.append($('<td>').css({padding:'2px 3px'}).append($mIn));
+          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($del));
+          $tb.append($tr);
+        });
+      }
+      renderRows();
+      $dd.append($tbl);
+
+      var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 0 4px;">').text('+ Meal Break Hour');
+      $addBtn.on('click',function(e){ e.stopPropagation(); draft.push({hours:'',mins:''}); renderRows(); markDirty(); });
+      $dd.append($('<div>').append($addBtn));
+
+      var $btnRow=$('<div>').css({display:'flex',gap:'6px',justifyContent:'flex-end',marginTop:'2px',borderTop:'1px solid #eef1f4',paddingTop:'8px'});
+      var $closeBtn=$('<button type="button">').text('Close').css({fontSize:'11px',padding:'3px 12px',background:'#fff',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+      $saveBtn=$('<button type="button">').text('Save').css({fontSize:'11px',padding:'3px 14px',background:'#308930',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600',display:'none'});
+      function closeDD(){ $(document).off('mousedown.nbdd'); $dd.remove(); }
+      function doSave(){
+        var parsed=draft.map(function(r){ return {hours:parseFloat(r.hours), mins:parseInt(r.mins)}; }).filter(function(r){ return !isNaN(r.hours)&&!isNaN(r.mins); });
+        calRow.mealBreaks=parsed;
+        saveCalendarRows();
+        if(typeof rebuildCalSection==='function') rebuildCalSection();
+        if(typeof rebuildStaffingSection==='function') rebuildStaffingSection();
+        _snapshot=JSON.stringify(draft); markDirty(); closeDD();
+      }
+      $saveBtn.on('click',function(e){ e.stopPropagation(); doSave(); });
+      $closeBtn.on('click',function(e){ e.stopPropagation(); if(_dirty() && !_confirmDiscard()) return; closeDD(); });
+      $btnRow.append($closeBtn,$saveBtn);
+      $dd.append($btnRow);
+      markDirty();
+
+      $('body').append($dd);
+      var rc=anchorEl.getBoundingClientRect();
+      var top=rc.bottom+4, left=rc.left, ddw=$dd.outerWidth()||240, ddh=$dd.outerHeight()||160;
+      if(left+ddw>window.innerWidth-8) left=Math.max(8, window.innerWidth-ddw-8);
+      if(top+ddh>window.innerHeight-8) top=Math.max(8, rc.top-ddh-4);
+      $dd.css({top:top+'px',left:left+'px'});
+      $dd.on('mousedown',function(e){ e.stopPropagation(); });
+      setTimeout(function(){ $(document).on('mousedown.nbdd',function(ev){ if($dd[0].contains(ev.target)||ev.target===anchorEl) return; if(_dirty() && !_confirmDiscard()) return; closeDD(); }); },0);
+    }
+
 
     var csThStyle={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
     var csTdStyle={border:'1px solid #dee2e6',padding:'2px 3px',verticalAlign:'middle'};
@@ -8361,6 +8578,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $bilChk.on('focus',showTip).on('blur',hideTip);
         })();
         $bilTd.append($bilWrap);
+        // Gear — only for Non-Billable calendars — opens that calendar's Non-Billable Settings dropdown.
+        var $nbGear=$('<span title="Non-Billable Settings">\u2699</span>').css({cursor:'pointer',fontSize:'13px',lineHeight:'1',color:'#6c757d',padding:'0 2px',marginLeft:'2px',userSelect:'none',display:(calendarRows[ri].billable!==false?'none':'inline-block')});
+        $bilChk.on('change',function(){ $nbGear.css('display', $(this).is(':checked')?'none':'inline-block'); });
+        (function(gRi){ $nbGear.on('click',function(e){ e.stopPropagation(); e.preventDefault(); openNBSettings(calendarRows[gRi], this); }); })(ri);
+        $bilTd.append($nbGear);
         $tr.append($bilTd);
         // Del button cell — matches Site Breakdown style
         var $delTd=$('<td>').css(Object.assign({},csTdStyle,{textAlign:'center',width:'46px',background:'#fafafa',padding:'4px 6px',verticalAlign:'middle',whiteSpace:'nowrap'}));
