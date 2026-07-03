@@ -4292,8 +4292,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Read-only meal-break indicator inside the Hours cell. Meal breaks are automatic now: driven
     // by the calendar's Billable flag + the duration formula (no manual per-cell editing). For a
     // Non-Billable calendar a shift >5h shows "-30m" / "-60m"; Billable calendars show nothing.
-    function buildBreakControl(d2, onChange, isBillable){
-      if(isBillable===undefined) isBillable=true;
+    function buildBreakControl(d2, onChange, calRowOrBool){
+      // 3rd arg may be a Program Calendar row (uses its Non-Billable meal-break settings) or a boolean.
+      var _bcR=_mbResolve(calRowOrBool), isBillable=_bcR.isBillable, _bcCalRow=_bcR.calRow;
       var $lbl=$('<span class="brk-label">').css({position:'absolute',top:'1px',right:'2px',fontSize:'8px',userSelect:'none',lineHeight:'1',padding:'0 1px',zIndex:'3',pointerEvents:'none'});
       function refreshLabel(){
         var raw=calcHours(d2.start,d2.end);
@@ -4306,7 +4307,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           else { $lbl.hide(); }
           return;
         }
-        var mins=mealBreakMinsFor(raw);
+        var mins=mealBreakMinsForCal(_bcCalRow, raw);
         if(mins>0){ $lbl.text('-'+mins+'m').css('color',STATUS_COLORS.nonbillable).show(); }
         else { $lbl.hide(); }
       }
@@ -4918,7 +4919,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         }
 
 
-        function buildOneTable(shData,getCountsFn,sfxClass,isBillable){
+        function buildOneTable(shData,getCountsFn,sfxClass,isBillable){  // 'isBillable' receives the Program Calendar row (or boolean); it flows to calcAdjustedHours/buildBreakControl, which apply that calendar's meal-break settings
           ROLES.forEach(function(r){ if(!shData[r.key]) shData[r.key]={}; DAYS.forEach(function(d){ if(!shData[r.key][d.k]) shData[r.key][d.k]={start:'',end:''}; }); });
           var _p={};
           var $stMn=$('<div class="sf-action-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
@@ -5226,7 +5227,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if($copyToBtn) _calSec.$hdr.append($copyToBtn);
           }
           var cFn=(function(sr,csr){ return function(){ return getSchoolCounts(sr,csr); }; })(combo.sRow,combo.calSiteRows);
-          var res=buildOneTable(shData,cFn,sfx,calRowBillable(combo.calRow));
+          var res=buildOneTable(shData,cFn,sfx,combo.calRow);
           res.$scroll.attr({'data-sf-cal':combo.ci!=null?String(combo.ci):'','data-sf-school':combo.si!=null?String(combo.si):'','data-sf-wk':combo.wk||''});
           _calSec.$section.append(res.$scroll);
           _allRecalcs.push(res);
@@ -8232,20 +8233,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function markDirty(){ if($saveBtn) $saveBtn.css('display', _dirty()?'inline-block':'none'); }
       function _confirmDiscard(){ try{ return window.confirm('Discard unsaved Non-Billable Settings changes?'); }catch(e){ return true; } }
 
-      var $dd=$('<div class="nb-settings-dd">').css({position:'fixed',zIndex:'1000000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 20px rgba(0,0,0,.16)',padding:'10px 12px',fontSize:'12px',minWidth:'240px',maxWidth:'320px'});
-      $dd.append($('<div>').css({fontWeight:'700',fontSize:'12px',color:'#212529',marginBottom:'8px'}).text('Non-Billable Settings'));
+      var $dd=$('<div class="nb-settings-dd">').css({position:'fixed',zIndex:'1000000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 20px rgba(0,0,0,.16)',padding:'8px 9px',fontSize:'12px',width:'fit-content',maxWidth:'260px'});
+      $dd.append($('<div>').css({fontWeight:'700',fontSize:'12px',color:'#212529',marginBottom:'6px',whiteSpace:'nowrap'}).text('Non-Billable Settings'));
 
-      var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+      var $tbl=$('<table>').css({borderCollapse:'collapse',width:'auto',fontSize:'11px'});
       var $thead=$('<thead>').append($('<tr>').append(
-        $('<th>').css({textAlign:'left',padding:'2px 4px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Hours'),
-        $('<th>').css({textAlign:'left',padding:'2px 4px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef'}).text('Meal Breaks, Total (min)'),
-        $('<th>').css({width:'44px',borderBottom:'1px solid #e9ecef'})
+        $('<th>').css({textAlign:'center',padding:'2px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Hours'),
+        $('<th>').css({textAlign:'center',padding:'2px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Meal Break'),
+        $('<th>').css({width:'1%',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef'})
       ));
       var $tb=$('<tbody>');
       $tbl.append($thead).append($tb);
 
       function numInput(val, decimals){
-        var $i=$('<input type="text">').attr('inputmode', decimals?'decimal':'numeric').val(val).css({width:'100%',boxSizing:'border-box',fontSize:'11px',padding:'2px 4px',border:'1px solid #ced4da',borderRadius:'4px',textAlign:'center'});
+        var $i=$('<input type="text">').attr('inputmode', decimals?'decimal':'numeric').val(val).css({width:(decimals?'40px':'46px'),boxSizing:'border-box',fontSize:'11px',padding:'2px 3px',border:'1px solid #ced4da',borderRadius:'4px',textAlign:'center'});
         $i.on('input',function(){ var v=$(this).val(); if(decimals){ v=v.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1'); } else { v=v.replace(/[^0-9]/g,''); } if(v!==$(this).val()) $(this).val(v); });
         return $i;
       }
@@ -8258,20 +8259,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $del=$('<button type="button" title="Delete">').text('Del').css({background:'#fff1f0',border:'1px solid #ffccc7',borderRadius:'5px',cursor:'pointer',color:'#cf1322',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'3px 7px',whiteSpace:'nowrap'});
           $del.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});}).on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
           $del.on('click',function(){ draft.splice(idx,1); renderRows(); markDirty(); });
-          $tr.append($('<td>').css({padding:'2px 3px'}).append($hIn));
-          $tr.append($('<td>').css({padding:'2px 3px'}).append($mIn));
-          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($del));
+          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($hIn));
+          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($mIn));
+          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center',whiteSpace:'nowrap'}).append($del));
           $tb.append($tr);
         });
       }
       renderRows();
       $dd.append($tbl);
 
-      var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 0 4px;">').text('+ Meal Break Hour');
+      var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:6px 0 3px;">').text('+ Meal Break Hour');
       $addBtn.on('click',function(e){ e.stopPropagation(); draft.push({hours:'',mins:''}); renderRows(); markDirty(); });
       $dd.append($('<div>').append($addBtn));
 
-      var $btnRow=$('<div>').css({display:'flex',gap:'6px',justifyContent:'flex-end',marginTop:'2px',borderTop:'1px solid #eef1f4',paddingTop:'8px'});
+      var $btnRow=$('<div>').css({display:'flex',gap:'6px',justifyContent:'flex-end',marginTop:'2px',borderTop:'1px solid #eef1f4',paddingTop:'6px'});
       var $closeBtn=$('<button type="button">').text('Close').css({fontSize:'11px',padding:'3px 12px',background:'#fff',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
       $saveBtn=$('<button type="button">').text('Save').css({fontSize:'11px',padding:'3px 14px',background:'#308930',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600',display:'none'});
       function closeDD(){ $(document).off('mousedown.nbdd'); $dd.remove(); }
@@ -8563,10 +8564,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               .css({position:'fixed', zIndex:2000000, display:'none', opacity:'1', pointerEvents:'none'})
               .appendTo('body');
           }
-          var TIP_HTML='Over 5 hrs: 30 min break<br>Over 6 hrs: 60 min break';
+          // Tooltip reflects THIS calendar's configurable Non-Billable Settings as a compact
+          // "Hours / Meal Break" table (built fresh on hover, so it tracks edits/saves).
+          // No hardcoded thresholds — it reads the same getCalMealBreaks() the calculations use.
+          function _mbTipHtml(){
+            var mb=getCalMealBreaks(calendarRows[ri])||[];
+            var body=mb.map(function(m){ return '<tr><td style="padding:2px 12px;text-align:center;">'+m.hours+'</td><td style="padding:2px 12px;text-align:center;">'+m.mins+'</td></tr>'; }).join('');
+            return '<div style="font-weight:700;margin-bottom:4px;white-space:nowrap;">Non-Billable Meal Breaks</div>'
+              +'<table style="border-collapse:collapse;font-size:11px;white-space:nowrap;line-height:1.4;">'
+              +'<tr><td style="padding:2px 12px;font-weight:600;border-bottom:1px solid #e6e6e6;text-align:center;">Hours</td>'
+              +'<td style="padding:2px 12px;font-weight:600;border-bottom:1px solid #e6e6e6;text-align:center;">Meal Break</td></tr>'
+              +body+'</table>';
+          }
           function showTip(){
             if($bilChk.is(':checked')) return;   // Non-Billable only — meal breaks don't apply when Billable
-            $tip.html(TIP_HTML).css('display','block');
+            $tip.html(_mbTipHtml()).css('display','block');
             var r=$bilWrap[0].getBoundingClientRect();
             var th=$tip[0].offsetHeight||40;
             var top=r.top - th - 8;
@@ -8577,12 +8589,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $bilWrap.on('mouseenter',showTip).on('mouseleave',hideTip);
           $bilChk.on('focus',showTip).on('blur',hideTip);
         })();
-        $bilTd.append($bilWrap);
+        // The checkbox/label and the (Non-Billable-only) gear share a centered inline-flex row.
+        var $bilCell=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'});
+        $bilCell.append($bilWrap);
         // Gear — only for Non-Billable calendars — opens that calendar's Non-Billable Settings dropdown.
-        var $nbGear=$('<span title="Non-Billable Settings">\u2699</span>').css({cursor:'pointer',fontSize:'13px',lineHeight:'1',color:'#6c757d',padding:'0 2px',marginLeft:'2px',userSelect:'none',display:(calendarRows[ri].billable!==false?'none':'inline-block')});
+        var $nbGear=$('<span title="Non-Billable Settings">\u2699</span>').css({cursor:'pointer',fontSize:'12px',lineHeight:'1',color:'#6c757d',userSelect:'none',display:(calendarRows[ri].billable!==false?'none':'inline-block')});
         $bilChk.on('change',function(){ $nbGear.css('display', $(this).is(':checked')?'none':'inline-block'); });
         (function(gRi){ $nbGear.on('click',function(e){ e.stopPropagation(); e.preventDefault(); openNBSettings(calendarRows[gRi], this); }); })(ri);
-        $bilTd.append($nbGear);
+        $bilCell.append($nbGear);
+        $bilTd.append($bilCell);
         $tr.append($bilTd);
         // Del button cell — matches Site Breakdown style
         var $delTd=$('<td>').css(Object.assign({},csTdStyle,{textAlign:'center',width:'46px',background:'#fafafa',padding:'4px 6px',verticalAlign:'middle',whiteSpace:'nowrap'}));
