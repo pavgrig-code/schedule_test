@@ -1709,6 +1709,12 @@ $(function(){
     _invalidateStaffCache();
     // Non-Schedule modes use these controls in the toolbar; bring them back if Schedule mode borrowed them.
     if(pageMode!=='schedule') _restoreSchedControlsToToolbar();
+    // The #staff-search field is shared across modes. Planning binds input.pg and Site Schedule
+    // binds input.sched (both run a GUIDE search); strip whichever doesn't belong to the current
+    // mode so a stale handler can't clobber the staff list after a mode switch. Each mode re-binds
+    // its own handler in its render path, so this is always safe.
+    if(pageMode!=='planning') $('#staff-search').off('input.pg');
+    if(pageMode!=='schedule') $('#staff-search').off('input.sched');
     // Planning Guides mode
     if(pageMode==='planning'){
       $('#timeline-area').hide(); $('#summary-bar').hide();
@@ -1737,6 +1743,11 @@ $(function(){
           }
         }catch(e){}
       }
+      // Shared-field hygiene (mirrors the Staff Schedule branch below): restore the staff
+      // placeholder and sync the field to staffFilter so guide-search text from Planning /
+      // Site Schedule doesn't linger over the staff list.
+      $('#staff-search').attr('placeholder','Search staff…');
+      if($('#staff-search').val()!==staffFilter) $('#staff-search').val(staffFilter);
       // Show staff column — rStaff reads selectedPersonId to apply .selected
       rStaff();
       $('#staff-col').show();
@@ -2661,8 +2672,10 @@ $(function(){
     // Insert New Guide button into the staff-col-header (centered vertically)
     $header.css({display:'flex',alignItems:'center',minHeight:'44px',padding:'0 4px'}).show().append($newGuideBtn);
 
-    // Shared action menu
-    var $pgMenu=$('<div>').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'130px',padding:'4px',display:'none',fontSize:'12px'});
+    // Shared action menu — reap any instance left by a previous rPlanningGuides render
+    // (and its outside-click doc handler) so mode round-trips don't accumulate orphaned portals.
+    $('.pg-action-menu').remove(); $(document).off('click._pgmenu');
+    var $pgMenu=$('<div class="pg-action-menu">').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'130px',padding:'4px',display:'none',fontSize:'12px'});
     $('body').append($pgMenu);
     function closePgMenu(){ $pgMenu.hide(); $(document).off('click._pgmenu'); }
     function pgMenuItem(label,cb){
@@ -4113,6 +4126,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     });
 
     $wrap.append($inp);
+    // Teardown: when the picker's wrapper leaves the DOM (section rebuild / panel .empty()),
+    // reap the body-appended dropdown portal, pending blur timer, position-tracking rAF loop,
+    // and the outside-click document handler. Without this, every guide-detail rebuild orphaned
+    // one portal div per picker on <body>.
+    $wrap.on('remove',function(){
+      $dd.remove();
+      if(_hideT){clearTimeout(_hideT);_hideT=null;}
+      if(_tpRaf){cancelAnimationFrame(_tpRaf);_tpRaf=null;}
+      _open=false;
+      $(document).off('click._tp_'+_uid);
+    });
     $wrap._val=function(){ return _val; };
     $wrap._setVal=function(v){ _val=v; $inp.val(window._PICKER_FMT(v)); };
     return $wrap;
@@ -5567,7 +5591,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $wrap.append($inp);
     $wrap.getVal=function(){ return _val; };
     $wrap.setVal=function(v){ _val=v; _sel=parseSel(v); $inp.val(fmtDisp(v)); if(_sel){_vy=_sel.y;_vm=_sel.m;} };
-    $wrap.destroy=function(){ $popup.remove(); $(document).off('click._dp_'+_uid); };
+    $wrap.destroy=function(){ $popup.remove(); $(document).off('click._dp_'+_uid); if(_dpRaf){cancelAnimationFrame(_dpRaf);_dpRaf=null;} };
+    // Teardown is also automatic: destroy() required a disciplined caller, and the guide-detail
+    // rebuild path never called it — orphaning one body-appended calendar popup per picker on
+    // every rebuild. The remove-hook makes panel .empty()/.remove() reap it unconditionally.
+    $wrap.on('remove',function(){ $wrap.destroy(); });
     return $wrap;
   }
 
@@ -6981,8 +7009,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function _tipSectionHeaderRow(schoolNames, sd, sdLabel, ncol, indentPx){
       var $r=$('<tr>');
       var $td=$('<td>').attr('colspan',ncol).css({padding:'4px 6px 3px '+(indentPx||6)+'px',background:'#f4f6f8',borderTop:'1px solid #e9ecef'});
-      (schoolNames||[]).forEach(function(nm){
-        $td.append($('<div>').css({fontWeight:'700',fontSize:'9.5px',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:'1.4'}).text(nm));
+      var _names=schoolNames||[];
+      // When a section groups MULTIPLE schools (a grouped school section, or a shared Special Day section
+      // covering several schools), render them as a subtle bullet list — consistent with the school list
+      // shown under the Program Calendar name. A single-school heading stays plain (a lone bullet reads oddly).
+      var _bulletSchools=_names.length>1;
+      _names.forEach(function(nm){
+        if(_bulletSchools){
+          $td.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontWeight:'700',fontSize:'9.5px',color:'#3c4043',lineHeight:'1.4'})
+            .append($('<span>').css({color:'#adb5bd',fontWeight:'400',flexShrink:'0'}).text('•'))
+            .append($('<span>').css({minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(nm)));
+        } else {
+          $td.append($('<div>').css({fontWeight:'700',fontSize:'9.5px',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:'1.4'}).text(nm));
+        }
       });
       if(sd){
         var $sd=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',fontWeight:'700',fontSize:'9.5px',color:'#3c4043',lineHeight:'1.4'});
@@ -7118,7 +7157,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $slw=$('<div class="cal-tip-schoollist">').css({lineHeight:'1.4'});
             _grpSites.forEach(function(sr,si){
               var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
-              $slw.append($('<div>').css({fontSize:'9px',color:'#6c757d',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm));
+              // Subtle bullet: muted dot + name, each school on its own line (min-width:0 keeps ellipsis in flex).
+              $slw.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'5px',fontSize:'9px',color:'#6c757d',lineHeight:'1.4'})
+                .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
+                .append($('<span>').css({minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm)));
             });
             $sltd.append($slw); $slr.append($sltd); $tb.append($slr);
           }
@@ -7130,6 +7172,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $tb.append($er);
         }
         var sub=0, parity=0;
+        // Renders one role row; also returns its Total so each section can accumulate its own subtotal.
         function _combRoleRow(r){
           var $row=$('<tr>').css({background:(parity++%2)?'#f9fafb':'#ffffff'});
           $row.append($('<td>').css({padding:'3px 6px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label));
@@ -7140,44 +7183,62 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#1a73e8',fontWeight:'700'}).text(r.noHoursNote?'0':r.total));
           $tb.append($row);
           sub+=(r.total||0);
+          return (r.total||0);
+        }
+        // Per-section subtotal: a clean "Subtotal" row at the end of each breakdown section (individual
+        // school section, collapsed shared-Special-Day section, or aggregate). Mirrors the regular view —
+        // same styling, emitted only when the section has hours > 0 — and never repeats the school or
+        // calendar name (already shown in the header above). This replaces the former single per-calendar
+        // "<name> Subtotal" row, so a multi-school calendar now shows one subtotal per school.
+        function _combSubtotalRow(sectionSub){
+          sectionSub=Math.round(sectionSub*100)/100;
+          if(!(sectionSub>0)) return;
+          var $s=$('<tr>').css({background:'#eef2f7'});
+          $s.append($('<td>').attr('colspan',_ncol-1).css({padding:'4px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text('Subtotal'));
+          $s.append($('<td>').css({padding:'4px 6px',textAlign:'center',fontWeight:'700',color:'#1a73e8'}).text(sectionSub));
+          $tb.append($s);
         }
         if(_collapse){
           // One shared breakdown for all schools that share the Special Day (summed by role/time — no double
           // count). A no-hours Special Day (e.g. Holiday) shows a single "No staffing hours this day" note.
-          var _comb=_tipCombineSchoolRows(_schoolGroups);
-          if(_comb.anyReal){ _comb.rows.forEach(_combRoleRow); }
+          var _comb=_tipCombineSchoolRows(_schoolGroups), _collSub=0;
+          if(_comb.anyReal){ _comb.rows.forEach(function(r){ _collSub+=_combRoleRow(r); }); }
           else {
             var $enr=$('<tr>').css({background:'#ffffff'});
             $enr.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day'));
             $tb.append($enr);
           }
+          _combSubtotalRow(_collSub);
         } else if(gp.bySchool){
           // Schools differ overall, but schools that share the SAME Special Day AND identical hours are merged
           // into ONE shared breakdown (e.g. 2 of 3 schools have no Special Day and the same schedule → one
           // table listing both, not two identical tables). Schools that genuinely differ keep their own section.
           _tipSignatureGroups(_schoolGroups).forEach(function(sg){
             if(sg.groups.length===1){
-              var g2=sg.groups[0];
+              var g2=sg.groups[0], _secSub=0;
               $tb.append(_tipSectionHeaderRow([_tipSchoolNameFor(_grpSites,g2.schoolIdx)], g2.sd, g2.sd?_tipSdLabel(gObj.id,g2.sd):'', _ncol, 22));
-              g2.rows.forEach(_combRoleRow);
+              g2.rows.forEach(function(r){ _secSub+=_combRoleRow(r); });
+              _combSubtotalRow(_secSub);
             } else {
+              // Multiple schools share identical hours + Special Day state: one merged section, and one clear
+              // "Subtotal" for the group (not repeated per school, and no school names in the subtotal line).
               $tb.append(_tipSectionHeaderRow(sg.schoolIdxs.map(function(si){ return _tipSchoolNameFor(_grpSites, si); }), sg.sd, sg.sd?_tipSdLabel(gObj.id,sg.sd):'', _ncol, 22));
-              var _cmb=_tipCombineSchoolRows(sg.groups);
-              if(_cmb.anyReal){ _cmb.rows.forEach(_combRoleRow); }
+              var _cmb=_tipCombineSchoolRows(sg.groups), _secSub=0;
+              if(_cmb.anyReal){ _cmb.rows.forEach(function(r){ _secSub+=_combRoleRow(r); }); }
               else { var $enr3=$('<tr>').css({background:'#ffffff'}); $enr3.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day')); $tb.append($enr3); }
+              _combSubtotalRow(_secSub);
             }
           });
         } else {
           // Aggregate calendar: optional Special Day subheader (e.g. single school with an SD), then role rows.
-          var _aggSd2=rows.length?rows[0].sd:null;
+          var _aggSd2=rows.length?rows[0].sd:null, _aggSub=0;
           if(_aggSd2) $tb.append(_tipSectionHeaderRow([], _aggSd2, _tipSdLabel(gObj.id,_aggSd2), _ncol, 22));
-          rows.forEach(_combRoleRow);
+          rows.forEach(function(r){ _aggSub+=_combRoleRow(r); });
+          _combSubtotalRow(_aggSub);
         }
+        // Calendar total still feeds the Combined Total footer; it is no longer rendered as its own row —
+        // per-section "Subtotal" rows (above) now carry the breakdown, matching the regular view.
         sub=Math.round(sub*100)/100; grand+=sub;
-        var $subr=$('<tr>').css({background:'#eef2f7'});
-        $subr.append($('<td>').attr('colspan',_ncol-1).css({padding:'4px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text(calName+' Subtotal'));
-        $subr.append($('<td>').css({padding:'4px 6px',textAlign:'center',fontWeight:'700',color:'#1a73e8'}).text(sub));
-        $tb.append($subr);
       });
       $tbl.append($tb);
 
@@ -7356,7 +7417,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $schoolList=$('<div class="cal-tip-schoollist">').css({marginBottom:'6px',lineHeight:'1.45'});
         _siteRows.forEach(function(sr,si){
           var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
-          $schoolList.append($('<div>').css({fontSize:'10px',color:'#5f6368',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm));
+          // Subtle bullet: muted dot + name, each school on its own line (min-width:0 keeps ellipsis in flex).
+          $schoolList.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontSize:'10px',color:'#5f6368',lineHeight:'1.45'})
+            .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
+            .append($('<span>').css({minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(_nm)));
         });
         $hdrPad.append($schoolList);
       }
@@ -7388,11 +7452,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $tb=$('<tbody>');
       var _totalColspan=5; // columns before the Total column (for subtotal layout)
 
-      // Emits a subtotal row for a school (only when it has hours > 0)
+      // Emits a subtotal row for a section (only when it has hours > 0). The label is intentionally just
+      // "Subtotal" — the school name is already shown in the section header directly above, so repeating it
+      // here (e.g. "Alliance Collins Family College-Ready High Subtotal") is redundant. schoolName is kept
+      // in the signature for call-site clarity but no longer printed.
       function appendSubtotal(schoolName, subtotal){
         if(!(subtotal>0)) return;
         var $sub=$('<tr>').css({background:'#eef2f7'});
-        $sub.append($('<td>').attr('colspan',_totalColspan).css({padding:'4px 5px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text((schoolName?schoolName+' ':'')+'Subtotal'));
+        $sub.append($('<td>').attr('colspan',_totalColspan).css({padding:'4px 5px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text('Subtotal'));
         $sub.append($('<td>').css({padding:'4px 5px',textAlign:'center',fontWeight:'700',color:'#1a73e8'}).text(Math.round(subtotal*100)/100));
         $tb.append($sub);
       }
@@ -10231,6 +10298,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   });
 
   $('#staff-search').on('input',function(){
+    // Planning / Site Schedule own this field via input.pg / input.sched (guide search).
+    // Skip the staff-side work there: it re-rendered the hidden staff list + grid and replaced
+    // history state on every guide-search keystroke, and polluted staffFilter with guide text.
+    if(pageMode==='planning'||pageMode==='schedule') return;
     staffFilter=$(this).val().trim();
     rStaff();rGrid();refreshView(true);
   });
