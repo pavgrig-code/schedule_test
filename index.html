@@ -28,6 +28,19 @@
 .cal-combined-day { position: relative; }
 .cal-combined-day.cal-hovered::after { content:''; position:absolute; inset:0; background:rgba(30,120,220,0.10); pointer-events:none; }
 .cal-combined-day.cal-hovered-wknd::after { content:''; position:absolute; inset:0; background:rgba(30,90,180,0.12); pointer-events:none; }
+/* Subtle border highlight on the cell whose hours breakdown is currently showing (hover tooltip or the
+   persistent click-pinned popup). Driven by the .cal-tip-active class, toggled with the tooltip anchor.
+   Rendered as an inset ring so it reads as a border without shifting any layout. */
+.cal-day-cell.cal-tip-active::before,
+.cal-combined-day.cal-tip-active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 2px rgba(30, 120, 220, 0.5);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 2;
+}
 :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#f1f3f5;--bd:#dee2e6;--bd2:#e9ecef;--tx:#212529;--tx2:#6c757d;--blue:#0d6efd;--blue2:#0b5ed7;--red:#E24B4A;}
 html,body{height:100%;margin:0;padding:0;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow:hidden;}
@@ -6600,6 +6613,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _hoverClass=_wknd?'cal-hovered-wknd':'cal-hovered';
               var _thisHasPopup=false;
               $td.on('mouseenter',function(){
+                if(_tipPinned) return;   // hover must not disturb a click-pinned popup
                 cancelHide();
                 $td.addClass(_hoverClass);
                 var hrsVal=parseFloat($td.find('.cal-combined-sum').text());
@@ -6609,6 +6623,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 $td.removeClass(_hoverClass);
                 if(_thisHasPopup && _tipAnchor && _tipAnchor[0]===$td[0]){ schedHide(120); }
                 else { _thisHasPopup=false; }
+              }).on('click',function(e){
+                // Click a combined cell with hours → open the SAME breakdown, pinned open until outside-click/Esc.
+                var hrsVal=parseFloat($td.find('.cal-combined-sum').text());
+                if(!(hrsVal>0)) return;
+                e.stopPropagation();
+                cancelHide();                      // cancel any pending hover-hide
+                _tipPinned=true;                   // pin FIRST → mouseenter guards suppress hover from this instant
+                showCombinedCalTooltip($td,_dk,g,_day); // rebuilds the SAME popup → the hover breakdown is replaced
+                pinCalTip();                        // arm deferred outside-click / Esc close
               });
             })(_dayKey,day,isWknd);
             // "…" action button + right-click → grouped Special Day menu for this combined day
@@ -6747,6 +6770,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _thisHasPopup=false;
               var _hoverClass=isWknd?'cal-hovered-wknd':'cal-hovered';
               $td.on('mouseenter',function(){
+                if(_tipPinned) return;   // hover must not disturb a click-pinned popup
                 cancelHide();
                 // Apply hover via CSS class — never touch inline background
                 $td.addClass(_hoverClass);
@@ -6775,6 +6799,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 } else {
                   _thisHasPopup=false;
                 }
+              }).on('click',function(e){
+                // Click a cell with hours → open the SAME breakdown, pinned open until an outside-click/Esc.
+                var hrsVal=parseFloat($td.find('.cal-hours').text());
+                if(!(hrsVal>0)) return;
+                e.stopPropagation();               // don't let this click reach the outside-close handler
+                cancelHide();                      // cancel any pending hover-hide
+                _tipPinned=true;                   // pin FIRST → mouseenter guards suppress hover from this instant
+                showCalTooltip($td, dk, g, day);   // rebuilds the SAME popup → the hover breakdown is replaced
+                pinCalTip();                        // arm deferred outside-click / Esc close
               });
             })(_dayKey, dateKey, baseBg, calRow.calId);
           }
@@ -6836,9 +6869,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _tipAnchor=null;
     var _tipCellBg=null;   // original bg of the currently highlighted cell
     var _rafId=null;
+    var _tipPinned=false;  // true when the breakdown popup was opened by a CLICK (stays until outside-click/Esc)
 
     function cancelHide(){ if(_tipHide){clearTimeout(_tipHide);_tipHide=null;} }
     function schedHide(delay){
+      if(_tipPinned) return;   // a click-pinned popup ignores hover-out; it closes only on outside-click/Esc
       cancelHide();
       _tipHide=setTimeout(function(){ hideCalTooltip(); },delay||80);
     }
@@ -6846,11 +6881,45 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function hideCalTooltip(){
       cancelHide();
       if(_tipAnchor){
-        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd');
+        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd cal-tip-active');
         _tipCellBg=null;
       }
       $calTip.hide(); _tipAnchor=null;
       if(_rafId){ cancelAnimationFrame(_rafId); _rafId=null; }
+      _unpinCalTip();
+    }
+
+    // ── Click-to-pin: keep the breakdown popup open until the user clicks outside it (or presses Esc) ──
+    function _calTipOutside(e){
+      if(!_tipPinned) return;
+      if(e.target===$calTip[0] || $.contains($calTip[0], e.target)) return; // clicks INSIDE the popup keep it open
+      hideCalTooltip();
+    }
+    function _calTipEsc(e){ if(_tipPinned && e.key==='Escape'){ hideCalTooltip(); } }
+    var _tipPinBindT=null;
+    function _clearPinBind(){ if(_tipPinBindT){ clearTimeout(_tipPinBindT); _tipPinBindT=null; } }
+    function _unpinCalTip(){
+      _clearPinBind();
+      if(!_tipPinned) return;
+      _tipPinned=false;
+      $(document).off('click.caltippin keydown.caltippin');
+    }
+    // Pin the CURRENTLY-shown popup (the caller has already built + positioned it via a show* function).
+    function pinCalTip(){
+      _tipPinned=true;
+      cancelHide();                     // suppress any pending hover-hide so the popup can't fade after pinning
+      $(document).off('click.caltippin keydown.caltippin');
+      _clearPinBind();
+      // Bind the outside-click / Esc listeners on the NEXT tick. Binding them synchronously let the very click
+      // that opened the popup bubble straight into the outside-close handler and shut it again. Deferring one
+      // tick (the same pattern the Special Day pickers use) guarantees the opening click is fully done first.
+      _tipPinBindT=setTimeout(function(){
+        _tipPinBindT=null;
+        if(!_tipPinned) return;         // popup was closed again before the tick elapsed
+        $(document).off('click.caltippin keydown.caltippin')
+          .on('click.caltippin', _calTipOutside)
+          .on('keydown.caltippin', _calTipEsc);
+      },0);
     }
 
     // Keep popup visible while hovering over it
@@ -6858,26 +6927,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $calTip.on('mouseleave',function(){ schedHide(120); });
 
     function posCalTip(fromRaf){
-      if(!_tipAnchor||!$calTip[0]||$calTip[0].style.display==='none'){ _rafId=null; return; }
-      var r=_tipAnchor[0].getBoundingClientRect();
+      if(!$calTip[0]||$calTip[0].style.display==='none'){ _rafId=null; return; }
       var tw=$calTip[0].offsetWidth||360;
       var th=$calTip[0].offsetHeight||200;
       var vw=window.innerWidth, vh=window.innerHeight;
-      var GAP=4, MARGIN=8;
+      var MARGIN=8;
       var tx, ty;
 
-      // ── Vertical: prefer below, then above ──
-      if(r.bottom+GAP+th <= vh-MARGIN){
-        ty=r.bottom+GAP;                          // below cell
-      } else if(r.top-GAP-th >= MARGIN){
-        ty=r.top-GAP-th;                          // above cell
+      if(_tipPinned){
+        // Persistent (click-pinned) popup: fixed in the CENTER of the viewport — NOT anchored to the clicked
+        // cell. $calTip is position:fixed, so viewport-centered coords keep it centered even while the
+        // calendar table scrolls behind it. Re-centering each frame also keeps it centered on window resize.
+        tx=Math.max(MARGIN, Math.round((vw-tw)/2));
+        ty=Math.max(MARGIN, Math.round((vh-th)/2));
       } else {
-        ty=Math.max(MARGIN, vh-th-MARGIN);         // clamp
+        // Hover tooltip: anchored next to the cell (prefer below, then above; align left, clamp to viewport).
+        if(!_tipAnchor){ _rafId=null; return; }
+        var r=_tipAnchor[0].getBoundingClientRect();
+        var GAP=4;
+        if(r.bottom+GAP+th <= vh-MARGIN){ ty=r.bottom+GAP; }
+        else if(r.top-GAP-th >= MARGIN){ ty=r.top-GAP-th; }
+        else { ty=Math.max(MARGIN, vh-th-MARGIN); }
+        tx=r.left;
+        if(tx+tw > vw-MARGIN) tx=Math.max(MARGIN, vw-tw-MARGIN);
       }
-
-      // ── Horizontal: align with left edge of cell, clamp to viewport ──
-      tx=r.left;
-      if(tx+tw > vw-MARGIN) tx=Math.max(MARGIN, vw-tw-MARGIN);
 
       $calTip.css({top:ty+'px',left:tx+'px'});
       if(fromRaf!==false) _rafId=requestAnimationFrame(function(){ posCalTip(true); });
@@ -7081,8 +7154,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
 
     function showCombinedCalTooltip($td, dayKey, gObj, cellDate){
-      if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){ _tipAnchor.removeClass('cal-hovered cal-hovered-wknd'); _tipCellBg=null; }
+      if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){ _tipAnchor.removeClass('cal-hovered cal-hovered-wknd cal-tip-active'); _tipCellBg=null; }
       _tipAnchor=$td;
+      $td.addClass('cal-tip-active');   // subtle border on the cell whose breakdown is showing (hover or pinned)
       var _crAll=(guideDetails[String(gObj.id)]||{}).calendarRows||[];
       var groups=[];
       _crAll.forEach(function(cr,oi){
@@ -7265,10 +7339,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function showCalTooltip($td, dayKey, gObj, cellDate){
       // If switching from one cell to another, remove hover class from old cell
       if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){
-        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd');
+        _tipAnchor.removeClass('cal-hovered cal-hovered-wknd cal-tip-active');
         _tipCellBg=null;
       }
       _tipAnchor=$td;
+      $td.addClass('cal-tip-active');   // subtle border on the cell whose breakdown is showing (hover or pinned)
       var abWeek=$td.closest('tr').attr('data-ab-week')||'';
       var calOrigIdx=$td.closest('tr').attr('data-cal-orig-idx');
       calOrigIdx=(calOrigIdx!==undefined&&calOrigIdx!==null&&calOrigIdx!=='') ? parseInt(calOrigIdx) : null;
@@ -7540,7 +7615,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
 
     // Clean up when section removed
-    $section.on('remove',function(){ $ctxMenu.remove(); closeCtx(); $calTip.remove(); if(_rafId){cancelAnimationFrame(_rafId);_rafId=null;} });
+    $section.on('remove',function(){ $ctxMenu.remove(); closeCtx(); $calTip.remove(); if(_rafId){cancelAnimationFrame(_rafId);_rafId=null;} _tipPinned=false; _clearPinBind(); $(document).off('click.caltippin keydown.caltippin'); });
     return $section;
   }
 
