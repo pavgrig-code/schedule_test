@@ -9200,15 +9200,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'auto',fontSize:'11px'});
       var $thead=$('<thead>').append($('<tr>').append(
-        $('<th>').css({textAlign:'center',padding:'2px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Hours'),
-        $('<th>').css({textAlign:'center',padding:'2px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',whiteSpace:'nowrap'}).text('Meal Break'),
-        $('<th>').css({width:'1%',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef'})
+        $('<th>').css({textAlign:'center',padding:'3px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',background:'#ffffff',whiteSpace:'nowrap'}).text('Hours'),
+        $('<th>').css({textAlign:'center',padding:'3px 6px',color:'#6c757d',fontWeight:'600',borderBottom:'1px solid #e9ecef',background:'#ffffff',whiteSpace:'nowrap'}).text('Meal Break'),
+        $('<th>').css({width:'1%',whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',background:'#ffffff'})
       ));
       var $tb=$('<tbody>');
       $tbl.append($thead).append($tb);
 
       function numInput(val, decimals){
-        var $i=$('<input type="text">').attr('inputmode', decimals?'decimal':'numeric').val(val).css({width:(decimals?'40px':'46px'),boxSizing:'border-box',fontSize:'11px',padding:'2px 3px',border:'1px solid #ced4da',borderRadius:'4px',textAlign:'center'});
+        var $i=$('<input type="text">').attr('inputmode', decimals?'decimal':'numeric').val(val).css({width:'100%',minWidth:'40px',boxSizing:'border-box',fontSize:'11px',padding:'2px 4px',border:'1px solid #ced4da',borderRadius:'4px',textAlign:'center'});
         $i.on('input',function(){ var v=$(this).val(); if(decimals){ v=v.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1'); } else { v=v.replace(/[^0-9]/g,''); } if(v!==$(this).val()) $(this).val(v); });
         return $i;
       }
@@ -9224,9 +9224,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $del=$('<button type="button" title="Delete">').text('Del').css({background:'#fff1f0',border:'1px solid #ffccc7',borderRadius:'5px',cursor:'pointer',color:'#cf1322',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'3px 7px',whiteSpace:'nowrap'});
           $del.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});}).on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
           $del.on('click',function(){ draft.splice(idx,1); renderRows(); markDirty(); });
-          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($hIn));
-          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center'}).append($mIn));
-          $tr.append($('<td>').css({padding:'2px 3px',textAlign:'center',whiteSpace:'nowrap'}).append($del));
+          $tr.append($('<td>').css({padding:'2px 6px',textAlign:'center'}).append($hIn));
+          $tr.append($('<td>').css({padding:'2px 6px',textAlign:'center'}).append($mIn));
+          $tr.append($('<td>').css({padding:'2px 6px',textAlign:'center',whiteSpace:'nowrap'}).append($del));
           $tb.append($tr);
         });
       }
@@ -9536,8 +9536,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           function _mbTipHtml(){
             var mb=(getCalMealBreaks(calendarRows[ri])||[]).slice().sort(function(a,b){ return parseFloat(a.hours)-parseFloat(b.hours); });   // ascending by Hours (copy — the defaults array is shared)
             var body=mb.map(function(m){ return '<tr><td style="padding:2px 8px;text-align:center;">'+m.hours+'</td><td style="padding:2px 8px;text-align:center;">'+m.mins+'</td></tr>'; }).join('');
-            return '<div style="font-weight:700;margin-bottom:4px;white-space:nowrap;">Non-Billable</div>'
-              +'<table style="border-collapse:collapse;font-size:11px;white-space:nowrap;line-height:1.4;">'
+            return '<table style="border-collapse:collapse;font-size:11px;white-space:nowrap;line-height:1.4;">'
               +'<tr><td style="padding:2px 8px;font-weight:600;border-bottom:1px solid #e9ecef;text-align:center;">Hours</td>'
               +'<td style="padding:2px 8px;font-weight:600;border-bottom:1px solid #e9ecef;text-align:center;">Meal Break</td></tr>'
               +body+'</table>';
