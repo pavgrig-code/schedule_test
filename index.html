@@ -8456,6 +8456,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     // (per-day hours logic is inlined + optimized directly into the per-school loop below)
     function fmtH(h){ var r=Math.round(h*100)/100; if(!isFinite(r)) r=0; var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); return s+' hrs'; }
+    function fmtAmt(n){ var v=Math.round((isFinite(n)?n:0)*100)/100, neg=v<0; v=Math.abs(v); var pr=v.toFixed(2).split('.'); pr[0]=pr[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return (neg?'-$':'$')+pr[0]+'.'+pr[1]; }
 
     var $container=$('<div>').attr('id','summary-section-'+g.id);
 
@@ -8528,6 +8529,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         tot+=xsSchoolRangeTotal(g.id,_calId2,(sr.school||'').trim(),cr.firstDay,cr.lastDay);   // Extra Shifts for this school within the calendar range
         return { num:si+1, name:(sr.school||sr.schoolAbbr||'').trim()||('School '+(si+1)), hours:(isFinite(tot)?tot:0) };
       });
+      var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;   // per-calendar Price/Hr — each Summary table uses its own calendar's price
       var calTotal=schoolTotals.reduce(function(a,s){return a+s.hours;},0);
 
       // Separate Summary card per Program Calendar, tied by Calendar ID (not name).
@@ -8549,6 +8551,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('#'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('School Name'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
+      $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Amount'));
       $tbl.append($('<thead>').append($hr));
       var $tb=$('<tbody>');
 
@@ -8559,6 +8562,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(st.num));
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).text(st.name));
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(st.hours)));
+        $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(price*st.hours)));
         $tb.append($sTr);
       });
 
@@ -8567,6 +8571,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#eaf0f6',whiteSpace:'nowrap'}));
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Total, Staffing Hrs'));
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(calTotal)));
+      $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(price*calTotal)));
       $tb.append($totTr);
 
       // Unallocated Hours + combined Total — only when this calendar has a meaningful (>0) Unallocated Hours value.
@@ -8578,6 +8583,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#fff7ea',whiteSpace:'nowrap'}));
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'600',color:'#212529',whiteSpace:'nowrap'}).text('Unallocated Hours'));
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'600',color:'#8a6d1a',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_unNum)));
+        $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'600',color:'#8a6d1a',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(price*_unNum)));
         $tb.append($unTr);
 
         // Combined Total row (Staffing Hrs + Unallocated Hours) — strongest total styling.
@@ -8585,6 +8591,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#dfeaf6',whiteSpace:'nowrap'}));
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Total'));
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(calTotal+_unNum)));
+        $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(price*(calTotal+_unNum))));
         $tb.append($grandTr);
       }
 
@@ -8674,6 +8681,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return $wrap2;
     }
 
+    function buildExportControl(){
+      // Compact pill, consistent with the header's status control.
+      var $btn=$('<button type="button">').css({
+        background:'#fff',color:'#495057',border:'1px solid #dee2e6',
+        borderRadius:'20px',padding:'3px 12px',fontSize:'11px',fontWeight:'600',
+        cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',lineHeight:'1.4',whiteSpace:'nowrap'
+      }).text('Export to');
+      $btn.append($('<span style="font-size:9px;opacity:0.7;">').text('\u25be'));
+      $btn.on('mouseenter',function(){ $(this).css({background:'#f8f9fa',borderColor:'#ced4da'}); })
+          .on('mouseleave',function(){ $(this).css({background:'#fff',borderColor:'#dee2e6'}); });
+
+      var $menu=$('<div>').css({
+        position:'absolute',top:'calc(100% + 4px)',left:'0',zIndex:'999',
+        background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
+        boxShadow:'0 4px 14px rgba(0,0,0,.12)',minWidth:'140px',padding:'4px',display:'none'
+      });
+      ['PDF','Excel'].forEach(function(opt){
+        var $opt=$('<button type="button">').css({
+          display:'flex',alignItems:'center',gap:'8px',width:'100%',
+          background:'none',border:'none',padding:'6px 10px',borderRadius:'6px',
+          cursor:'pointer',fontSize:'12px',textAlign:'left',color:'#212529'
+        }).text(opt)
+          .on('mouseenter',function(){ $(this).css('background','#f5f5f5'); })
+          .on('mouseleave',function(){ $(this).css('background','none'); });
+        // Not wired to any export yet — just close the menu.
+        $opt.on('click',function(e){ e.stopPropagation(); $menu.hide(); });
+        $menu.append($opt);
+      });
+
+      var $wrapE=$('<div style="position:relative;display:inline-block;">').append($btn,$menu);
+      $btn.on('click',function(e){ e.stopPropagation(); $menu.toggle(); });
+      $(document).off('click.pgexport').on('click.pgexport',function(){ $menu.hide(); });
+      return $wrapE;
+    }
+
     var $wrap=$('<div>').css({width:'100%'});
 
     // Header
@@ -8732,6 +8774,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $nameWrap.append($name,$idLabel);
         return $nameWrap;
       })(),
+      buildExportControl(),
       buildStatusControl()
     );
     $wrap.append($hdr);
@@ -9240,7 +9283,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $btnRow=$('<div>').css({display:'flex',gap:'6px',justifyContent:'flex-end',marginTop:'2px',borderTop:'1px solid #eef1f4',paddingTop:'6px'});
       var $closeBtn=$('<button type="button">').text('Close').css({fontSize:'11px',padding:'3px 12px',background:'#fff',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
       $saveBtn=$('<button type="button">').text('Save').css({fontSize:'11px',padding:'3px 14px',background:'#308930',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600',display:'none'});
-      function closeDD(){ $(document).off('mousedown.nbdd'); $dd.remove(); }
+      function closeDD(){ window.removeEventListener('scroll', placeDD, true); window.removeEventListener('resize', placeDD); $(document).off('mousedown.nbdd'); $dd.remove(); }
       function doSave(){
         var parsed=draft.map(function(r){ return {hours:parseFloat(r.hours), mins:parseInt(r.mins)}; }).filter(function(r){ return !isNaN(r.hours)&&!isNaN(r.mins); });
         parsed.sort(function(a,b){ return a.hours-b.hours; });   // persist ordered by Hours
@@ -9257,11 +9300,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       markDirty();
 
       $('body').append($dd);
-      var rc=anchorEl.getBoundingClientRect();
-      var top=rc.bottom+4, left=rc.left, ddw=$dd.outerWidth()||240, ddh=$dd.outerHeight()||160;
-      if(left+ddw>window.innerWidth-8) left=Math.max(8, window.innerWidth-ddw-8);
-      if(top+ddh>window.innerHeight-8) top=Math.max(8, rc.top-ddh-4);
-      $dd.css({top:top+'px',left:left+'px'});
+      // Keep the dropdown visually attached to its anchor (the Non-Billable gear/label) while the page or any
+      // nested container scrolls, or on resize: recompute its fixed position from the CURRENT anchor rect with
+      // the same viewport clamping (flip above / nudge left when there's no room below/right). Listeners are
+      // removed in closeDD; placeDD also self-detaches if the dropdown element is gone (e.g. a section rebuild).
+      function placeDD(){
+        if(!document.body.contains($dd[0])){ window.removeEventListener('scroll', placeDD, true); window.removeEventListener('resize', placeDD); return; }
+        if(!anchorEl || !document.body.contains(anchorEl)) return;
+        var rc=anchorEl.getBoundingClientRect();
+        var ddw=$dd.outerWidth()||240, ddh=$dd.outerHeight()||160;
+        var top=rc.bottom+4, left=rc.left;
+        if(left+ddw>window.innerWidth-8) left=Math.max(8, window.innerWidth-ddw-8);
+        if(top+ddh>window.innerHeight-8) top=Math.max(8, rc.top-ddh-4);
+        $dd.css({top:top+'px',left:left+'px'});
+      }
+      placeDD();
+      window.addEventListener('scroll', placeDD, true);   // capture → also catches scrolls inside nested containers
+      window.addEventListener('resize', placeDD);
       $dd.on('mousedown',function(e){ e.stopPropagation(); });
       setTimeout(function(){ $(document).on('mousedown.nbdd',function(ev){ if($dd[0].contains(ev.target)||ev.target===anchorEl) return; if(_dirty() && !_confirmDiscard()) return; closeDD(); }); },0);
     }
@@ -9483,6 +9538,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if($(this).val()!==v)$(this).val(v);
             calendarRows[ppRi].pricePerHour=v;
             saveCalendarRows();
+            if(typeof refreshSummary==='function') refreshSummary(g);   // Amount column updates immediately with the new Price/Hr — no reload/refresh needed
           });
           $ppInp.on('blur',function(){
             var raw=$(this).val().trim();
@@ -9491,6 +9547,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $(this).val(num.toFixed(2));
             calendarRows[ppRi].pricePerHour=num.toFixed(2);
             saveCalendarRows();
+            if(typeof refreshSummary==='function') refreshSummary(g);   // reflect the normalized price in the Amount column
           });
         })(ri);
         $ppWrap.append($ppInp);
@@ -9529,6 +9586,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $tip=$('<div class="tooltip" id="mealbreak-tip"></div>')
               .css({position:'fixed', zIndex:2000000, display:'none', opacity:'1', pointerEvents:'none'})
               .appendTo('body');
+            // Keep the tooltip visually attached to its anchor (the Non-Billable label/gear control) while the
+            // page or any nested container scrolls, or on resize: recompute its fixed position from the CURRENT
+            // anchor rect. The active anchor is stored on the shared element; the listeners are attached once
+            // (the element lives on <body> and survives section rebuilds, so this never stacks up).
+            (function(){
+              var el=$tip[0];
+              el.__mbPosition=function(){
+                var a=el.__mbAnchor;
+                if(!a || el.style.display==='none' || !document.body.contains(a)) return;
+                var r=a.getBoundingClientRect();
+                var th=el.offsetHeight||40;
+                var top=r.top - th - 8;
+                if(top < 4) top = r.bottom + 8;        // fall back below if there's no room above
+                el.style.left=Math.max(4,r.left)+'px';
+                el.style.top=top+'px';
+              };
+              window.addEventListener('scroll', el.__mbPosition, true);   // capture → catches scrolls inside nested scroll containers too
+              window.addEventListener('resize', el.__mbPosition);
+            })();
           }
           // Tooltip reflects THIS calendar's configurable Non-Billable Settings as a compact
           // "Hours / Meal Break" table (built fresh on hover, so it tracks edits/saves).
@@ -9543,14 +9619,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
           function showTip(){
             if($bilChk.is(':checked')) return;   // Non-Billable only — meal breaks don't apply when Billable
+            var el=$tip[0];
+            el.__mbAnchor=$bilWrap[0];            // which row's control the shared tooltip is currently attached to
             $tip.html(_mbTipHtml()).css('display','block');
-            var r=$bilWrap[0].getBoundingClientRect();
-            var th=$tip[0].offsetHeight||40;
-            var top=r.top - th - 8;
-            if(top < 4) top = r.bottom + 8;        // fall back below if no room above
-            $tip.css({left:Math.max(4,r.left)+'px', top:top+'px'});
+            el.__mbPosition();                    // place it now; the scroll/resize listeners keep it attached
           }
-          function hideTip(){ $tip.css('display','none'); }
+          function hideTip(){ $tip[0].__mbAnchor=null; $tip.css('display','none'); }
           $bilWrap.on('mouseenter',showTip).on('mouseleave',hideTip);
           $bilChk.on('focus',showTip).on('blur',hideTip);
         })();
