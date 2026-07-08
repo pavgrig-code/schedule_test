@@ -1445,7 +1445,9 @@ $(function(){
   // table's break label exactly: 8px, Non-Billable color, upper-right of a position:relative cell,
   // non-interactive, and it never overlaps the main total (the value sits in its own left-aligned span).
   function _mealBreakChip(mins){
-    return $('<span class="cal-tip-brk">').css({position:'absolute',top:'0px',right:'2px',fontSize:'8px',lineHeight:'1',padding:'0 1px',color:STATUS_COLORS.nonbillable,userSelect:'none',pointerEvents:'none',zIndex:'2',whiteSpace:'nowrap',fontWeight:'600'}).text('-'+mins+'m');
+    var _m=parseInt(mins,10);
+    if(!isFinite(_m) || _m<=0) return $();   // never render -0m / null / undefined / NaN
+    return $('<span class="cal-tip-brk">').css({position:'absolute',top:'0px',right:'2px',fontSize:'8px',lineHeight:'1',padding:'0 1px',color:STATUS_COLORS.nonbillable,userSelect:'none',pointerEvents:'none',zIndex:'2',whiteSpace:'nowrap',fontWeight:'600'}).text('-'+_m+'m');
   }
   // A calendar is Billable unless its `billable` flag is explicitly false (default = Billable).
   function calRowBillable(calRow){ return !calRow || calRow.billable!==false; }
@@ -7167,12 +7169,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append(td({color:'#212529',whiteSpace:'normal',wordBreak:'break-word',lineHeight:'1.3',maxWidth:'120px'}).text(roleLbl[r.role]||r.role||'—'));
           $row.append(td({textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).text(_xsFmt(r.start)));
           $row.append(td({textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).text(_xsFmt(r.end)));
-          $row.append(td({textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.hours));
+          // Hours cell: value span + optional Non-Billable meal-break chip (upper-right), matching the Staffing Hours break label.
+          var $xh=td({textAlign:'center',color:'#212529',fontWeight:'600',position:'relative',paddingRight:'16px'});
+          $xh.append($('<span>').text(r.hours));
+          if(r.brkMins>0) $xh.append(_mealBreakChip(r.brkMins));
+          $row.append($xh);
           $row.append(td({textAlign:'center',color:'#495057'}).text(r.cnt));
-          // Total cell: value span + optional Non-Billable meal-break chip (upper-right), same as the regular rows.
-          var $xt=td({textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700',position:'relative',paddingRight:'16px'});
+          // Total cell (plain — the meal-break chip now lives in the Hours cell).
+          var $xt=td({textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
           $xt.append($('<span>').text(r.total));
-          if(r.brkMins>0) $xt.append(_mealBreakChip(r.brkMins));
           $row.append($xt);
           if(o.pinned && first){
             var $act=td({verticalAlign:'middle',whiteSpace:'nowrap',textAlign:'right'}).attr('rowspan',vr.length);
@@ -7274,10 +7279,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $rSel.append($('<option>').attr('value','').text('—'));
           roles.forEach(function(ro){ $rSel.append($('<option>').attr('value',ro.key).text(ro.label)); });
           $rSel.val(r.role||'');
-          var $h=$('<td class="xs-hrs">').css({padding:'2px 4px',textAlign:'center',color:'#212529',fontWeight:'600'});
-          var $tot=$('<td class="xs-tot">').css({padding:'2px 12px 2px 4px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700',position:'relative'});
+          var $h=$('<td class="xs-hrs">').css({padding:'2px 12px 2px 4px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
+          var $hVal=$('<span class="xs-hrs-val">'); $h.append($hVal);
+          var $tot=$('<td class="xs-tot">').css({padding:'2px 4px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
           var $totVal=$('<span class="xs-tot-val">'); $tot.append($totVal);
-          function paintCalcs(){ var rc=rowCalc(r); $h.text(rc.ok?rc.h:'—'); $totVal.text(rc.ok?rc.total:'—'); $tot.children('.cal-tip-brk').remove(); if(rc.ok&&rc.brk>0) $tot.append(_mealBreakChip(rc.brk)); paintTotal(); }
+          function paintCalcs(){ var rc=rowCalc(r); $hVal.text(rc.ok?rc.h:'—'); $totVal.text(rc.ok?rc.total:'—'); $h.children('.cal-tip-brk').remove(); if(rc.ok&&rc.brk>0) $h.append(_mealBreakChip(rc.brk)); paintTotal(); }
           $rSel.on('change',function(){ r.role=$(this).val()||''; paintCalcs(); refreshFooter(); });
           $row.append($('<td>').css({padding:'2px 4px'}).append($rSel));
           ['start','end'].forEach(function(f){
@@ -7917,11 +7923,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append($('<td>').css({padding:'3px 6px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.start,r.ovS,r.origStart)));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.end,r.ovE,r.origEnd)));
-          $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.noHoursNote?'0':r.hours));
+          var $ch=$('<td>').css({padding:'3px 12px 3px 6px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
+          $ch.append($('<span>').text(r.noHoursNote?'0':r.hours));
+          if(!r.noHoursNote && r.brkMins>0) $ch.append(_mealBreakChip(r.brkMins));   // Non-Billable meal-break chip, in the Hours cell
+          $row.append($ch);
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(String(r.cnt),r.ovC,String(r.origCnt!=null?r.origCnt:r.cnt))));
-          var $ct=$('<td>').css({padding:'3px 6px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700',position:'relative'});
+          var $ct=$('<td>').css({padding:'3px 6px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
           $ct.append($('<span>').text(r.noHoursNote?'0':r.total));
-          if(!r.noHoursNote && r.brkMins>0) $ct.append(_mealBreakChip(r.brkMins));   // Non-Billable meal-break chip, matching the individual view
           $row.append($ct);
           $tb.append($row);
           sub+=(r.total||0);
@@ -8391,14 +8399,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         return $td;
       }
       function _roleCells(r){
-        var $h=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#212529',fontWeight:'600'}).text(r.noHoursNote?'0':r.hours);
-        // Total cell holds its value in a dedicated span so the Non-Billable meal-break chip can sit in the
+        // Hours cell holds its value in a dedicated span so the Non-Billable meal-break chip can sit in the
         // upper-right without overlapping the number (matching the Staffing Hours table's break label).
-        var $t=$('<td>').css({padding:'3px 5px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700',position:'relative'});
+        var $h=$('<td>').css({padding:'3px 12px 3px 5px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
+        var $hv=$('<span class="cal-tip-hrs-val">').text(r.noHoursNote?'0':r.hours);
+        $h.append($hv);
+        if(!r.noHoursNote && r.brkMins>0) $h.append(_mealBreakChip(r.brkMins));
+        var $t=$('<td>').css({padding:'3px 5px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
         var $tv=$('<span class="cal-tip-total-val">').text(r.noHoursNote?'0':r.total);
         $t.append($tv);
-        if(!r.noHoursNote && r.brkMins>0) $t.append(_mealBreakChip(r.brkMins));
-        if(!r.noHoursNote) _live.rows.push({r:r,$h:$h,$t:$t,$tv:$tv});   // registered for live (pre-Save) recalculation
+        if(!r.noHoursNote) _live.rows.push({r:r,$h:$h,$t:$t,$tv:$tv,$hv:$hv});   // registered for live (pre-Save) recalculation
         return [
           $('<td>').css({padding:'3px 5px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label),
           _valCell(r,'start'),
@@ -8477,10 +8487,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var raw=calcH(s,e2);
           var h=calcAdjH({start:s,end:e2}); h=(h&&h>0)?h:0;
           var t=Math.round(h*c*100)/100;
-          en.$h.text(h); (en.$tv||en.$t).text(t);
-          en.$t.children('.cal-tip-brk').remove();   // recompute the meal-break chip for the edited hours (Non-Billable only)
+          (en.$hv||en.$h).text(h); (en.$tv||en.$t).text(t);
+          en.$h.children('.cal-tip-brk').remove();   // recompute the meal-break chip for the edited hours (Non-Billable only) — now in the Hours cell
           var _bm=(!_tipBillable && raw!==null && raw>0)?mealBreakMinsForCal(_tipCalRow,raw):0;
-          if(_bm>0) en.$t.append(_mealBreakChip(_bm));
+          if(_bm>0) en.$h.append(_mealBreakChip(_bm));
           totals.push(t);
         });
         _live.subs.forEach(function(sb){
