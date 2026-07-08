@@ -7269,7 +7269,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       $t.append($('<thead>').append($hr2));
       var $tb2=$('<tbody>');
-      function rowCalc(r){ var h=_xsCalcH(r.start,r.end); var c=parseInt(r.cnt); var ok=(h!==null&&h>0&&!isNaN(c)&&c>0); var cr=_xsCalRow(gid,st.calId); var adj=ok?adjForBillable(h,cr):null; var brk=(ok&&!calRowBillable(cr))?mealBreakMinsForCal(cr,h):0; return {h:h,c:c,ok:ok,brk:brk,total:ok?Math.round(adj*c*100)/100:null}; }
+      function rowCalc(r){ var h=_xsCalcH(r.start,r.end); var c=parseInt(r.cnt); var ok=(h!==null&&h>0&&!isNaN(c)&&c>0); var cr=_xsCalRow(gid,st.calId); var adj=ok?adjForBillable(h,cr):null; adj=(adj!=null&&adj>0)?adj:(ok?0:null); var brk=(ok&&!calRowBillable(cr))?mealBreakMinsForCal(cr,h):0; return {h:h,adj:(adj!=null)?Math.round(adj*100)/100:null,c:c,ok:ok,brk:brk,total:ok?Math.round((adj||0)*c*100)/100:null}; }
       var paintTotal=function(){};      // assigned below
       function renderRows(){
         $tb2.empty();
@@ -7283,7 +7283,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $hVal=$('<span class="xs-hrs-val">'); $h.append($hVal);
           var $tot=$('<td class="xs-tot">').css({padding:'2px 4px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
           var $totVal=$('<span class="xs-tot-val">'); $tot.append($totVal);
-          function paintCalcs(){ var rc=rowCalc(r); $hVal.text(rc.ok?rc.h:'—'); $totVal.text(rc.ok?rc.total:'—'); $h.children('.cal-tip-brk').remove(); if(rc.ok&&rc.brk>0) $h.append(_mealBreakChip(rc.brk)); paintTotal(); }
+          function paintCalcs(){ var rc=rowCalc(r); $hVal.text(rc.ok?rc.adj:'—'); $totVal.text(rc.ok?rc.total:'—'); $h.children('.cal-tip-brk').remove(); if(rc.ok&&rc.brk>0) $h.append(_mealBreakChip(rc.brk)); paintTotal(); }
           $rSel.on('change',function(){ r.role=$(this).val()||''; paintCalcs(); refreshFooter(); });
           $row.append($('<td>').css({padding:'2px 4px'}).append($rSel));
           ['start','end'].forEach(function(f){
