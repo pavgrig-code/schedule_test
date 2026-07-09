@@ -747,6 +747,43 @@ $(function(){
     return {d:nd,cnt:nc,tOv:(sOv||eOv),cOv:cOv,sOv:sOv,eOv:eOv};
   }
 
+  // ── Override / Extra-Shift day indicator ──────────────────────────────────────────────────────
+  // A day/calendar is "changed" when it has at least one real saved Start/End/Count override OR one
+  // Extra Shift. Overrides that were edited back to the base Staffing Hours value are pruned by
+  // setCellOv (empty entries removed), so a present entry always means a genuine change.
+  function dayHasCellOv(gid,calId,dateKey){
+    if(calId==null||!dateKey) return false;
+    var det=guideDetails[String(gid)]; var m=det&&det.calCellOverrides;
+    if(!m) return false;
+    var pre=String(calId)+'|'+dateKey+'|';
+    for(var k in m){ if(k.indexOf(pre)===0){ var e=m[k]; if(e&&(e.start!=null||e.end!=null||e.cnt!=null)) return true; } }
+    return false;
+  }
+  // This specific calendar+date has a saved override OR an Extra Shift (individual-view scope).
+  function dayHasChanges(gid,calId,dateKey){
+    return dayHasCellOv(gid,calId,dateKey) || getExtraShifts(gid,calId,dateKey).length>0;
+  }
+  // Combined-view scope: any of the given calendars has changes on this date.
+  function dayHasChangesAnyCal(gid,dateKey,calRows){
+    if(!calRows) return false;
+    for(var i=0;i<calRows.length;i++){ var cid=calRows[i]&&calRows[i].calId; if(cid!=null && dayHasChanges(gid,cid,dateKey)) return true; }
+    return false;
+  }
+  // The small, subtle indicator dot (exact requested style). Sits inline immediately after the date label.
+  function _changeDot(){
+    return $('<span class="cal-chg-dot">').attr('title','This day has saved Hour Overrides or Extra Shifts').css({
+      background:'rgb(255, 243, 205)',width:'8px',height:'8px',borderRadius:'4px',border:'1px solid gray',
+      display:'inline-block',marginLeft:'4px',verticalAlign:'middle',flexShrink:'0'
+    });
+  }
+  // Add or remove the dot inside a date-label element to match `on`, without duplicating or reflowing.
+  function _setChangeDot(labelEl,on){
+    if(!labelEl) return;
+    var $lbl=$(labelEl), has=$lbl.children('.cal-chg-dot').length>0;
+    if(on && !has) $lbl.append(_changeDot());
+    else if(!on && has) $lbl.children('.cal-chg-dot').remove();
+  }
+
   // ── Extra Shifts ── manual one-day additions created from the pinned Calendar Hours Breakdown popup.
   // Stored per guide in guideDetails[gid].calExtraShifts under '<calId>|<dateKey>' → [shift, ...] where a
   // shift is {id, school, rows:[{role,start,end,cnt}]}. The stable identity is therefore
@@ -6715,6 +6752,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       sumCombinedCells(); // roll per-calendar carrier hours up into the combined day totals
       paintCombinedSdMarkers(); // per-calendar Special Day markers + whole-cell SD background
+      // Override / Extra-Shift indicator dots — recomputed live on every hours pass (save, add/edit/delete, recalc).
+      var _iCells=$section[0]?$section[0].querySelectorAll('.cal-day-cell:not(.cal-combined-carrier)'):[];
+      for(var _di=0;_di<_iCells.length;_di++){ var _ie=_iCells[_di], _il=_ie.querySelector('.cal-date-label'); if(!_il) continue;
+        var _icid=_ie.getAttribute('data-cal-id'), _idk=_ie.getAttribute('data-date-key');
+        _setChangeDot(_il,(_icid!=null&&_icid!==''&&_idk)?dayHasChanges(g.id,_icid,_idk):false); }
+      var _cCells=$section[0]?$section[0].querySelectorAll('.cal-combined-day'):[];
+      for(var _ci=0;_ci<_cCells.length;_ci++){ var _ce=_cCells[_ci], _cl=_ce.querySelector('.cal-date-label'); if(!_cl) continue;
+        var _cdk=_ce.getAttribute('data-date-key');
+        _setChangeDot(_cl,_cdk?dayHasChangesAnyCal(g.id,_cdk,_calRows):false); }
     }
 
     // Build one calendar block per valid calendarRow
@@ -6774,7 +6820,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             minHeight:'40px',minWidth:'66px',position:'relative',background:baseBg,color:anyActive?'#212529':'#ccc',fontSize:'9px'
           });
           // Date label (muted when no calendar is active on this date)
-          $td.append($('<span>').css({fontSize:'9px',color:anyActive?'#adb5bd':'transparent',lineHeight:'1',display:'block',padding:'1px 0'}).text(fmtDate(day)));
+          $td.append($('<span class="cal-date-label">').css({fontSize:'9px',color:anyActive?'#adb5bd':'transparent',lineHeight:'1',display:'block',padding:'1px 0'}).text(fmtDate(day)));
 
           // Visible SUMMED hours for the day across every active calendar — styled exactly like an individual cell (one number, no dots).
           $td.append($('<div class="cal-combined-sum">').css({fontSize:'11px',fontWeight:'600',color:'#3c4043',lineHeight:'1.2',marginTop:'2px'}));
@@ -6918,7 +6964,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var _dayKeyMap=['mon','tue','wed','thu','fri','sat','sun'];
           var _dayKey=_dayKeyMap[di];
           var _isTodayCell=isTodayDate(day); // subtle today highlight = border ring only (no bg change)
-          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx}).css({
+          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx,'data-cal-id':(calRow&&calRow.calId!=null?calRow.calId:'')}).css({
             border:BDR,padding:'3px 4px',textAlign:'left',verticalAlign:'top',
             height:'40px',minWidth:'66px',position:'relative',
             background:cellBg,
@@ -6947,7 +6993,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
 
           // Date label
-          $td.append($('<span>').css({fontSize:'9px',color:inRange?'#adb5bd':'transparent',lineHeight:'1',display:'block',padding:'1px 0'}).text(fmtDate(day)));
+          $td.append($('<span class="cal-date-label">').css({fontSize:'9px',color:inRange?'#adb5bd':'transparent',lineHeight:'1',display:'block',padding:'1px 0'}).text(fmtDate(day)));
 
           // Hours display (read-only, populated by updateCalendarHours)
           if(inRange){
@@ -7170,7 +7216,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append(td({textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).text(_xsFmt(r.start)));
           $row.append(td({textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).text(_xsFmt(r.end)));
           // Hours cell: value span + optional Non-Billable meal-break chip (upper-right), matching the Staffing Hours break label.
-          var $xh=td({textAlign:'center',color:'#212529',fontWeight:'600',position:'relative',paddingRight:'16px'});
+          var $xh=td({textAlign:'center',color:'#212529',fontWeight:'600',position:'relative',paddingRight:'22px'});
           $xh.append($('<span>').text(r.hours));
           if(r.brkMins>0) $xh.append(_mealBreakChip(r.brkMins));
           $row.append($xh);
@@ -7923,7 +7969,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $row.append($('<td>').css({padding:'3px 6px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.start,r.ovS,r.origStart)));
           $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.end,r.ovE,r.origEnd)));
-          var $ch=$('<td>').css({padding:'3px 12px 3px 6px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
+          var $ch=$('<td>').css({padding:'3px 18px 3px 6px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
           $ch.append($('<span>').text(r.noHoursNote?'0':r.hours));
           if(!r.noHoursNote && r.brkMins>0) $ch.append(_mealBreakChip(r.brkMins));   // Non-Billable meal-break chip, in the Hours cell
           $row.append($ch);
@@ -8401,7 +8447,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function _roleCells(r){
         // Hours cell holds its value in a dedicated span so the Non-Billable meal-break chip can sit in the
         // upper-right without overlapping the number (matching the Staffing Hours table's break label).
-        var $h=$('<td>').css({padding:'3px 12px 3px 5px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
+        var $h=$('<td>').css({padding:'3px 18px 3px 5px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
         var $hv=$('<span class="cal-tip-hrs-val">').text(r.noHoursNote?'0':r.hours);
         $h.append($hv);
         if(!r.noHoursNote && r.brkMins>0) $h.append(_mealBreakChip(r.brkMins));
@@ -8565,6 +8611,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return fallback||'FFFFFFFF';
     }
     function r2(n){ return Math.round(n*100)/100; }
+    function colLetter(n){ var s=''; while(n>0){ var m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+    var _usedSheet={'planning guide':1,'staffing hours':1,'calendars':1,'summary':1};
+    function safeSheetName(nm){
+      var base=String(nm||'Sheet').replace(/[\/\\?*:\[\]]/g,' ').replace(/\s+/g,' ').trim()||'Sheet';
+      if(base.length>31) base=base.slice(0,31).trim();
+      var out=base,i=2;
+      while(_usedSheet[out.toLowerCase()]){ var suf=' ('+i+')'; out=base.slice(0,31-suf.length).trim()+suf; i++; }
+      _usedSheet[out.toLowerCase()]=1; return out;
+    }
+    function dailySheetName(calName){
+      var suffix=' - Daily Hours';
+      var base=String(calName||'Calendar').replace(/[\/\\?*:\[\]]/g,' ').replace(/\s+/g,' ').trim()||'Calendar';
+      var room=31-suffix.length;
+      if(base.length>room) base=base.slice(0,room).trim();
+      return safeSheetName(base+suffix);
+    }
 
     var det=getGuideDetail(g.id);
     var calRows=det.calendarRows||[];
@@ -8585,25 +8647,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // Resolve one school × calendar × date → {rows:[{label,start,end,hrs,cnt,total,ovNote}], sd, noHours}
     function resolveDay(vc,si,sr,dateObj){
-      var cr=vc.cr, co=calStaffOpts(g,cr.calId), dateKey=isoD(dateObj);
+      var cr=vc.cr, co=calStaffOpts(g,cr.calId), dateKey=isoD(dateObj), billable=calRowBillable(cr);
       var out={rows:[],sd:null,noHours:false,total:0};
       var sdId=markerSdId(cr.calId,dateKey,si);
       var srcKey=DOW[dateObj.getDay()];
       if(sdId){ var sd=getSdById(g.id,sdId); if(sd){ out.sd=sd; if(sd.noHours){ out.noHours=true; return out; } srcKey=sd.id; } }
       var slot=sfSlots[slotKey2(co.bySchool?si:null,vc.origIdx,abWeekFor(cr,dateObj,co))]||{};
       roles.forEach(function(role){
-        var cnt=parseInt(sr[role.countKey])||0;
-        var rd=slot[role.key], tm=rd?rd[srcKey]:null;
-        var ovNote='';
+        var origCnt=parseInt(sr[role.countKey])||0, cnt=origCnt;
+        var rd=slot[role.key], baseTm=rd?rd[srcKey]:null, tm=baseTm;
+        var ovNote='', isOv=false, sOv=false, eOv=false, cOv=false;
         var ov=getCellOv(g.id,cr.calId,dateKey,si,role.key);
-        if(ov){ var ea=applyCellOv(ov,tm||{start:'',end:''},cnt); tm=ea.d; cnt=ea.cnt;
-          var bits=[]; if(ea.sOv)bits.push('Start'); if(ea.eOv)bits.push('End'); if(ea.cOv)bits.push('Count');
-          if(bits.length) ovNote=bits.join('/')+' override'; }
+        if(ov){ var ea=applyCellOv(ov,baseTm||{start:'',end:''},cnt); tm=ea.d; cnt=ea.cnt;
+          sOv=!!ea.sOv; eOv=!!ea.eOv; cOv=!!ea.cOv;
+          var bits=[]; if(sOv)bits.push('Start'); if(eOv)bits.push('End'); if(cOv)bits.push('Count');
+          if(bits.length){ ovNote=bits.join('/')+' override'; isOv=true; } }
         if(!cnt||!tm) return;
-        var h=adjForBillable(calcH(tm.start,tm.end),cr);
+        var raw=calcH(tm.start,tm.end);
+        var h=adjForBillable(raw,cr);
         if(!(h>0)) return;
+        var brk=(!billable && raw!==null && raw>0)?mealBreakMinsForCal(cr,raw):0;
         var tot=r2(h*cnt);
-        out.rows.push({label:role.label,start:tm.start,end:tm.end,hrs:h,cnt:cnt,total:tot,ovNote:ovNote});
+        out.rows.push({label:role.label,start:tm.start,end:tm.end,hrs:h,rawHrs:raw,cnt:cnt,total:tot,ovNote:ovNote,brkMins:brk,isOverride:isOv,sOv:sOv,eOv:eOv,cOv:cOv,origStart:(baseTm&&baseTm.start)||'',origEnd:(baseTm&&baseTm.end)||'',origCnt:origCnt});
         out.total=r2(out.total+tot);
       });
       return out;
@@ -8770,44 +8835,125 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         blank(ws);
       });
 
-      // ════════ Sheet 2: Staffing Hours ════════
+      // ════════ Sheet 2: Staffing Hours (mirrors the Planning Guide tables) ════════
       var ws2=wb.addWorksheet('Staffing Hours');
       var sdCols=sds.filter(function(s){return !s.noHours;});
-      var dayCols=sdCols.map(function(s){return {k:s.id,lbl:s.name};})
-        .concat(['mon','tue','wed','thu','fri','sat','sun'].map(function(k){return {k:k,lbl:DAYLBL[k]};}));
-      ws2.columns=[{width:4},{width:14},{width:11}].concat(dayCols.map(function(){return {width:11};}));
+      var dayCols=sdCols.map(function(s){return {k:s.id,lbl:s.name,sd:s};})
+        .concat(['mon','tue','wed','thu','fri','sat','sun'].map(function(k){return {k:k,lbl:DAYLBL[k],wknd:(k==='sat'||k==='sun')};}));
+      ws2.columns=[{width:3},{width:12},{width:9}].concat(dayCols.map(function(){return {width:10.5};}));
+      var lastSdIdx=dayCols.reduce(function(a,dc,i){ return dc.sd?i:a; },-1);
+      var MED_TOP={style:'medium',color:{argb:'FF7F9AB5'}}, DIV_R={style:'medium',color:{argb:'FF9AAFC5'}}, TOT_TOP={style:'medium',color:{argb:'FFADB5BD'}};
+      function withDiv(base,isLastSd){ return isLastSd?Object.assign({},base,{right:DIV_R}):base; }
+      var FILL_HDR_WK={type:'pattern',pattern:'solid',fgColor:{argb:'FFDDE8F5'}};
+      var FILL_WK={type:'pattern',pattern:'solid',fgColor:{argb:'FFEDF3FA'}};
+      var FILL_WK_TOT={type:'pattern',pattern:'solid',fgColor:{argb:'FFD6E5F5'}};
+      var FILL_CNT={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F4F8'}};
+      var FILL_TOTDAY_WK={type:'pattern',pattern:'solid',fgColor:{argb:'FFC8DBEE'}};
+      var FILL_ROLE={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8F9FB'}};
+      var FILL_LBL={type:'pattern',pattern:'solid',fgColor:{argb:'FFFAFAFA'}};
+      function sdFill(dc){ return {type:'pattern',pattern:'solid',fgColor:{argb:toARGB(dc.sd.color,'FFFFFFFF')}}; }
       validCals.forEach(function(vc){
-        var cr=vc.cr, co=calStaffOpts(g,cr.calId);
-        var schools=co.bySchool?siteRowsFor(g,cr.calId).map(function(sr,i){return {si:i,sr:sr};}):[{si:null,sr:null}];
+        var cr=vc.cr, co=calStaffOpts(g,cr.calId), billable=calRowBillable(cr);
+        var allSite=siteRowsFor(g,cr.calId);
+        var schools=co.bySchool?allSite.map(function(sr,i){return {si:i,sr:sr};}):[{si:null,sr:null}];
         var wks=co.alternateWeeks?['a','b']:[''];
-        secTitle(ws2,((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)))+(calRowBillable(cr)?'':' (Non-Billable)'));
+        secTitle(ws2,((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)))+(billable?'':' (Non-Billable)'));
+        function countFor(sch,role){
+          if(sch.si!==null) return parseInt(sch.sr&&sch.sr[role.countKey])||0;
+          var t=0; allSite.forEach(function(r){ t+=parseInt(r&&r[role.countKey])||0; }); return t;
+        }
         schools.forEach(function(sch){
           wks.forEach(function(wk){
             var sub=[];
             if(sch.si!==null) sub.push('School '+(sch.si+1)+((sch.sr&&sch.sr.school)?('. '+sch.sr.school):''));
             if(wk) sub.push(wk==='a'?'Week A':'Week B');
-            if(sub.length){ var sr2=ws2.addRow([null,sub.join(' \u2014 ')]); sr2.getCell(2).font={name:'Calibri',size:10,bold:true,color:{argb:'FF495057'}}; }
-            hdrRow(ws2,[null,'Role',''].concat(dayCols.map(function(dc){return dc.lbl;})));
+            if(sub.length){ var sr2=ws2.addRow([null,sub.join(' \u2014 ')]); sr2.getCell(2).font={name:'Calibri',size:9.5,bold:true,color:{argb:'FF495057'}}; }
+            // header
+            var hrow=ws2.addRow([null,'Role',''].concat(dayCols.map(function(dc){return dc.lbl;}))); hrow.height=15;
+            for(var hc=2;hc<=3+dayCols.length;hc++){
+              var c=hrow.getCell(hc), dj=hc-4, dc=dayCols[dj];
+              c.font={name:'Calibri',size:9,bold:true,color:{argb:'FF495057'}};
+              c.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+              c.fill=dc?(dc.sd?sdFill(dc):(dc.wknd?FILL_HDR_WK:HDR_FILL)):HDR_FILL;
+              c.border=withDiv(BORD, dj===lastSdIdx);
+            }
             var slot=sfSlots[slotKey2(sch.si,vc.origIdx,wk)]||{};
             roles.forEach(function(role){
-              var rd=slot[role.key]||{};
-              var sRow=dataRow(ws2,[null,role.label,'Start'].concat(dayCols.map(function(dc){ return fmt12(rd[dc.k]&&rd[dc.k].start); })));
-              var eRow=dataRow(ws2,[null,'','End'].concat(dayCols.map(function(dc){ return fmt12(rd[dc.k]&&rd[dc.k].end); })));
-              var hRow=dataRow(ws2,[null,'','Hours'].concat(dayCols.map(function(dc){
-                var tm=rd[dc.k]; if(!tm) return '';
-                var h=adjForBillable(calcH(tm.start,tm.end),cr);
-                return (h>0)?h:'';
-              })));
-              sRow.getCell(2).font={name:'Calibri',size:10,bold:true};
-              [sRow,eRow,hRow].forEach(function(r){ for(var ci=3;ci<=3+dayCols.length;ci++){ r.getCell(ci).alignment={horizontal:'center'}; } });
-              for(var ci=4;ci<=3+dayCols.length;ci++){ var c=hRow.getCell(ci); if(typeof c.value==='number'){ c.numFmt=FMT_H; } }
+              var rd=slot[role.key]||{}, cnt=countFor(sch,role);
+              function adjH(dc){ var tm=rd[dc.k]; if(!tm) return null; var h=adjForBillable(calcH(tm.start,tm.end),cr); return (h>0)?h:null; }
+              var startRow=ws2.addRow([null,role.label,'Start'].concat(dayCols.map(function(dc){ return fmt12(rd[dc.k]&&rd[dc.k].start); })));
+              var endRow  =ws2.addRow([null,'','End'].concat(dayCols.map(function(dc){ return fmt12(rd[dc.k]&&rd[dc.k].end); })));
+              var hrsRow  =ws2.addRow([null,'','Hours'].concat(dayCols.map(function(dc){ var h=adjH(dc); return h!=null?h:''; })));
+              var cntRow  =ws2.addRow([null,'','Count'].concat(dayCols.map(function(dc){ var h=adjH(dc); return (h!=null&&cnt>0)?cnt:''; })));
+              var totRow  =ws2.addRow([null,'','Total Hours'].concat(dayCols.map(function(){return '';})));
+              // Total Hours = Hours * Count (valid Excel formula; result carries the computed value)
+              dayCols.forEach(function(dc,dj){
+                var col=4+dj, h=adjH(dc);
+                if(h!=null&&cnt>0){ var L=colLetter(col); totRow.getCell(col).value={formula:L+hrsRow.number+'*'+L+cntRow.number, result:r2(h*cnt)}; }
+              });
+              // meal-break annotation on Hours cells (Non-Billable) — smaller secondary rich-text
+              if(!billable){
+                dayCols.forEach(function(dc,dj){
+                  var col=4+dj, tm=rd[dc.k]; if(!tm) return; var raw=calcH(tm.start,tm.end); if(!(raw>0)) return;
+                  var mins=mealBreakMinsForCal(cr,raw); if(!(mins>0)) return; var h=adjForBillable(raw,cr); if(!(h>0)) return;
+                  hrsRow.getCell(col).value={richText:[{text:String(h),font:{name:'Calibri',size:10,color:{argb:'FF212529'}}},{text:'  -'+mins+'m',font:{name:'Calibri',size:7,italic:true,color:{argb:'FF5555B5'}}}]};
+                });
+              }
+              // role label on the Start row (bold), shaded like the UI Role cell
+              startRow.getCell(2).value=role.label;
+              startRow.getCell(2).font={name:'Calibri',size:9,bold:true,color:{argb:'FF495057'}};
+              startRow.getCell(2).alignment={vertical:'middle',horizontal:'center'};
+              startRow.getCell(2).fill=FILL_ROLE; startRow.getCell(2).border=BORD;
+              [endRow,hrsRow,cntRow,totRow].forEach(function(r){ r.getCell(2).fill=FILL_ROLE; r.getCell(2).border=BORD; });
+              var rows5=[{r:startRow},{r:endRow},{r:hrsRow},{r:cntRow,count:true},{r:totRow,tot:true}];
+              rows5.forEach(function(gr){
+                var row=gr.r; row.height=14;
+                var lc=row.getCell(3);
+                lc.value=(gr.r===startRow?'Start':(gr.r===endRow?'End':(gr.r===hrsRow?'Hours':(gr.count?'Count':'Total Hours'))));
+                lc.font={name:'Calibri',size:9,bold:!!gr.tot,color:{argb:gr.tot?'FF495057':'FF6C757D'}};
+                lc.alignment={vertical:'middle',horizontal:'right'};
+                lc.fill=(gr.tot||gr.count)?FILL_CNT:FILL_LBL;
+                lc.border=gr.tot?Object.assign({},BORD,{top:TOT_TOP}):BORD;
+                dayCols.forEach(function(dc,dj){
+                  var col=4+dj, c=row.getCell(col);
+                  c.alignment={vertical:'middle',horizontal:'center'};
+                  if(gr.tot){ c.font={name:'Calibri',size:10,bold:true}; }
+                  else if(!c.font||!c.font.name){ c.font={name:'Calibri',size:10}; }
+                  var fill=null;
+                  if(gr.tot) fill=dc.wknd?FILL_WK_TOT:FILL_CNT;
+                  else if(gr.count) fill=dc.wknd?FILL_WK:FILL_CNT;
+                  else if(dc.sd) fill=sdFill(dc);
+                  else if(dc.wknd) fill=FILL_WK;
+                  if(fill) c.fill=fill;
+                  c.border=withDiv(gr.tot?Object.assign({},BORD,{top:TOT_TOP}):BORD, dj===lastSdIdx);
+                  if((gr.r===hrsRow||gr.tot)&&typeof c.value==='number') c.numFmt=FMT_H;
+                });
+              });
+            });
+            // Total Hrs/Day footer
+            var footRow=ws2.addRow([null,'','Total Hrs/Day'].concat(dayCols.map(function(){return '';}))); footRow.height=15;
+            var fl=footRow.getCell(2); fl.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8EEF5'}}; fl.border=Object.assign({},BORD,{top:MED_TOP});
+            var fl3=footRow.getCell(3); fl3.value='Total Hrs/Day'; fl3.font={name:'Calibri',size:9,bold:true,color:{argb:'FF3D5A80'}};
+            fl3.alignment={vertical:'middle',horizontal:'left'}; fl3.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8EEF5'}}; fl3.border=Object.assign({},BORD,{top:MED_TOP});
+            dayCols.forEach(function(dc,dj){
+              var col=4+dj, dayT=0, any=false;
+              roles.forEach(function(role){
+                var rd=slot[role.key]||{}, tm=rd[dc.k]; if(!tm) return;
+                var h=adjForBillable(calcH(tm.start,tm.end),cr), cnt=countFor(sch,role);
+                if(h>0&&cnt>0){ dayT=r2(dayT+h*cnt); any=true; }
+              });
+              var c=footRow.getCell(col);
+              if(any){ c.value=dayT; c.numFmt=FMT_H; }
+              c.font={name:'Calibri',size:10,bold:true,color:{argb:'FF1A3A5C'}};
+              c.alignment={vertical:'middle',horizontal:'center'};
+              c.fill=dc.wknd?FILL_TOTDAY_WK:FILL_CNT;
+              c.border=withDiv(Object.assign({},BORD,{top:MED_TOP}), dj===lastSdIdx);
             });
             blank(ws2);
           });
         });
       });
       if(!validCals.length){ ws2.addRow([null,'No program calendars defined.']); }
-
       // ════════ Sheet 3: Calendars ════════
       var ws3=wb.addWorksheet('Calendars');
       ws3.columns=[{width:4},{width:8},{width:17},{width:15},{width:15},{width:15},{width:15},{width:15},{width:15},{width:15}];
@@ -8853,84 +8999,108 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         for(var dd=new Date(wS); dd<=wE; dd=addDays(dd,7),wj++){
           var wee=addDays(dd,6);
           var cel=[null,'Week '+wj,MSHORT[dd.getMonth()]+' '+dd.getDate()+' \u2013 '+MSHORT[wee.getMonth()]+' '+wee.getDate()];
+          var cFills=[];
           for(var kk=0;kk<7;kk++){
-            var dy=addDays(dd,kk), lines=[MSHORT[dy.getMonth()]+' '+dy.getDate()], any=false;
+            var dy=addDays(dd,kk), lines=[MSHORT[dy.getMonth()]+' '+dy.getDate()], any=false, cSd=null;
             validCals.forEach(function(vc){
               if(dy<vc.fd||dy>vc.ld) return;
               any=true;
               var info=dayTotalFor(vc,dy);
+              if(info.sd&&!cSd) cSd=info.sd;
               var nm=(vc.cr.name&&vc.cr.name.trim())||('Calendar '+(vc.origIdx+1));
               lines.push(nm+': '+(info.sd?info.sd.name+(info.total>0?' \u00b7 '+info.total+' hrs':''):(info.total>0?info.total+' hrs':'\u2014')));
             });
             cel.push(any?lines.join('\n'):'');
+            cFills.push(cSd?toARGB(cSd.color,null):null);
           }
           var rw=dataRow(ws3,cel);
           rw.height=14+validCals.length*13;
-          for(var cx=4;cx<=10;cx++){ rw.getCell(cx).alignment={vertical:'top',horizontal:'left',wrapText:true}; }
+          for(var cx=4;cx<=10;cx++){ rw.getCell(cx).alignment={vertical:'top',horizontal:'left',wrapText:true}; var _cf=cFills[cx-4]; if(_cf) rw.getCell(cx).fill={type:'pattern',pattern:'solid',fgColor:{argb:_cf}}; }
         }
         blank(ws3);
       }
       if(!validCals.length){ ws3.addRow([null,'No program calendars defined.']); }
 
-      // ════════ Sheet 4: Extra Shifts and Overrides ════════
-      var ws4=wb.addWorksheet('Extra Shifts and Overrides');
-      ws4.columns=[{width:4},{width:26},{width:12},{width:10},{width:10},{width:9},{width:9},{width:10},{width:20}];
-      var wroteAnyXsOv=false;
+      // ════════ Sheets: one "{Calendar} - Daily Hours" per Program Calendar ════════
+      // (replaces the former "Extra Shifts and Overrides" sheet — XS + overrides now live inline here)
+      var DAILY_HEAD=['Date','Day','Special Day','School','Role','Start','End','Hrs','Count','Total','Status','Meal Break','Type','Source (original)'];
+      var FILL_XS={type:'pattern',pattern:'solid',fgColor:{argb:'FFE9F5EC'}};
+      var FILL_OV={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF8E6'}};
+      function dailyRow(wsD,cells,opts){
+        opts=opts||{};
+        var row=wsD.addRow(cells); row.height=14;
+        row.eachCell({includeEmpty:true},function(c){ c.font={name:'Calibri',size:9.5}; c.border=BORD; c.alignment={vertical:'middle'}; });
+        var c1=row.getCell(1); if(c1.value instanceof Date){ c1.numFmt='mm/dd/yyyy'; c1.alignment={vertical:'middle',horizontal:'center'}; }
+        [8,10].forEach(function(ci){ var c=row.getCell(ci); if(typeof c.value==='number'){ c.numFmt=FMT_H; } });
+        [6,7,8,9,10,11,12].forEach(function(ci){ row.getCell(ci).alignment={vertical:'middle',horizontal:'center'}; });
+        var mb=row.getCell(12); if(mb.value){ mb.font={name:'Calibri',size:8,italic:true,color:{argb:'FF5555B5'}}; }
+        var fill=null;
+        if(opts.xs) fill=FILL_XS;
+        else if(opts.override) fill=FILL_OV;
+        else if(opts.noHours) fill={type:'pattern',pattern:'solid',fgColor:{argb:opts.sd?toARGB(opts.sd.color,'FFF3F4F6'):'FFF3F4F6'}};
+        if(fill){ row.eachCell({includeEmpty:false},function(c){ c.fill=fill; }); }
+        if(opts.sd && !opts.noHours){ var sc=row.getCell(3); sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:toARGB(opts.sd.color,'FFFFFFFF')}}; }
+        if(opts.xs){ row.getCell(13).font={name:'Calibri',size:9.5,bold:true,color:{argb:'FF1E7E34'}}; }
+        else if(opts.override){ row.getCell(13).font={name:'Calibri',size:9.5,bold:true,color:{argb:'FF8A6D0B'}}; }
+        return row;
+      }
       validCals.forEach(function(vc){
-        var cr=vc.cr, pre=String(cr.calId)+'|';
-        var dates={};
-        var ovm=det.calCellOverrides||{};
-        for(var k in ovm){ if(k.indexOf(pre)===0){ var dk=k.split('|')[1]; if(dk>=cr.firstDay&&dk<=cr.lastDay) dates[dk]=true; } }
-        var xsm=det.calExtraShifts||{};
-        for(var k2 in xsm){ if(k2.indexOf(pre)===0){ var dk2=k2.slice(pre.length); if(dk2>=cr.firstDay&&dk2<=cr.lastDay&&(xsm[k2]||[]).length) dates[dk2]=true; } }
-        var dkeys=Object.keys(dates).sort();
-        if(!dkeys.length) return;
-        wroteAnyXsOv=true;
-        secTitle(ws4,(cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)));
+        var cr=vc.cr, billable=calRowBillable(cr), statusLbl=billable?'Billable':'Non-Billable';
+        var wsD=wb.addWorksheet(dailySheetName((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1))));
+        wsD.columns=[{width:11},{width:10},{width:14},{width:22},{width:15},{width:9},{width:9},{width:7},{width:7},{width:9},{width:13},{width:11},{width:11},{width:22}];
+        var dt=secTitle(wsD,((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)))+' \u2014 Daily Hours ('+statusLbl+')');
+        dt.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:toARGB(cr.color,'FFCFD6DF')}};
+        var hr=hdrRow(wsD,DAILY_HEAD);
+        wsD.views=[{state:'frozen',ySplit:hr.number}];
         var schools=siteRowsFor(g,cr.calId);
-        dkeys.forEach(function(dk){
-          var dObj=parseD(dk);
-          var dr=ws4.addRow([null,fmtDateLong(dObj)]);
-          dr.getCell(2).font={name:'Calibri',size:10,bold:true,color:{argb:'FF495057'}};
-          hdrRow(ws4,[null,'School','Role','Start','End','Hrs','Count','Total','Note']);
-          var dayTot=0;
+        var calGrand=0, d=new Date(vc.fd);
+        while(d<=vc.ld){
+          var dObj=new Date(d), dateKey=isoD(dObj), dow=WLONG[dObj.getDay()];
+          var dayTot=0, wroteRow=false, daySd=null;
+          schools.forEach(function(sr,si){ if(!daySd){ var pre=resolveDay(vc,si,sr,dObj); if(pre.sd) daySd=pre.sd; } });
           schools.forEach(function(sr,si){
             var schoolName=(sr.school||'').trim()||('School '+(si+1));
             var info=resolveDay(vc,si,sr,dObj);
             if(info.noHours){
-              var nh=dataRow(ws4,[null,schoolName,'','','','','','',(info.sd?info.sd.name+' \u2014 no hours':'No hours')]);
-              nh.getCell(2).font={name:'Calibri',size:10};
-              return;
+              dailyRow(wsD,[dObj,dow,(info.sd?info.sd.name:''),schoolName,'','','','','',0,statusLbl,'',(info.sd?info.sd.name:'No hours'),''],{sd:info.sd,noHours:true});
+              wroteRow=true; return;
             }
             info.rows.forEach(function(r){
-              var row=dataRow(ws4,[null,schoolName,r.label,fmt12(r.start),fmt12(r.end),r.hrs,r.cnt,r.total,r.ovNote||(info.sd?info.sd.name:'')]);
-              row.getCell(6).numFmt=FMT_H; row.getCell(8).numFmt=FMT_H;
-              [4,5,6,7,8].forEach(function(ci){ row.getCell(ci).alignment={horizontal:'center'}; });
-              if(r.ovNote){ row.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF8E6'}}; }); }
-              dayTot=r2(dayTot+r.total);
+              var typ=r.isOverride?'Override':'Regular', src='';
+              if(r.isOverride){
+                var parts=[];
+                if(r.sOv||r.eOv) parts.push((r.origStart?fmt12(r.origStart):'\u2014')+'\u2013'+(r.origEnd?fmt12(r.origEnd):'\u2014'));
+                if(r.cOv) parts.push('\u00d7'+r.origCnt);
+                src='was '+(parts.join(' ')||'\u2014');
+              }
+              dailyRow(wsD,[dObj,dow,(daySd?daySd.name:''),schoolName,r.label,fmt12(r.start),fmt12(r.end),r.hrs,r.cnt,r.total,statusLbl,(r.brkMins>0?('-'+r.brkMins+'m'):''),typ,src],{sd:daySd,override:r.isOverride});
+              dayTot=r2(dayTot+r.total); wroteRow=true;
             });
-            getExtraShifts(g.id,cr.calId,dk).forEach(function(s){
-              if(String(s.school||'').trim()!==String(sr.school||'').trim()) return;
-              xsValidRows(s, cr).forEach(function(r){
+            getExtraShifts(g.id,cr.calId,dateKey).forEach(function(shf){
+              if(String(shf.school||'').trim()!==String(sr.school||'').trim()) return;
+              xsValidRows(shf,cr).forEach(function(r){
                 var roleLbl=(roles.find(function(x){return x.key===r.role;})||{}).label||r.role;
-                var row=dataRow(ws4,[null,schoolName,roleLbl,fmt12(r.start),fmt12(r.end),r.hours,r.cnt,r.total,'Extra Shift']);
-                row.getCell(6).numFmt=FMT_H; row.getCell(8).numFmt=FMT_H;
-                [4,5,6,7,8].forEach(function(ci){ row.getCell(ci).alignment={horizontal:'center'}; });
-                row.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE9F5EC'}}; });
-                dayTot=r2(dayTot+r.total);
+                dailyRow(wsD,[dObj,dow,(daySd?daySd.name:''),schoolName,roleLbl,fmt12(r.start),fmt12(r.end),r.hours,r.cnt,r.total,statusLbl,(r.brkMins>0?('-'+r.brkMins+'m'):''),'Extra Shift',''],{xs:true});
+                dayTot=r2(dayTot+r.total); wroteRow=true;
               });
             });
           });
-          var trw=dataRow(ws4,[null,'','','','','','Total',dayTot,'']);
-          trw.getCell(7).font={name:'Calibri',size:10,bold:true};
-          trw.getCell(8).font={name:'Calibri',size:10,bold:true};
-          trw.getCell(8).numFmt=FMT_H; trw.getCell(8).alignment={horizontal:'center'};
-          trw.eachCell({includeEmpty:false},function(c){ c.fill=TOT_FILL; });
-          blank(ws4);
-        });
+          if(!wroteRow){
+            dailyRow(wsD,[dObj,dow,(daySd?daySd.name:''),'','','','','','',0,statusLbl,'',(daySd?daySd.name:'No hours'),''],{sd:daySd,noHours:true});
+          } else {
+            var st=dailyRow(wsD,['','','','','','','','','Day total',dayTot,'','','',''],{});
+            st.getCell(9).font={name:'Calibri',size:9,bold:true,color:{argb:'FF495057'}}; st.getCell(9).alignment={vertical:'middle',horizontal:'right'};
+            st.getCell(10).font={name:'Calibri',size:10,bold:true};
+            st.eachCell({includeEmpty:false},function(c){ c.fill=TOT_FILL; });
+          }
+          calGrand=r2(calGrand+dayTot);
+          d=addDays(d,1);
+        }
+        var gr=dailyRow(wsD,['','','','','','','','','Calendar total',calGrand,'','','',''],{});
+        gr.getCell(9).font={name:'Calibri',size:10,bold:true}; gr.getCell(9).alignment={vertical:'middle',horizontal:'right'};
+        gr.getCell(10).font={name:'Calibri',size:11,bold:true};
+        gr.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFDCE7F2'}}; });
       });
-      if(!wroteAnyXsOv){ ws4.addRow([null,'No Extra Shifts or overrides saved for this Planning Guide.']); }
-
       // ════════ Sheet 5: Summary ════════
       var ws5=wb.addWorksheet('Summary');
       ws5.columns=[{width:4},{width:6},{width:32},{width:14},{width:16}];
