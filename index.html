@@ -8796,12 +8796,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       blank(ws);
 
-      // Site Breakdown per Program Calendar (+ Unallocated Hours)
+      // Site Breakdown moved to its own sheet (Sheet 2), immediately after Planning Guide.
       var coachRoles=getRoles(g.id).filter(function(r){return r.isCoach;});
       var staffRoles=getRoles(g.id).filter(function(r){return !r.isCoach;});
+      var wsSB=wb.addWorksheet('Site Breakdown');
+      var _sbCols=[{width:4},{width:6},{width:26}];
+      var _sbNumCols=coachRoles.length*2+staffRoles.length+3; // Students+Coaches per coach role, Staff per staff role, +3 totals
+      for(var _sbi=0;_sbi<_sbNumCols;_sbi++) _sbCols.push({width:13});
+      wsSB.columns=_sbCols;
       validCals.forEach(function(vc){
         var cr=vc.cr;
-        secTitle(ws,'Site Breakdown \u2014 '+((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1))));
+        secTitle(wsSB,'Site Breakdown \u2014 '+((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1))));
         var hdr=[null,'#','School Name'];
         coachRoles.forEach(function(r){ hdr.push('Students '+r.name); });
         hdr.push('Total Students');
@@ -8809,7 +8814,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         hdr.push('Total Coaches');
         staffRoles.forEach(function(r){ hdr.push(r.name); });
         hdr.push('Total Staff');
-        hdrRow(ws,hdr);
+        hdrRow(wsSB,hdr);
         var totals=new Array(hdr.length).fill(0);
         siteRowsFor(g,cr.calId).forEach(function(sr,si){
           var cells=[null,si+1,(sr.school||'').trim()||('School '+(si+1))];
@@ -8820,22 +8825,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           cells.push(totCoach||'');
           staffRoles.forEach(function(r){ var v=parseInt(sr[r.key])||0; totStaff+=v; cells.push(v||''); });
           cells.push((totCoach+totStaff)||'');
-          var row=dataRow(ws,cells);
+          var row=dataRow(wsSB,cells);
           for(var ci=4;ci<=cells.length;ci++){ row.getCell(ci).alignment={horizontal:'center'}; }
           cells.forEach(function(v,idx){ if(typeof v==='number'&&idx>=3) totals[idx]+=v; });
         });
         var unRec=(det.unschedByCal||{})[String(cr.calId)];
         var unNum=unRec?parseFloat(unRec.unalloc):NaN;
         if(isFinite(unNum)&&unNum>0){
-          var ur=dataRow(ws,[null,'','Unallocated Hours',unNum]);
+          var ur=dataRow(wsSB,[null,'','Unallocated Hours',unNum]);
           ur.getCell(3).font={name:'Calibri',size:10,bold:true};
           ur.getCell(4).numFmt=FMT_H; ur.getCell(4).alignment={horizontal:'center'};
           ur.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3CD'}}; });
         }
-        blank(ws);
+        blank(wsSB);
       });
+      if(!validCals.length){ wsSB.addRow([null,'No program calendars defined.']); }
 
-      // ════════ Sheet 2: Staffing Hours (mirrors the Planning Guide tables) ════════
+      // ════════ Sheet 3: Staffing Hours (mirrors the Planning Guide tables) ════════
       var ws2=wb.addWorksheet('Staffing Hours');
       var sdCols=sds.filter(function(s){return !s.noHours;});
       var dayCols=sdCols.map(function(s){return {k:s.id,lbl:s.name,sd:s};})
@@ -8886,10 +8892,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var hrsRow  =ws2.addRow([null,'','Hours'].concat(dayCols.map(function(dc){ var h=adjH(dc); return h!=null?h:''; })));
               var cntRow  =ws2.addRow([null,'','Count'].concat(dayCols.map(function(dc){ var h=adjH(dc); return (h!=null&&cnt>0)?cnt:''; })));
               var totRow  =ws2.addRow([null,'','Total Hours'].concat(dayCols.map(function(){return '';})));
-              // Total Hours = Hours * Count (valid Excel formula; result carries the computed value)
+              // Total Hours = Hours * Count copied as a straight computed value (NOT an Excel formula)
               dayCols.forEach(function(dc,dj){
                 var col=4+dj, h=adjH(dc);
-                if(h!=null&&cnt>0){ var L=colLetter(col); totRow.getCell(col).value={formula:L+hrsRow.number+'*'+L+cntRow.number, result:r2(h*cnt)}; }
+                if(h!=null&&cnt>0){ totRow.getCell(col).value=r2(h*cnt); }
               });
               // meal-break annotation on Hours cells (Non-Billable) — smaller secondary rich-text
               if(!billable){
@@ -8957,6 +8963,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ════════ Sheet 3: Calendars ════════
       var ws3=wb.addWorksheet('Calendars');
       ws3.columns=[{width:4},{width:8},{width:17},{width:15},{width:15},{width:15},{width:15},{width:15},{width:15},{width:15}];
+      // Each week renders as TWO rows: a distinct day-label row (bold, shaded, medium underline) above a
+      // plain Hours row (white, centered, numeric only - no "hrs" text). Week/Dates span both rows.
+      var CAL_LBL_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFEDF1F6'}};
+      var CAL_OOR_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFF1F3F5'}};
+      var CAL_LBL_BOT={style:'medium',color:{argb:'FFB8C4D2'}};
+      function styleCalWeek(lRow,hRow,meta){
+        lRow.height=meta.some(function(m){return m&&m.sd;})?27:16;
+        hRow.height=15;
+        ws3.mergeCells(lRow.number,2,hRow.number,2);
+        ws3.mergeCells(lRow.number,3,hRow.number,3);
+        var wkC=lRow.getCell(2); wkC.font={name:'Calibri',size:9.5,bold:true,color:{argb:'FF495057'}}; wkC.alignment={vertical:'middle',horizontal:'center'}; wkC.fill=HDR_FILL;
+        var dtC=lRow.getCell(3); dtC.font={name:'Calibri',size:9,color:{argb:'FF6C757D'}}; dtC.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+        for(var i=0;i<7;i++){
+          var col=4+i, m=meta[i]||{}, lc=lRow.getCell(col), hc=hRow.getCell(col);
+          lc.font={name:'Calibri',size:9.5,bold:true,color:{argb:'FF343A40'}};
+          lc.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+          lc.fill=m.oor?CAL_OOR_FILL:(m.sd?{type:'pattern',pattern:'solid',fgColor:{argb:toARGB(m.sd.color,'FFFFFFFF')}}:CAL_LBL_FILL);
+          lc.border=Object.assign({},BORD,{bottom:CAL_LBL_BOT});
+          hc.font={name:'Calibri',size:10,color:{argb:'FF212529'}};
+          hc.alignment={vertical:'middle',horizontal:'center'};
+          if(m.oor) hc.fill=CAL_OOR_FILL;
+          if(typeof hc.value==='number') hc.numFmt=FMT_H;
+          hc.border=BORD;
+        }
+      }
       function weekGrid(vc){
         var cr=vc.cr;
         secTitle(ws3,((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)))+' \u2014 '+MLONG[vc.fd.getMonth()]+' '+vc.fd.getDate()+' \u2013 '+MLONG[vc.ld.getMonth()]+' '+vc.ld.getDate()+', '+vc.ld.getFullYear());
@@ -8964,26 +8995,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var wStart=toMonday(vc.fd), wEnd=toSunday(vc.ld), wi=1;
         for(var d=new Date(wStart); d<=wEnd; d=addDays(d,7),wi++){
           var we=addDays(d,6);
-          var cells=[null,'Week '+wi,MSHORT[d.getMonth()]+' '+d.getDate()+' \u2013 '+MSHORT[we.getMonth()]+' '+we.getDate()];
-          var fills=[];
+          var dateRange=MSHORT[d.getMonth()]+' '+d.getDate()+' \u2013 '+MSHORT[we.getMonth()]+' '+we.getDate();
+          var labels=[null,'Week '+wi,dateRange], hours=[null,'',''], meta=[];
           for(var k=0;k<7;k++){
             var day=addDays(d,k);
-            if(day<vc.fd||day>vc.ld){ cells.push(''); fills.push('FFF1F3F5'); continue; }
+            if(day<vc.fd||day>vc.ld){ labels.push(''); hours.push(''); meta.push({oor:true}); continue; }
             var info=dayTotalFor(vc,day);
-            var txt=MSHORT[day.getMonth()]+' '+day.getDate();
-            if(info.sd) txt+='\n'+info.sd.name;
-            if(info.total>0) txt+='\n'+info.total+' hrs';
-            cells.push(txt);
-            fills.push(info.sd?toARGB(info.sd.color,null):null);
+            var lbl=MSHORT[day.getMonth()]+' '+day.getDate();
+            if(info.sd) lbl+='\n'+info.sd.name;
+            labels.push(lbl); hours.push(info.total>0?info.total:''); meta.push({sd:info.sd,total:info.total});
           }
-          var row=dataRow(ws3,cells);
-          row.height=30;
-          for(var ci=4;ci<=10;ci++){
-            var c=row.getCell(ci);
-            c.alignment={vertical:'top',horizontal:'left',wrapText:true};
-            var f=fills[ci-4];
-            if(f) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:f}};
-          }
+          styleCalWeek(dataRow(ws3,labels),dataRow(ws3,hours),meta);
         }
         blank(ws3);
       }
@@ -8998,24 +9020,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var wS=toMonday(cfd), wE=toSunday(cld), wj=1;
         for(var dd=new Date(wS); dd<=wE; dd=addDays(dd,7),wj++){
           var wee=addDays(dd,6);
-          var cel=[null,'Week '+wj,MSHORT[dd.getMonth()]+' '+dd.getDate()+' \u2013 '+MSHORT[wee.getMonth()]+' '+wee.getDate()];
-          var cFills=[];
+          var dateRange=MSHORT[dd.getMonth()]+' '+dd.getDate()+' \u2013 '+MSHORT[wee.getMonth()]+' '+wee.getDate();
+          var labels=[null,'Week '+wj,dateRange], hours=[null,'',''], meta=[];
           for(var kk=0;kk<7;kk++){
-            var dy=addDays(dd,kk), lines=[MSHORT[dy.getMonth()]+' '+dy.getDate()], any=false, cSd=null;
+            var dy=addDays(dd,kk), any=false, cSd=null, cTot=0;
+            // Combined day total = sum of every covering calendar's hours - EXACTLY the Planning Guide combined cell.
             validCals.forEach(function(vc){
               if(dy<vc.fd||dy>vc.ld) return;
               any=true;
               var info=dayTotalFor(vc,dy);
               if(info.sd&&!cSd) cSd=info.sd;
-              var nm=(vc.cr.name&&vc.cr.name.trim())||('Calendar '+(vc.origIdx+1));
-              lines.push(nm+': '+(info.sd?info.sd.name+(info.total>0?' \u00b7 '+info.total+' hrs':''):(info.total>0?info.total+' hrs':'\u2014')));
+              cTot=r2(cTot+info.total);
             });
-            cel.push(any?lines.join('\n'):'');
-            cFills.push(cSd?toARGB(cSd.color,null):null);
+            if(!any){ labels.push(''); hours.push(''); meta.push({oor:true}); continue; }
+            var lbl=MSHORT[dy.getMonth()]+' '+dy.getDate();
+            if(cSd) lbl+='\n'+cSd.name;
+            labels.push(lbl); hours.push(cTot>0?cTot:''); meta.push({sd:cSd,total:cTot});
           }
-          var rw=dataRow(ws3,cel);
-          rw.height=14+validCals.length*13;
-          for(var cx=4;cx<=10;cx++){ rw.getCell(cx).alignment={vertical:'top',horizontal:'left',wrapText:true}; var _cf=cFills[cx-4]; if(_cf) rw.getCell(cx).fill={type:'pattern',pattern:'solid',fgColor:{argb:_cf}}; }
+          styleCalWeek(dataRow(ws3,labels),dataRow(ws3,hours),meta);
         }
         blank(ws3);
       }
