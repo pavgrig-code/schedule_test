@@ -772,7 +772,7 @@ $(function(){
   // The small, subtle indicator dot (exact requested style). Sits inline immediately after the date label.
   function _changeDot(){
     return $('<span class="cal-chg-dot">').attr('title','This day has saved Hour Overrides or Extra Shifts').css({
-      background:'rgb(255, 243, 205)',width:'8px',height:'8px',borderRadius:'4px',border:'1px solid gray',
+      background:'rgb(255, 223, 151)',width:'8px',height:'8px',borderRadius:'4px',border:'1px solid gray',
       display:'inline-block',marginLeft:'4px',verticalAlign:'middle',flexShrink:'0'
     });
   }
@@ -10812,6 +10812,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Body
       var $tbody=$('<tbody class="staffing-tbody">');
+      // ── Duplicate-school highlight ── Schools should be unique within a calendar's Site Breakdown.
+      // Key by CDS id (real picked schools) or normalized name; blank rows are never "duplicates".
+      // Every row that shares a school with another row gets its School Name cell flagged. Recomputed on
+      // full table builds and after any per-row school pick/clear.
+      function _sbSchoolKey(r){
+        if(!r) return '';
+        var cds=(r.schoolCds!=null?String(r.schoolCds):'').trim();
+        if(cds) return 'c:'+cds;
+        var nm=(r.school!=null?String(r.school):'').trim();
+        return nm?('n:'+nm.toLowerCase()):'';
+      }
+      function refreshSbDupes(){
+        var counts={};
+        siteRows.forEach(function(r){ var k=_sbSchoolKey(r); if(k) counts[k]=(counts[k]||0)+1; });
+        $tbody.children('tr').each(function(i){
+          var r=siteRows[i]; if(!r) return;   // totals row (no matching siteRows entry) — skip
+          var $cell=$(this).children('td').eq(1);   // School Name cell
+          var k=_sbSchoolKey(r), dup=(!!k && counts[k]>1);
+          if(dup){ $cell.addClass('sb-dup-school').css({background:'#fff1f0',boxShadow:'inset 3px 0 0 0 #ff4d4f'}).attr('title','Duplicate school \u2014 each school should appear only once in this Site Breakdown.'); }
+          else { $cell.removeClass('sb-dup-school').css({background:'',boxShadow:''}).removeAttr('title'); }
+        });
+      }
       siteRows.forEach(function(r,ri){
         var $tr=$('<tr>').css(ri%2===1?{background:'#fafafa'}:{});
 
@@ -10851,7 +10873,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // Show selected chip
             var $chip=$('<div>').css({display:'flex',alignItems:'center',gap:'4px',padding:'2px 4px',background:'#e8f4fd',borderRadius:'4px',fontSize:'11px',color:'#0a6ebd',fontWeight:'500',whiteSpace:'nowrap'});
             $chip.append($('<span>').text(r.school));
-            var $clr=$('<span>').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).text('×').on('click',function(){r.school='';r.schoolCds='';r.schoolAbbr='';saveSiteRows();buildSchoolCell();updateTotalRow($tbody); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }});
+            var $clr=$('<span>').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).text('×').on('click',function(){r.school='';r.schoolCds='';r.schoolAbbr='';saveSiteRows();buildSchoolCell();updateTotalRow($tbody);refreshSbDupes(); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }});
             $chip.append($clr);
             $nameTd.append($chip);
           } else {
@@ -10910,7 +10932,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       r.school=s.name; r.schoolCds=s.cds; r.schoolAbbr=s.abbr;
                       $dd.hide();
                       $(document).off('click._schoolDd');
-                      saveSiteRows(); buildSchoolCell(); updateTotalRow($tbody); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }
+                      saveSiteRows(); buildSchoolCell(); updateTotalRow($tbody); refreshSbDupes(); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }
                     });
                   $dd.append($item);
                 });
@@ -11096,6 +11118,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $trow.append(tc(_tst).addClass('tot-staff'));
       $trow.append($('<td>').css({border:'1px solid #dee2e6',background:'#f0f4f8'}));
       $tbody.append($trow);
+      refreshSbDupes();   // flag any duplicate schools once the full body is built
 
       $tbl.append($tbody);
       $scroll.append($tbl);
