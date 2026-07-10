@@ -797,11 +797,29 @@ $(function(){
     if(!det.calExtraShifts) det.calExtraShifts={};
     return det.calExtraShifts;
   }
+  // Canonical Site Breakdown school name: the entered School Name, or the app's standard "School N"
+  // fallback (N = 1-based row position) when it is blank. Same convention the breakdown, Summary and
+  // export use, so an Extra Shift saved against a blank-named row stays matched to that school.
+  function _siteName(r,i){ return (r&&r.school?String(r.school):'').trim()||('School '+((i|0)+1)); }
   function _xsSchools(gid,calId){
     var det=guideDetails[String(gid)]||{}; var by=det.siteRowsByCal||{};
     var rows=by[calId]||by[String(calId)]||[];
-    var names={}; rows.forEach(function(r){ var nm=(r&&r.school?String(r.school):'').trim(); if(nm) names[nm]=true; });
+    var names={}; rows.forEach(function(r,i){ names[_siteName(r,i)]=true; });
     return names;
+  }
+  // Resolve an Extra Shift's stored school label to the CURRENT Site Breakdown row it belongs to, returning
+  // that row's current name. Matches by current name first, then by positional fallback ("School N" -> row
+  // index N-1) so a shift created against a blank row's fallback name stays attached and follows the row's
+  // real name once one is assigned. Returns null only when no such row exists (genuinely orphaned).
+  function _xsResolveSchool(gid,calId,stored){
+    if(stored==null) return null;
+    var det=guideDetails[String(gid)]||{}; var by=det.siteRowsByCal||{};
+    var rows=by[calId]||by[String(calId)]||[];
+    var s=String(stored).trim(); if(!s) return null;
+    for(var i=0;i<rows.length;i++){ if(_siteName(rows[i],i)===s) return _siteName(rows[i],i); }
+    var mm=/^School\s+(\d+)$/.exec(s);
+    if(mm){ var idx=parseInt(mm[1],10)-1; if(idx>=0&&idx<rows.length) return _siteName(rows[idx],idx); }
+    return null;
   }
   function _xsCalcH(s,e){ if(!s||!e)return null; var sp=String(s).split(':'),ep=String(e).split(':'); var sm=parseInt(sp[0])*60+(parseInt(sp[1])||0),em=parseInt(ep[0])*60+(parseInt(ep[1])||0); if(isNaN(sm)||isNaN(em))return null; return em>sm?(Math.round((em-sm)/60*100)/100):null; }
   // Resolve a calendar row by its stable calId (for applying that calendar's Billable/Non-Billable rules to Extra Shifts).
@@ -830,8 +848,11 @@ $(function(){
   function getExtraShifts(gid,calId,dateKey){
     var m=_xsMap(gid); if(!m||calId==null) return [];
     var list=m[calId+'|'+dateKey]; if(!list||!list.length) return [];
-    var names=_xsSchools(gid,calId);
-    return list.filter(function(s){ return s && s.school && names[String(s.school).trim()]; });
+    // Resolve each shift's stored school to the CURRENT Site Breakdown row name so shifts stay attached
+    // (and follow the real name) after a blank fallback row is given a school. Unresolvable shifts drop.
+    var out=[];
+    list.forEach(function(s){ if(!s||!s.school) return; var rn=_xsResolveSchool(gid,calId,s.school); if(rn) out.push(Object.assign({},s,{school:rn})); });
+    return out;
   }
   function xsDayTotal(gid,calId,dateKey){ var _cr=_xsCalRow(gid,calId); var t=0; getExtraShifts(gid,calId,dateKey).forEach(function(s){ t+=xsShiftTotal(s,_cr); }); return Math.round(t*100)/100; }
   // Summary integration: one school's Extra Shift hours for a calendar across [fromIso, toIso].
@@ -843,7 +864,7 @@ $(function(){
       if(k.indexOf(pre)!==0) continue;
       var dk=k.slice(String(pre).length);
       if(fromIso&&dk<fromIso) continue; if(toIso&&dk>toIso) continue;
-      (m[k]||[]).forEach(function(s){ if(s&&String(s.school||'').trim()===nm) t+=xsShiftTotal(s,_cr); });
+      (m[k]||[]).forEach(function(s){ if(s&&_xsResolveSchool(gid,calId,s.school)===nm) t+=xsShiftTotal(s,_cr); });
     }
     return Math.round(t*100)/100;
   }
@@ -7255,7 +7276,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):dateKey;
       var roles=_xsRoleList(gid);
       var calOpts=[]; (det.calendarRows||[]).forEach(function(cr,i){ if(cr&&cr.calId!=null) calOpts.push({calId:cr.calId,label:(cr.name&&cr.name.trim())||('Calendar '+(i+1))}); });
-      function schoolsFor(calId){ var by=det.siteRowsByCal||{}; var rows=by[calId]||by[String(calId)]||[]; var out=[]; rows.forEach(function(r){ var nm=(r&&r.school?String(r.school):'').trim(); if(nm)out.push(nm); }); return out; }
+      function schoolsFor(calId){ var by=det.siteRowsByCal||{}; var rows=by[calId]||by[String(calId)]||[]; return rows.map(function(r,i){ return _siteName(r,i); }); }
 
       // State — editing preloads the saved values; new starts on this popup's calendar with one blank row.
       var st={
@@ -7315,7 +7336,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       $t.append($('<thead>').append($hr2));
       var $tb2=$('<tbody>');
-      function rowCalc(r){ var h=_xsCalcH(r.start,r.end); var c=parseInt(r.cnt); var ok=(h!==null&&h>0&&!isNaN(c)&&c>0); var cr=_xsCalRow(gid,st.calId); var adj=ok?adjForBillable(h,cr):null; adj=(adj!=null&&adj>0)?adj:(ok?0:null); var brk=(ok&&!calRowBillable(cr))?mealBreakMinsForCal(cr,h):0; return {h:h,adj:(adj!=null)?Math.round(adj*100)/100:null,c:c,ok:ok,brk:brk,total:ok?Math.round((adj||0)*c*100)/100:null}; }
+      function rowCalc(r){ var h=_xsCalcH(r.start,r.end); var c=parseInt(r.cnt); var hOk=(h!==null&&h>0); var cOk=(!isNaN(c)&&c>0); var ok=(hOk&&cOk); var cr=_xsCalRow(gid,st.calId); var adj=hOk?adjForBillable(h,cr):null; adj=(adj!=null&&adj>0)?adj:(hOk?0:null); var brk=(hOk&&!calRowBillable(cr))?mealBreakMinsForCal(cr,h):0; return {h:h,adj:(adj!=null)?Math.round(adj*100)/100:null,c:c,hOk:hOk,cOk:cOk,ok:ok,brk:brk,total:ok?Math.round((adj||0)*c*100)/100:null}; }
       var paintTotal=function(){};      // assigned below
       function renderRows(){
         $tb2.empty();
@@ -7329,7 +7350,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $hVal=$('<span class="xs-hrs-val">'); $h.append($hVal);
           var $tot=$('<td class="xs-tot">').css({padding:'2px 4px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
           var $totVal=$('<span class="xs-tot-val">'); $tot.append($totVal);
-          function paintCalcs(){ var rc=rowCalc(r); $hVal.text(rc.ok?rc.adj:'—'); $totVal.text(rc.ok?rc.total:'—'); $h.children('.cal-tip-brk').remove(); if(rc.ok&&rc.brk>0) $h.append(_mealBreakChip(rc.brk)); paintTotal(); }
+          function paintCalcs(){ var rc=rowCalc(r); $hVal.text(rc.hOk?rc.adj:'—'); $totVal.text(rc.ok?rc.total:'—'); $h.children('.cal-tip-brk').remove(); if(rc.hOk&&rc.brk>0) $h.append(_mealBreakChip(rc.brk)); paintTotal(); }
           $rSel.on('change',function(){ r.role=$(this).val()||''; paintCalcs(); refreshFooter(); });
           $row.append($('<td>').css({padding:'2px 4px'}).append($rSel));
           ['start','end'].forEach(function(f){
@@ -8689,7 +8710,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function schoolRangeTotal(vc,si,sr){
       var t=0,d=new Date(vc.fd);
       while(d<=vc.ld){ t=r2(t+resolveDay(vc,si,sr,d).total); d=addDays(d,1); }
-      t=r2(t+xsSchoolRangeTotal(g.id,vc.cr.calId,(sr.school||'').trim(),vc.cr.firstDay,vc.cr.lastDay));
+      t=r2(t+xsSchoolRangeTotal(g.id,vc.cr.calId,_siteName(sr,si),vc.cr.firstDay,vc.cr.lastDay));
       return t;
     }
 
@@ -9276,7 +9297,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             d=addDays(d,1);
           }
         }
-        tot+=xsSchoolRangeTotal(g.id,_calId2,(sr.school||'').trim(),cr.firstDay,cr.lastDay);   // Extra Shifts for this school within the calendar range
+        tot+=xsSchoolRangeTotal(g.id,_calId2,_siteName(sr,si),cr.firstDay,cr.lastDay);   // Extra Shifts for this school within the calendar range
         return { num:si+1, name:(sr.school||sr.schoolAbbr||'').trim()||('School '+(si+1)), hours:(isFinite(tot)?tot:0) };
       });
       var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;   // per-calendar Price/Hr — each Summary table uses its own calendar's price
@@ -10560,6 +10581,88 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(isPrimary) setGuideDetail(g.id,'siteRows',siteRows);
     }
 
+    // ── "Copy to" action — mirrors the Staffing Hours Copy to. Shown only with 2+ Program Calendars.
+    // Full-replaces the selected destination Site Breakdown table(s) with this table's rows. ──
+    (function(){
+      var _allCals=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].calendarRows)||[];
+      var _dests=_allCals.filter(function(cr){ return cr && cr.calId!=null && String(cr.calId)!==String(calId); });
+      if(calId==null || _dests.length<1) return;   // one calendar → no Copy to
+
+      var $copyBtn=$('<button type="button" class="sb-copyto-btn">').css({
+        background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
+        padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
+        display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',
+        marginLeft:'8px',flexShrink:'0',whiteSpace:'nowrap'
+      }).html('Copy to <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+      $copyBtn.on('mouseenter',function(){$(this).css({borderColor:'#adb5bd',color:'#495057'});});
+      $copyBtn.on('mouseleave',function(){$(this).css({borderColor:'#dee2e6',color:'#6c757d'});});
+      $secHd.append($copyBtn);   // immediately after the calendar name
+
+      var $dd=$('<div class="sb-copyto-dd">').attr('data-guide',String(g.id)).css({
+        position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
+        boxShadow:'0 4px 16px rgba(0,0,0,.14)',padding:'10px 12px',display:'none',minWidth:'190px',fontSize:'11px'
+      });
+      $('body').append($dd);
+      var _raf=null, _uid='sbdd-'+Math.random().toString(36).slice(2);
+      function ddPos(){ var r=$copyBtn[0].getBoundingClientRect(); $dd.css({top:(r.bottom+4)+'px',left:Math.min(r.left,window.innerWidth-210)+'px'}); }
+      function ddClose(){ $dd.hide(); if(_raf){cancelAnimationFrame(_raf);_raf=null;} $(document).off('click.'+_uid); }
+      function ddTrack(){ if($dd.is(':visible')){ ddPos(); _raf=requestAnimationFrame(ddTrack); } else { _raf=null; } }
+
+      function mkCb(lbl,checked,locked){
+        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'2px 0',cursor:locked?'default':'pointer'});
+        var $cb=$('<input type="checkbox">').prop('checked',checked).prop('disabled',!!locked).css({cursor:locked?'default':'pointer',margin:'0',width:'12px',height:'12px'});
+        var $lbl=$('<span>').text(lbl).css({fontSize:'11px',color:'#212529',userSelect:'none'});
+        $row.append($cb,$lbl);
+        if(!locked) $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); } });
+        return {$row:$row,$cb:$cb};
+      }
+
+      function buildDD(){
+        $dd.empty();
+        var single=(_dests.length===1);
+        var cbs=[];
+        _dests.forEach(function(cr){
+          var nm=(cr.name&&cr.name.trim())||('Calendar '+(_allCals.indexOf(cr)+1));
+          var cb=mkCb(nm,true,single);   // single destination → checked + locked
+          cbs.push({calId:cr.calId,$cb:cb.$cb});
+          $dd.append(cb.$row);
+        });
+        var $btns=$('<div>').css({display:'flex',gap:'6px',marginTop:'4px',paddingTop:'8px',borderTop:'1px solid #e9ecef'});
+        var $doCopy=$('<button type="button">').text('Copy').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'});
+        var $reset=$('<button type="button">').text('Reset').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+        $reset.on('click',function(e){ e.stopPropagation(); buildDD(); ddPos(); $dd.show(); });
+        $doCopy.on('click',function(e){
+          e.stopPropagation();
+          var targets=cbs.filter(function(x){ return x.$cb.prop('checked'); }).map(function(x){ return x.calId; });
+          ddClose();
+          if(!targets.length) return;
+          // FULL REPLACE: clear each destination's rows, then copy in a deep clone of THIS table's rows.
+          var src0=JSON.parse(JSON.stringify(siteRows));
+          targets.forEach(function(destCalId){
+            var destRows=siteRowsFor(g,destCalId);            // the actual array (aliased for the primary calendar)
+            var copies=JSON.parse(JSON.stringify(src0));
+            copies.forEach(function(r){ r.schoolId=cdsForSchool(r.school,r.schoolAbbr)||_genEntityId('sch_'); }); // real schools keep their CDS id; blanks get fresh ids
+            destRows.length=0; copies.forEach(function(r){ destRows.push(r); });   // remove old data, then replace (in place → alias preserved)
+          });
+          setGuideDetail(g.id,'siteRowsByCal',(guideDetails[String(g.id)]||{}).siteRowsByCal);
+          if(_allCals.length) setGuideDetail(g.id,'siteRows',siteRowsFor(g,_allCals[0].calId));
+          rebuildAllFromRoles();   // refresh Site Breakdown + Staffing Hours + Calendar
+        });
+        $btns.append($reset,$doCopy);
+        $dd.append($btns);
+      }
+
+      $copyBtn.on('click',function(e){
+        e.stopPropagation();
+        if($dd.is(':visible')){ ddClose(); return; }
+        $('body > .sb-copyto-dd').not($dd[0]).hide();   // only one open at a time
+        buildDD(); ddPos(); $dd.show();
+        if(!_raf) _raf=requestAnimationFrame(ddTrack);
+        setTimeout(function(){ $(document).on('click.'+_uid,function(){ ddClose(); }); },0);   // click outside closes
+      });
+      $dd.on('click',function(e){ e.stopPropagation(); });
+    })();
+
     // CSS for table
     var tblStyle='border-collapse:collapse;width:100%;font-size:11px;';
     var thStyle='border:1px solid #dee2e6;background:#f8f9fb;font-weight:700;text-align:center;padding:4px 6px;white-space:nowrap;font-size:10px;color:#495057;';
@@ -11071,6 +11174,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // calendar exactly as before — no regression until Stage 2 wires them per-calendar.
     function renderCalGroupsSection(){
       ensureGuideEntityIds(g);
+      $('body > .sb-copyto-dd[data-guide="'+g.id+'"]').remove();   // clear stale portalled Copy to dropdowns before rebuilding cards
       var _det=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
       if(!_det.siteRows) _det.siteRows=[{school:''}];
       if(!_det.siteRowsByCal) _det.siteRowsByCal={};
