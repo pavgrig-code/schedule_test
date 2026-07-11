@@ -9458,18 +9458,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(guideRows.length){
         blank(ws5);
         secTitle(ws5,'Planning Guide Summary');
-        hdrRow(ws5,[null,'#','Program Calendars','Hours','Amount']);
+        hdrRow(ws5,[null,'Program Calendars','Hours','Amount']);
         var _pgH=0,_pgA=0;
         guideRows.forEach(function(gr,gi){
           _pgH=r2(_pgH+gr.hours); _pgA=r2(_pgA+gr.amount);
-          var grow=dataRow(ws5,[null,gi+1,gr.name,gr.hours,gr.amount]);
-          grow.getCell(4).numFmt=FMT_H; grow.getCell(5).numFmt=FMT_AMT;
-          grow.getCell(4).alignment={horizontal:'right'}; grow.getCell(5).alignment={horizontal:'right'};
+          var grow=dataRow(ws5,[null,gr.name,gr.hours,gr.amount]);
+          grow.getCell(3).numFmt=FMT_H; grow.getCell(4).numFmt=FMT_AMT;
+          grow.getCell(3).alignment={horizontal:'right'}; grow.getCell(4).alignment={horizontal:'right'};
         });
-        var gtot=dataRow(ws5,[null,'Total','Planning Guide',_pgH,_pgA]);
+        var gtot=dataRow(ws5,[null,'Planning Guide',_pgH,_pgA]);
         gtot.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9E6F6'}}; c.font={name:'Calibri',size:10,bold:true}; });
-        gtot.getCell(4).numFmt=FMT_H; gtot.getCell(5).numFmt=FMT_AMT;
-        gtot.getCell(4).alignment={horizontal:'right'}; gtot.getCell(5).alignment={horizontal:'right'};
+        gtot.getCell(3).numFmt=FMT_H; gtot.getCell(4).numFmt=FMT_AMT;
+        gtot.getCell(3).alignment={horizontal:'right'}; gtot.getCell(4).alignment={horizontal:'right'};
       }
 
       // ── file name: {Guide Name} ({Guide ID}) - mm-dd-yyyy.xlsx (sanitized) ──
@@ -9674,7 +9674,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $gScroll=$('<div style="overflow-x:auto;">');
       var $gTbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $gHr=$('<tr>');
-      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('#'));
       $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('Program Calendars'));
       $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
       $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Amount'));
@@ -9684,7 +9683,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       guideRollup.forEach(function(row,ri){
         _gHours+=row.hours; _gAmt+=row.amount;
         var $r=$('<tr>');
-        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1));
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).append(_calCircle(row.color).css({marginRight:'6px'})).append($('<span>').text(row.name)));
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(row.hours)));
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.amount)));
@@ -9692,7 +9690,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       // Grand Total row: "Total | Planning Guide" — emphasized, consistent with the calendar total rows.
       var $gTot=$('<tr>').css({background:'#d9e6f6',borderTop:'2px solid #b0c8e6'});
-      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 8px',fontWeight:'700',color:'#212529',textAlign:'center',whiteSpace:'nowrap',background:'#d9e6f6'}).text('Total'));
       $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Planning Guide'));
       $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_gHours)));
       $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(_gAmt)));
@@ -9799,7 +9796,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
         boxShadow:'0 4px 14px rgba(0,0,0,.12)',minWidth:'140px',padding:'4px',display:'none'
       });
-      ['PDF','Excel'].forEach(function(opt){
+      ['Excel'].forEach(function(opt){
         var $opt=$('<button type="button">').css({
           display:'flex',alignItems:'center',gap:'8px',width:'100%',
           background:'none',border:'none',padding:'6px 10px',borderRadius:'6px',
@@ -9810,7 +9807,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $opt.on('click',function(e){
           e.stopPropagation(); $menu.hide();   // dropdown always closes on selection
           // Excel → generate the workbook from the CURRENT stores (always the latest values).
-          // PDF stays a placeholder until that exporter is wired.
           if(opt==='Excel') exportGuideToExcel(g);
         });
         $menu.append($opt);
