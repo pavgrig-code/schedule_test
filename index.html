@@ -886,6 +886,12 @@ $(function(){
 
   // Shared districts — used in Staff Details and Planning Guides
   var DISTRICTS_DATA = {"Alameda County": [{"name": "Alameda County Office of Education", "abbr": "ACOE (ALA)"}, {"name": "Alameda Unified", "abbr": "AUSD (ALA)"}, {"name": "Albany City Unified", "abbr": "ACUSD (ALA)"}, {"name": "Berkeley Unified", "abbr": "BUSD (ALA)"}, {"name": "California School for the Blind (State Special Schl)", "abbr": "CSB (ALA)"}, {"name": "California School for the Deaf-Fremont (State Special Schl)", "abbr": "CSDF (ALA)"}, {"name": "Castro Valley Unified", "abbr": "CVUSD (ALA)"}, {"name": "Dublin Unified", "abbr": "DUSD (ALA)"}, {"name": "Eden Area ROP", "abbr": "EAROP (ALA)"}, {"name": "Emery Unified", "abbr": "EUSD (ALA)"}, {"name": "Fremont Unified", "abbr": "FUSD (ALA)"}, {"name": "Hayward Unified", "abbr": "HUSD (ALA)"}, {"name": "Livermore Valley Joint Unified", "abbr": "LVJUSD (ALA)"}, {"name": "Mission Valley ROC/P", "abbr": "MVROCP (ALA)"}, {"name": "Mountain House Elementary", "abbr": "MHESD (ALA)"}, {"name": "New Haven Unified", "abbr": "NHUSD (ALA)"}, {"name": "Newark Unified", "abbr": "NUSD (ALA)"}, {"name": "Oakland Unified", "abbr": "OUSD (ALA)"}, {"name": "Piedmont City Unified", "abbr": "PCUSD (ALA)"}, {"name": "Pleasanton Unified", "abbr": "PUSD (ALA)"}, {"name": "SBE - Latitude 37.8 High", "abbr": "SBE-L378HSD (ALA)"}, {"name": "San Leandro Unified", "abbr": "SLUSD (ALA)"}, {"name": "San Lorenzo Unified", "abbr": "SLUSD (ALA)"}, {"name": "Sunol Glen Unified", "abbr": "SGUSD (ALA)"}, {"name": "Tri-Valley ROP", "abbr": "TVROP (ALA)"}], "Alpine County": [{"name": "Alpine County Office of Education", "abbr": "ACOE (ALP)"}, {"name": "Alpine County Unified", "abbr": "ACUSD (ALP)"}], "Amador County": [{"name": "Amador County Office of Education", "abbr": "ACOE (AMA)"}, {"name": "Amador County ROP", "abbr": "ACROP (AMA)"}, {"name": "Amador County Unified", "abbr": "ACUSD (AMA)"}], "Butte County": [{"name": "Bangor Union Elementary", "abbr": "BUESD (BUT)"}, {"name": "Biggs Unified", "abbr": "BUSD (BUT)"}, {"name": "Butte County Office of Education", "abbr": "BCOE (BUT)"}, {"name": "Butte County ROP", "abbr": "BCROP (BUT)"}, {"name": "Chico Unified", "abbr": "CUSD (BUT)"}, {"name": "Durham Unified", "abbr": "DUSD (BUT)"}, {"name": "Golden Feather Union Elementary", "abbr": "GFUESD (BUT)"}, {"name": "Gridley Unified", "abbr": "GUSD (BUT)"}, {"name": "Manzanita Elementary", "abbr": "MESD (BUT)"}, {"name": "Oroville City Elementary", "abbr": "OCESD (BUT)"}, {"name": "Oroville Union High", "abbr": "OUHSD (BUT)"}, {"name": "Palermo Union Elementary", "abbr": "PUESD (BUT)"}, {"name": "Paradise Unified", "abbr": "PUSD (BUT)"}, {"name": "Pioneer Union Elementary", "abbr": "PUESD (BUT)"}, {"name": "Thermalito Union Elementary", "abbr": "TUESD (BUT)"}], "Calaveras County": [{"name": "Bret Harte Union High", "abbr": "BHUHSD (CAL)"}, {"name": "Calaveras County Office of Education", "abbr": "CCOE (CAL)"}, {"name": "Calaveras Unified", "abbr": "CUSD (CAL)"}, {"name": "Mark Twain Union Elementary", "abbr": "MTUESD (CAL)"}, {"name": "Vallecito Union", "abbr": "VUSD (CAL)"}], "Colusa County": [{"name": "Colusa County Office of Education", "abbr": "CCOE (COL)"}, {"name": "Colusa Unified", "abbr": "CUSD (COL)"}, {"name": "Maxwell Unified", "abbr": "MUSD (COL)"}, {"name": "Pierce Joint Unified", "abbr": "PJUSD (COL)"}, {"name": "Williams Unified", "abbr": "WUSD (COL)"}], "Contra Costa County": [{"name": "Acalanes Union High", "abbr": "AUHSD (CC)"}, {"name": "Antioch Unified", "abbr": "AUSD (CC)"}, {"name": "Brentwood Union", "abbr": "BUSD (CC)"}, {"name": "Byron Union Elementary", "abbr": "BUESD (CC)"}, {"name": "Canyon Elementary", "abbr": "CESD (CC)"}, {"name": "Contra Costa County Office of Education", "abbr": "CCCOE (CC)"}, {"name": "Contra Costa County ROP", "abbr": "CCCROP (CC)"}, {"name": "John Swett Unified", "abbr": "JSUSD (CC)"}, {"name": "Knightsen Elementary", "abbr": "KESD (CC)"}, {"name": "Lafayette Elementary", "abbr": "LESD (CC)"}, {"name": "Liberty Union High", "abbr": "LUHSD (CC)"}, {"name": "Martinez Unified", "abbr": "MUSD (CC)"}, {"name": "Moraga Elementary", "abbr": "MESD (CC)"}, {"name": "Mt. Diablo Unified", "abbr": "MDUSD (CC)"}, {"name": "Oakley Union Elementary", "abbr": "OUESD (CC)"}, {"name": "Orinda Union", "abbr": "OUSD (CC)"}, {"name": "Pittsburg Unified", "abbr": "PUSD (CC)"}, {"name": "SBE - John Henry High", "abbr": "SBE-JHHSD (CC)"}, {"name": "San Ramon Valley Unified", "abbr": "SRVUSD (CC)"}, {"name": "Walnut Creek Elementary", "abbr": "WCESD (CC)"}, {"name": "West Contra Costa Unified", "abbr": "WCCUSD (CC)"}], "Del Norte County": [{"name": "Del Norte County Office of Education", "abbr": "DNCOE (DN)"}, {"name": "Del Norte County ROP", "abbr": "DNCROP (DN)"}, {"name": "Del Norte County Unified", "abbr": "DNCUSD (DN)"}], "El Dorado County": [{"name": "Black Oak Mine Unified", "abbr": "BOMUSD (ED)"}, {"name": "Buckeye Union Elementary", "abbr": "BUESD (ED)"}, {"name": "Camino Union Elementary", "abbr": "CUESD (ED)"}, {"name": "Central Sierra ROP", "abbr": "CSROP (ED)"}, {"name": "El Dorado County Office of Education", "abbr": "EDCOE (ED)"}, {"name": "El Dorado Union High", "abbr": "EDUHSD (ED)"}, {"name": "Gold Oak Union Elementary", "abbr": "GOUESD (ED)"}, {"name": "Gold Trail Union Elementary", "abbr": "GTUESD (ED)"}, {"name": "Indian Diggings Elementary", "abbr": "IDESD (ED)"}, {"name": "Lake Tahoe Unified", "abbr": "LTUSD (ED)"}, {"name": "Latrobe", "abbr": "L (ED)"}, {"name": "Mother Lode Union Elementary", "abbr": "MLUESD (ED)"}, {"name": "Pioneer Union", "abbr": "PUSD (ED)"}, {"name": "Placerville Union Elementary", "abbr": "PUESD (ED)"}, {"name": "Pollock Pines Elementary", "abbr": "PPESD (ED)"}, {"name": "Rescue Union Elementary", "abbr": "RUESD (ED)"}, {"name": "Silver Fork Elementary", "abbr": "SFESD (ED)"}], "Fresno County": [{"name": "Alvina Elementary", "abbr": "AESD (FRE)"}, {"name": "Big Creek Elementary", "abbr": "BCESD (FRE)"}, {"name": "Burrel Union Elementary", "abbr": "BUESD (FRE)"}, {"name": "Caruthers Unified", "abbr": "CUSD (FRE)"}, {"name": "Central Unified", "abbr": "CUSD (FRE)"}, {"name": "Clay Joint Elementary", "abbr": "CJESD (FRE)"}, {"name": "Clovis Unified", "abbr": "CUSD (FRE)"}, {"name": "Coalinga-Huron Unified", "abbr": "CHUSD (FRE)"}, {"name": "Firebaugh-Las Deltas Unified", "abbr": "FLDUSD (FRE)"}, {"name": "Fowler Unified", "abbr": "FUSD (FRE)"}, {"name": "Fresno County Office of Education", "abbr": "FCOE (FRE)"}, {"name": "Fresno ROP", "abbr": "FROP (FRE)"}, {"name": "Fresno Unified", "abbr": "FUSD (FRE)"}, {"name": "Golden Plains Unified", "abbr": "GPUSD (FRE)"}, {"name": "Kerman Unified", "abbr": "KUSD (FRE)"}, {"name": "Kings Canyon Joint Unified", "abbr": "KCJUSD (FRE)"}, {"name": "Kingsburg Elementary Charter", "abbr": "KEC (FRE)"}, {"name": "Kingsburg Joint Union High", "abbr": "KJUHSD (FRE)"}, {"name": "Laton Joint Unified", "abbr": "LJUSD (FRE)"}, {"name": "Mendota Unified", "abbr": "MUSD (FRE)"}, {"name": "Orange Center", "abbr": "OC (FRE)"}, {"name": "Pacific Union Elementary", "abbr": "PUESD (FRE)"}, {"name": "Parlier Unified", "abbr": "PUSD (FRE)"}, {"name": "Pine Ridge Elementary", "abbr": "PRESD (FRE)"}, {"name": "Raisin City Elementary", "abbr": "RCESD (FRE)"}, {"name": "Riverdale Joint Unified", "abbr": "RJUSD (FRE)"}, {"name": "Sanger Unified", "abbr": "SUSD (FRE)"}, {"name": "Selma Unified", "abbr": "SUSD (FRE)"}, {"name": "Sierra Unified", "abbr": "SUSD (FRE)"}, {"name": "Valley ROP", "abbr": "VROP (FRE)"}, {"name": "Washington Colony Elementary", "abbr": "WCESD (FRE)"}, {"name": "Washington Unified", "abbr": "WUSD (FRE)"}, {"name": "West Park Elementary", "abbr": "WPESD (FRE)"}, {"name": "Westside Elementary", "abbr": "WESD (FRE)"}], "Glenn County": [{"name": "Capay Joint Union Elementary", "abbr": "CJUESD (GLE)"}, {"name": "Glenn County Office of Education", "abbr": "GCOE (GLE)"}, {"name": "Glenn County ROP", "abbr": "GCROP (GLE)"}, {"name": "Hamilton Unified", "abbr": "HUSD (GLE)"}, {"name": "Lake Elementary", "abbr": "LESD (GLE)"}, {"name": "Orland Joint Unified", "abbr": "OJUSD (GLE)"}, {"name": "Plaza Elementary", "abbr": "PESD (GLE)"}, {"name": "Princeton Joint Unified", "abbr": "PJUSD (GLE)"}, {"name": "Stony Creek Joint Unified", "abbr": "SCJUSD (GLE)"}, {"name": "Willows Unified", "abbr": "WUSD (GLE)"}], "Humboldt County": [{"name": "Arcata Elementary", "abbr": "AESD (HUM)"}, {"name": "Big Lagoon Union Elementary", "abbr": "BLUESD (HUM)"}, {"name": "Blue Lake Union Elementary", "abbr": "BLUESD (HUM)"}, {"name": "Bridgeville Elementary", "abbr": "BESD (HUM)"}, {"name": "Cuddeback Union Elementary", "abbr": "CUESD (HUM)"}, {"name": "Cutten Elementary", "abbr": "CESD (HUM)"}, {"name": "Eureka City Schools", "abbr": "ECS (HUM)"}, {"name": "Ferndale Unified", "abbr": "FUSD (HUM)"}, {"name": "Fieldbrook Elementary", "abbr": "FESD (HUM)"}, {"name": "Fortuna Elementary", "abbr": "FESD (HUM)"}, {"name": "Fortuna Union High", "abbr": "FUHSD (HUM)"}, {"name": "Freshwater Elementary", "abbr": "FESD (HUM)"}, {"name": "Garfield Elementary", "abbr": "GESD (HUM)"}, {"name": "Humboldt County Office of Education", "abbr": "HCOE (HUM)"}, {"name": "Humboldt County ROP", "abbr": "HCROP (HUM)"}, {"name": "Hydesville Elementary", "abbr": "HESD (HUM)"}, {"name": "Jacoby Creek Elementary", "abbr": "JCESD (HUM)"}, {"name": "Klamath-Trinity Joint Unified", "abbr": "KTJUSD (HUM)"}, {"name": "Kneeland Elementary", "abbr": "KESD (HUM)"}, {"name": "Loleta Union Elementary", "abbr": "LUESD (HUM)"}, {"name": "Maple Creek Elementary", "abbr": "MCESD (HUM)"}, {"name": "Mattole Unified", "abbr": "MUSD (HUM)"}, {"name": "McKinleyville Union Elementary", "abbr": "MUESD (HUM)"}, {"name": "Northern Humboldt Union High", "abbr": "NHUHSD (HUM)"}, {"name": "Orick Elementary", "abbr": "OESD (HUM)"}, {"name": "Pacific Union Elementary", "abbr": "PUESD (HUM)"}, {"name": "Peninsula Union", "abbr": "PUSD (HUM)"}, {"name": "Rio Dell Elementary", "abbr": "RDESD (HUM)"}, {"name": "Scotia Union Elementary", "abbr": "SUESD (HUM)"}, {"name": "South Bay Union Elementary", "abbr": "SBUESD (HUM)"}, {"name": "Southern Humboldt Joint Unified", "abbr": "SHJUSD (HUM)"}, {"name": "Trinidad Union Elementary", "abbr": "TUESD (HUM)"}], "Imperial County": [{"name": "Brawley Elementary", "abbr": "BESD (IMP)"}, {"name": "Brawley Union High", "abbr": "BUHSD (IMP)"}, {"name": "Calexico Unified", "abbr": "CUSD (IMP)"}, {"name": "Calipatria Unified", "abbr": "CUSD (IMP)"}, {"name": "Central Union High", "abbr": "CUHSD (IMP)"}, {"name": "El Centro Elementary", "abbr": "ECESD (IMP)"}, {"name": "Heber Elementary", "abbr": "HESD (IMP)"}, {"name": "Holtville Unified", "abbr": "HUSD (IMP)"}, {"name": "Imperial County Office of Education", "abbr": "ICOE (IMP)"}, {"name": "Imperial Unified", "abbr": "IUSD (IMP)"}, {"name": "Imperial Valley ROP", "abbr": "IVROP (IMP)"}, {"name": "Magnolia Union Elementary", "abbr": "MUESD (IMP)"}, {"name": "McCabe Union Elementary", "abbr": "MUESD (IMP)"}, {"name": "Meadows Union", "abbr": "MUSD (IMP)"}, {"name": "Mulberry Elementary", "abbr": "MESD (IMP)"}, {"name": "San Pasqual Valley Unified", "abbr": "SPVUSD (IMP)"}, {"name": "Seeley Union Elementary", "abbr": "SUESD (IMP)"}, {"name": "Westmorland Union Elementary", "abbr": "WUESD (IMP)"}], "Inyo County": [{"name": "Big Pine Unified", "abbr": "BPUSD (INY)"}, {"name": "Bishop Unified", "abbr": "BUSD (INY)"}, {"name": "Death Valley Unified", "abbr": "DVUSD (INY)"}, {"name": "Inyo County Office of Education", "abbr": "ICOE (INY)"}, {"name": "Lone Pine Unified", "abbr": "LPUSD (INY)"}, {"name": "Owens Valley Unified", "abbr": "OVUSD (INY)"}, {"name": "Round Valley Joint Elementary", "abbr": "RVJESD (INY)"}], "Kern County": [{"name": "Arvin Union", "abbr": "AUSD (KER)"}, {"name": "Bakersfield City", "abbr": "BC (KER)"}, {"name": "Beardsley Elementary", "abbr": "BESD (KER)"}, {"name": "Blake Elementary", "abbr": "BESD (KER)"}, {"name": "Buttonwillow Union Elementary", "abbr": "BUESD (KER)"}, {"name": "Caliente Union Elementary", "abbr": "CUESD (KER)"}, {"name": "Delano Joint Union High", "abbr": "DJUHSD (KER)"}, {"name": "Delano Union Elementary", "abbr": "DUESD (KER)"}, {"name": "Di Giorgio Elementary", "abbr": "DGESD (KER)"}, {"name": "Edison Elementary", "abbr": "EESD (KER)"}, {"name": "El Tejon Unified", "abbr": "ETUSD (KER)"}, {"name": "Elk Hills Elementary", "abbr": "EHESD (KER)"}, {"name": "Fairfax Elementary", "abbr": "FESD (KER)"}, {"name": "Fruitvale Elementary", "abbr": "FESD (KER)"}, {"name": "General Shafter Elementary", "abbr": "GSESD (KER)"}, {"name": "Greenfield Union", "abbr": "GUSD (KER)"}, {"name": "Kern County Office of Education", "abbr": "KCOE (KER)"}, {"name": "Kern County ROP", "abbr": "KCROP (KER)"}, {"name": "Kern High", "abbr": "KHSD (KER)"}, {"name": "Kern High ROC", "abbr": "KHROC (KER)"}, {"name": "Kernville Union Elementary", "abbr": "KUESD (KER)"}, {"name": "Lakeside Union", "abbr": "LUSD (KER)"}, {"name": "Lamont Elementary", "abbr": "LESD (KER)"}, {"name": "Linns Valley-Poso Flat Union", "abbr": "LVPFUSD (KER)"}, {"name": "Lost Hills Union Elementary", "abbr": "LHUESD (KER)"}, {"name": "Maple Elementary", "abbr": "MESD (KER)"}, {"name": "Maricopa Unified", "abbr": "MUSD (KER)"}, {"name": "McFarland Unified", "abbr": "MUSD (KER)"}, {"name": "McKittrick Elementary", "abbr": "MESD (KER)"}, {"name": "Midway Elementary", "abbr": "MESD (KER)"}, {"name": "Mojave Unified", "abbr": "MUSD (KER)"}, {"name": "Muroc Joint Unified", "abbr": "MJUSD (KER)"}, {"name": "Norris Elementary", "abbr": "NESD (KER)"}, {"name": "Panama-Buena Vista Union", "abbr": "PBVUSD (KER)"}, {"name": "Pond Union Elementary", "abbr": "PUESD (KER)"}, {"name": "Richland Union Elementary", "abbr": "RUESD (KER)"}, {"name": "Rio Bravo-Greeley Union Elementary", "abbr": "RBGUESD (KER)"}, {"name": "Rosedale Union Elementary", "abbr": "RUESD (KER)"}, {"name": "Semitropic Elementary", "abbr": "SESD (KER)"}, {"name": "Sierra Sands Unified", "abbr": "SSUSD (KER)"}, {"name": "South Fork Union", "abbr": "SFUSD (KER)"}, {"name": "Southern Kern Unified", "abbr": "SKUSD (KER)"}, {"name": "Standard Elementary", "abbr": "SESD (KER)"}, {"name": "Taft City", "abbr": "TC (KER)"}, {"name": "Taft Union High", "abbr": "TUHSD (KER)"}, {"name": "Tehachapi Unified", "abbr": "TUSD (KER)"}, {"name": "Vineland Elementary", "abbr": "VESD (KER)"}, {"name": "Wasco Union Elementary", "abbr": "WUESD (KER)"}, {"name": "Wasco Union High", "abbr": "WUHSD (KER)"}], "Kings County": [{"name": "Armona Union Elementary", "abbr": "AUESD (KIN)"}, {"name": "Central Union Elementary", "abbr": "CUESD (KIN)"}, {"name": "Corcoran Joint Unified", "abbr": "CJUSD (KIN)"}, {"name": "Hanford Elementary", "abbr": "HESD (KIN)"}, {"name": "Hanford Joint Union High", "abbr": "HJUHSD (KIN)"}, {"name": "Island Union Elementary", "abbr": "IUESD (KIN)"}, {"name": "Kings County Office of Education", "abbr": "KCOE (KIN)"}, {"name": "Kings County ROP", "abbr": "KCROP (KIN)"}, {"name": "Kings River-Hardwick Union Elementary", "abbr": "KRHUESD (KIN)"}, {"name": "Kit Carson Union Elementary", "abbr": "KCUESD (KIN)"}, {"name": "Lakeside Union Elementary", "abbr": "LUESD (KIN)"}, {"name": "Lemoore Union Elementary", "abbr": "LUESD (KIN)"}, {"name": "Lemoore Union High", "abbr": "LUHSD (KIN)"}, {"name": "Pioneer Union Elementary", "abbr": "PUESD (KIN)"}, {"name": "Reef-Sunset Unified", "abbr": "RSUSD (KIN)"}], "Lake County": [{"name": "Kelseyville Unified", "abbr": "KUSD (LAK)"}, {"name": "Konocti Unified", "abbr": "KUSD (LAK)"}, {"name": "Lake County Office of Education", "abbr": "LCOE (LAK)"}, {"name": "Lakeport Unified", "abbr": "LUSD (LAK)"}, {"name": "Lucerne Elementary", "abbr": "LESD (LAK)"}, {"name": "Middletown Unified", "abbr": "MUSD (LAK)"}, {"name": "Upper Lake Unified", "abbr": "ULUSD (LAK)"}], "Lassen County": [{"name": "Big Valley Joint Unified", "abbr": "BVJUSD (LAS)"}, {"name": "Fort Sage Unified", "abbr": "FSUSD (LAS)"}, {"name": "Janesville Union Elementary", "abbr": "JUESD (LAS)"}, {"name": "Johnstonville Elementary", "abbr": "JESD (LAS)"}, {"name": "Lassen County Office of Education", "abbr": "LCOE (LAS)"}, {"name": "Lassen ROP", "abbr": "LROP (LAS)"}, {"name": "Lassen Union High", "abbr": "LUHSD (LAS)"}, {"name": "Ravendale-Termo Elementary", "abbr": "RTESD (LAS)"}, {"name": "Richmond Elementary", "abbr": "RESD (LAS)"}, {"name": "Shaffer Union Elementary", "abbr": "SUESD (LAS)"}, {"name": "Susanville Elementary", "abbr": "SESD (LAS)"}, {"name": "Westwood Unified", "abbr": "WUSD (LAS)"}], "Los Angeles County": [{"name": "ABC Unified", "abbr": "ABCUSD (LA)"}, {"name": "Acton-Agua Dulce Unified", "abbr": "AADUSD (LA)"}, {"name": "Alhambra Unified", "abbr": "AUSD (LA)"}, {"name": "Antelope Valley ROP", "abbr": "AVROP (LA)"}, {"name": "Antelope Valley Union High", "abbr": "AVUHSD (LA)"}, {"name": "Arcadia Unified", "abbr": "AUSD (LA)"}, {"name": "Azusa Unified", "abbr": "AUSD (LA)"}, {"name": "Baldwin Park Unified", "abbr": "BPUSD (LA)"}, {"name": "Bassett Unified", "abbr": "BUSD (LA)"}, {"name": "Bellflower Unified", "abbr": "BUSD (LA)"}, {"name": "Beverly Hills Unified", "abbr": "BHUSD (LA)"}, {"name": "Bonita Unified", "abbr": "BUSD (LA)"}, {"name": "Burbank Unified", "abbr": "BUSD (LA)"}, {"name": "California Advancing Pathways for Students in Los Angeles County ROC/P", "abbr": "CAPSLACROCP (LA)"}, {"name": "Castaic Union", "abbr": "CUSD (LA)"}, {"name": "Centinela Valley Union High", "abbr": "CVUHSD (LA)"}, {"name": "Charter Oak Unified", "abbr": "COUSD (LA)"}, {"name": "Claremont Unified", "abbr": "CUSD (LA)"}, {"name": "Compton Unified", "abbr": "CUSD (LA)"}, {"name": "Compton Unified ROP", "abbr": "CUROP (LA)"}, {"name": "Covina-Valley Unified", "abbr": "CVUSD (LA)"}, {"name": "Culver City Unified", "abbr": "CCUSD (LA)"}, {"name": "Downey Unified", "abbr": "DUSD (LA)"}, {"name": "Duarte Unified", "abbr": "DUSD (LA)"}, {"name": "East Whittier City Elementary", "abbr": "EWCESD (LA)"}, {"name": "Eastside Union Elementary", "abbr": "EUESD (LA)"}, {"name": "El Monte City", "abbr": "EMC (LA)"}, {"name": "El Monte Union High", "abbr": "EMUHSD (LA)"}, {"name": "El Rancho Unified", "abbr": "ERUSD (LA)"}, {"name": "El Segundo Unified", "abbr": "ESUSD (LA)"}, {"name": "Garvey Elementary", "abbr": "GESD (LA)"}, {"name": "Glendale Unified", "abbr": "GUSD (LA)"}, {"name": "Glendora Unified", "abbr": "GUSD (LA)"}, {"name": "Gorman Joint", "abbr": "GJ (LA)"}, {"name": "Hacienda la Puente Unified", "abbr": "HLPUSD (LA)"}, {"name": "Hart ROP", "abbr": "HROP (LA)"}, {"name": "Hawthorne", "abbr": "H (LA)"}, {"name": "Hermosa Beach City Elementary", "abbr": "HBCESD (LA)"}, {"name": "Hughes-Elizabeth Lakes Union Elementary", "abbr": "HELUESD (LA)"}, {"name": "Inglewood Unified", "abbr": "IUSD (LA)"}, {"name": "Keppel Union Elementary", "abbr": "KUESD (LA)"}, {"name": "La Canada Unified", "abbr": "LCUSD (LA)"}, {"name": "Lancaster Elementary", "abbr": "LESD (LA)"}, {"name": "Las Virgenes Unified", "abbr": "LVUSD (LA)"}, {"name": "Lawndale Elementary", "abbr": "LESD (LA)"}, {"name": "Lennox", "abbr": "L (LA)"}, {"name": "Little Lake City Elementary", "abbr": "LLCESD (LA)"}, {"name": "Long Beach Unified", "abbr": "LBUSD (LA)"}, {"name": "Long Beach Unified ROP", "abbr": "LBUROP (LA)"}, {"name": "Los Angeles County Office of Education", "abbr": "LACOE (LA)"}, {"name": "Los Angeles County ROP", "abbr": "LACROP (LA)"}, {"name": "Los Angeles Unified", "abbr": "LAUSD (LA)"}, {"name": "Los Angeles Unified ROCP", "abbr": "LAUROCP (LA)"}, {"name": "Los Nietos", "abbr": "LN (LA)"}, {"name": "Lynwood Unified", "abbr": "LUSD (LA)"}, {"name": "Manhattan Beach Unified", "abbr": "MBUSD (LA)"}, {"name": "Monrovia Unified", "abbr": "MUSD (LA)"}, {"name": "Montebello Unified", "abbr": "MUSD (LA)"}, {"name": "Mountain View Elementary", "abbr": "MVESD (LA)"}, {"name": "Newhall", "abbr": "N (LA)"}, {"name": "Norwalk-La Mirada Unified", "abbr": "NLMUSD (LA)"}, {"name": "Palmdale Elementary", "abbr": "PESD (LA)"}, {"name": "Palos Verdes Peninsula Unified", "abbr": "PVPUSD (LA)"}, {"name": "Paramount Unified", "abbr": "PUSD (LA)"}, {"name": "Pasadena Unified", "abbr": "PUSD (LA)"}, {"name": "Pomona Unified", "abbr": "PUSD (LA)"}, {"name": "Redondo Beach Unified", "abbr": "RBUSD (LA)"}, {"name": "Rosemead Elementary", "abbr": "RESD (LA)"}, {"name": "Rowland Unified", "abbr": "RUSD (LA)"}, {"name": "San Antonio ROP", "abbr": "SAROP (LA)"}, {"name": "San Gabriel Unified", "abbr": "SGUSD (LA)"}, {"name": "San Gabriel Valley Regional Occupational Program", "abbr": "SGVROP (LA)"}, {"name": "San Marino Unified", "abbr": "SMUSD (LA)"}, {"name": "Santa Monica-Malibu Unified", "abbr": "SMMUSD (LA)"}, {"name": "Saugus Union", "abbr": "SUSD (LA)"}, {"name": "South Pasadena Unified", "abbr": "SPUSD (LA)"}, {"name": "South Whittier Elementary", "abbr": "SWESD (LA)"}, {"name": "Southern California ROC", "abbr": "SCROC (LA)"}, {"name": "Sulphur Springs Union", "abbr": "SSUSD (LA)"}, {"name": "Temple City Unified", "abbr": "TCUSD (LA)"}, {"name": "Torrance Unified", "abbr": "TUSD (LA)"}, {"name": "Tri-Cities ROP", "abbr": "TCROP (LA)"}, {"name": "Valle Lindo Elementary", "abbr": "VLESD (LA)"}, {"name": "Walnut Valley Unified", "abbr": "WVUSD (LA)"}, {"name": "West Covina Unified", "abbr": "WCUSD (LA)"}, {"name": "Westside Union Elementary", "abbr": "WUESD (LA)"}, {"name": "Whittier City", "abbr": "WC (LA)"}, {"name": "Whittier Union High", "abbr": "WUHSD (LA)"}, {"name": "William S. Hart Union High", "abbr": "WSHUHSD (LA)"}, {"name": "Wilsona Elementary", "abbr": "WESD (LA)"}, {"name": "Wiseburn Unified", "abbr": "WUSD (LA)"}], "Madera County": [{"name": "Alview-Dairyland Union Elementary", "abbr": "ADUESD (MAD)"}, {"name": "Bass Lake Joint Union Elementary", "abbr": "BLJUESD (MAD)"}, {"name": "Chawanakee Unified", "abbr": "CUSD (MAD)"}, {"name": "Chowchilla Elementary", "abbr": "CESD (MAD)"}, {"name": "Chowchilla Union High", "abbr": "CUHSD (MAD)"}, {"name": "Golden Valley Unified", "abbr": "GVUSD (MAD)"}, {"name": "Madera County Superintendent of Schools", "abbr": "MCSS (MAD)"}, {"name": "Madera Unified", "abbr": "MUSD (MAD)"}, {"name": "Raymond-Knowles Union Elementary", "abbr": "RKUESD (MAD)"}, {"name": "Yosemite Unified", "abbr": "YUSD (MAD)"}], "Marin County": [{"name": "Bolinas-Stinson Union", "abbr": "BSUSD (MRN)"}, {"name": "Kentfield Elementary", "abbr": "KESD (MRN)"}, {"name": "Laguna Joint Elementary", "abbr": "LJESD (MRN)"}, {"name": "Lagunitas Elementary", "abbr": "LESD (MRN)"}, {"name": "Larkspur-Corte Madera", "abbr": "LCM (MRN)"}, {"name": "Marin County Office of Education", "abbr": "MCOE (MRN)"}, {"name": "Marin County ROP", "abbr": "MCROP (MRN)"}, {"name": "Mill Valley Elementary", "abbr": "MVESD (MRN)"}, {"name": "Miller Creek Elementary", "abbr": "MCESD (MRN)"}, {"name": "Nicasio", "abbr": "N (MRN)"}, {"name": "Novato Unified", "abbr": "NUSD (MRN)"}, {"name": "Reed Union Elementary", "abbr": "RUESD (MRN)"}, {"name": "Ross Elementary", "abbr": "RESD (MRN)"}, {"name": "Ross Valley Elementary", "abbr": "RVESD (MRN)"}, {"name": "San Rafael City Elementary", "abbr": "SRCESD (MRN)"}, {"name": "San Rafael City High", "abbr": "SRCHSD (MRN)"}, {"name": "Sausalito Marin City", "abbr": "SMC (MRN)"}, {"name": "Shoreline Unified", "abbr": "SUSD (MRN)"}, {"name": "Tamalpais Union High", "abbr": "TUHSD (MRN)"}], "Mariposa County": [{"name": "Mariposa County Office of Education", "abbr": "MCOE (MRP)"}, {"name": "Mariposa County Unified", "abbr": "MCUSD (MRP)"}], "Mendocino County": [{"name": "Anderson Valley Unified", "abbr": "AVUSD (MEN)"}, {"name": "Arena Union Elementary", "abbr": "AUESD (MEN)"}, {"name": "Fort Bragg Unified", "abbr": "FBUSD (MEN)"}, {"name": "Laytonville Unified", "abbr": "LUSD (MEN)"}, {"name": "Leggett Valley Unified", "abbr": "LVUSD (MEN)"}, {"name": "Manchester Union Elementary", "abbr": "MUESD (MEN)"}, {"name": "Mendocino County Office of Education", "abbr": "MCOE (MEN)"}, {"name": "Mendocino County ROC/ROP", "abbr": "MCROCROP (MEN)"}, {"name": "Mendocino Unified", "abbr": "MUSD (MEN)"}, {"name": "Point Arena Joint Union High", "abbr": "PAJUHSD (MEN)"}, {"name": "Potter Valley Community Unified", "abbr": "PVCUSD (MEN)"}, {"name": "Round Valley Unified", "abbr": "RVUSD (MEN)"}, {"name": "Ukiah Unified", "abbr": "UUSD (MEN)"}, {"name": "Willits Unified", "abbr": "WUSD (MEN)"}], "Merced County": [{"name": "Atwater Elementary", "abbr": "AESD (MER)"}, {"name": "Ballico-Cressey Elementary", "abbr": "BCESD (MER)"}, {"name": "Delhi Unified", "abbr": "DUSD (MER)"}, {"name": "Dos Palos Oro Loma Joint Unified", "abbr": "DPOLJUSD (MER)"}, {"name": "El Nido Elementary", "abbr": "ENESD (MER)"}, {"name": "Gustine Unified", "abbr": "GUSD (MER)"}, {"name": "Hilmar Unified", "abbr": "HUSD (MER)"}, {"name": "Le Grand Union Elementary", "abbr": "LGUESD (MER)"}, {"name": "Le Grand Union High", "abbr": "LGUHSD (MER)"}, {"name": "Livingston Union", "abbr": "LUSD (MER)"}, {"name": "Los Banos Unified", "abbr": "LBUSD (MER)"}, {"name": "McSwain Union Elementary", "abbr": "MUESD (MER)"}, {"name": "Merced City Elementary", "abbr": "MCESD (MER)"}, {"name": "Merced County Office of Education", "abbr": "MCOE (MER)"}, {"name": "Merced County ROP", "abbr": "MCROP (MER)"}, {"name": "Merced River Union Elementary", "abbr": "MRUESD (MER)"}, {"name": "Merced Union High", "abbr": "MUHSD (MER)"}, {"name": "Plainsburg Union Elementary", "abbr": "PUESD (MER)"}, {"name": "Planada Elementary", "abbr": "PESD (MER)"}, {"name": "Snelling-Merced Falls Union Elementary", "abbr": "SMFUESD (MER)"}, {"name": "Weaver Union", "abbr": "WUSD (MER)"}, {"name": "Winton", "abbr": "W (MER)"}], "Modoc County": [{"name": "Modoc County Office of Education", "abbr": "MCOE (MOD)"}, {"name": "Modoc County ROP", "abbr": "MCROP (MOD)"}, {"name": "Modoc Joint Unified", "abbr": "MJUSD (MOD)"}, {"name": "Surprise Valley Joint Unified", "abbr": "SVJUSD (MOD)"}, {"name": "Tulelake Basin Joint Unified", "abbr": "TBJUSD (MOD)"}], "Mono County": [{"name": "Eastern Sierra Unified", "abbr": "ESUSD (MON)"}, {"name": "Mammoth Unified", "abbr": "MUSD (MON)"}, {"name": "Mono County Office of Education", "abbr": "MCOE (MON)"}], "Monterey County": [{"name": "Alisal Union", "abbr": "AUSD (MNT)"}, {"name": "Big Sur Unified", "abbr": "BSUSD (MNT)"}, {"name": "Bradley Union Elementary", "abbr": "BUESD (MNT)"}, {"name": "Carmel Unified", "abbr": "CUSD (MNT)"}, {"name": "Chualar Union", "abbr": "CUSD (MNT)"}, {"name": "Gonzales Unified", "abbr": "GUSD (MNT)"}, {"name": "Graves Elementary", "abbr": "GESD (MNT)"}, {"name": "Greenfield Union Elementary", "abbr": "GUESD (MNT)"}, {"name": "King City Union", "abbr": "KCUSD (MNT)"}, {"name": "Lagunita Elementary", "abbr": "LESD (MNT)"}, {"name": "Mission Trails ROP", "abbr": "MTROP (MNT)"}, {"name": "Mission Union Elementary", "abbr": "MUESD (MNT)"}, {"name": "Monterey County Office of Education", "abbr": "MCOE (MNT)"}, {"name": "Monterey Peninsula Unified", "abbr": "MPUSD (MNT)"}, {"name": "North Monterey County Unified", "abbr": "NMCUSD (MNT)"}, {"name": "Pacific Grove Unified", "abbr": "PGUSD (MNT)"}, {"name": "Salinas City Elementary", "abbr": "SCESD (MNT)"}, {"name": "Salinas Union High", "abbr": "SUHSD (MNT)"}, {"name": "San Antonio Union Elementary", "abbr": "SAUESD (MNT)"}, {"name": "San Ardo Union Elementary", "abbr": "SAUESD (MNT)"}, {"name": "San Lucas Union Elementary", "abbr": "SLUESD (MNT)"}, {"name": "Santa Rita Union Elementary", "abbr": "SRUESD (MNT)"}, {"name": "Soledad Unified", "abbr": "SUSD (MNT)"}, {"name": "South Monterey County Joint Union High", "abbr": "SMCJUHSD (MNT)"}, {"name": "Spreckels Union Elementary", "abbr": "SUESD (MNT)"}, {"name": "Washington Union Elementary", "abbr": "WUESD (MNT)"}], "Napa County": [{"name": "Calistoga Joint Unified", "abbr": "CJUSD (NAP)"}, {"name": "Howell Mountain Elementary", "abbr": "HMESD (NAP)"}, {"name": "Napa County Office of Education", "abbr": "NCOE (NAP)"}, {"name": "Napa County ROP", "abbr": "NCROP (NAP)"}, {"name": "Napa Valley Unified", "abbr": "NVUSD (NAP)"}, {"name": "Pope Valley Union Elementary", "abbr": "PVUESD (NAP)"}, {"name": "Saint Helena Unified", "abbr": "SHUSD (NAP)"}], "Nevada County": [{"name": "Chicago Park Elementary", "abbr": "CPESD (NEV)"}, {"name": "Clear Creek Elementary", "abbr": "CCESD (NEV)"}, {"name": "Grass Valley Elementary", "abbr": "GVESD (NEV)"}, {"name": "Nevada City Elementary", "abbr": "NCESD (NEV)"}, {"name": "Nevada County Office of Education", "abbr": "NCOE (NEV)"}, {"name": "Nevada Joint Union High", "abbr": "NJUHSD (NEV)"}, {"name": "Penn Valley Union Elementary", "abbr": "PVUESD (NEV)"}, {"name": "Pleasant Ridge Union Elementary", "abbr": "PRUESD (NEV)"}, {"name": "Twin Ridges Elementary", "abbr": "TRESD (NEV)"}, {"name": "Union Hill Elementary", "abbr": "UHESD (NEV)"}], "Orange County": [{"name": "Anaheim Elementary", "abbr": "AESD (OC)"}, {"name": "Anaheim Union High", "abbr": "AUHSD (OC)"}, {"name": "Brea-Olinda Unified", "abbr": "BOUSD (OC)"}, {"name": "Buena Park Elementary", "abbr": "BPESD (OC)"}, {"name": "Capistrano Unified", "abbr": "CUSD (OC)"}, {"name": "Central Orange County CTE Partnership (CTEp)", "abbr": "COCCTEP (OC)"}, {"name": "Centralia Elementary", "abbr": "CESD (OC)"}, {"name": "Coastline ROP", "abbr": "CROP (OC)"}, {"name": "College and Career Advantage", "abbr": "CCA (OC)"}, {"name": "Cypress Elementary", "abbr": "CESD (OC)"}, {"name": "Fountain Valley Elementary", "abbr": "FVESD (OC)"}, {"name": "Fullerton Elementary", "abbr": "FESD (OC)"}, {"name": "Fullerton Joint Union High", "abbr": "FJUHSD (OC)"}, {"name": "Garden Grove Unified", "abbr": "GGUSD (OC)"}, {"name": "Huntington Beach City Elementary", "abbr": "HBCESD (OC)"}, {"name": "Huntington Beach Union High", "abbr": "HBUHSD (OC)"}, {"name": "Irvine Unified", "abbr": "IUSD (OC)"}, {"name": "La Habra City Elementary", "abbr": "LHCESD (OC)"}, {"name": "Laguna Beach Unified", "abbr": "LBUSD (OC)"}, {"name": "Los Alamitos Unified", "abbr": "LAUSD (OC)"}, {"name": "Lowell Joint", "abbr": "LJ (OC)"}, {"name": "Magnolia Elementary", "abbr": "MESD (OC)"}, {"name": "Newport-Mesa Unified", "abbr": "NMUSD (OC)"}, {"name": "North Orange County ROP-Adult", "abbr": "NOCROPA (OC)"}, {"name": "Ocean View", "abbr": "OV (OC)"}, {"name": "Orange County Department of Education", "abbr": "OCDE (OC)"}, {"name": "Orange Unified", "abbr": "OUSD (OC)"}, {"name": "Placentia-Yorba Linda Unified", "abbr": "PYLUSD (OC)"}, {"name": "SBE - Magnolia Science Academy Santa Ana", "abbr": "SBE-MSASA (OC)"}, {"name": "Saddleback Valley Unified", "abbr": "SVUSD (OC)"}, {"name": "Santa Ana Unified", "abbr": "SAUSD (OC)"}, {"name": "Savanna Elementary", "abbr": "SESD (OC)"}, {"name": "Tustin Unified", "abbr": "TUSD (OC)"}, {"name": "Westminster", "abbr": "W (OC)"}], "Placer County": [{"name": "Ackerman Charter", "abbr": "AC (PLA)"}, {"name": "Alta-Dutch Flat Union Elementary", "abbr": "ADFUESD (PLA)"}, {"name": "Auburn Union Elementary", "abbr": "AUESD (PLA)"}, {"name": "Colfax Elementary", "abbr": "CESD (PLA)"}, {"name": "Dry Creek Joint Elementary", "abbr": "DCJESD (PLA)"}, {"name": "Eureka Union", "abbr": "EUSD (PLA)"}, {"name": "Foresthill Union Elementary", "abbr": "FUESD (PLA)"}, {"name": "Loomis Union Elementary", "abbr": "LUESD (PLA)"}, {"name": "Newcastle Elementary", "abbr": "NESD (PLA)"}, {"name": "Placer County Office of Education", "abbr": "PCOE (PLA)"}, {"name": "Placer Hills Union Elementary", "abbr": "PHUESD (PLA)"}, {"name": "Placer Union High", "abbr": "PUHSD (PLA)"}, {"name": "Rocklin Unified", "abbr": "RUSD (PLA)"}, {"name": "Roseville City", "abbr": "RC (PLA)"}, {"name": "Roseville Joint Union High", "abbr": "RJUHSD (PLA)"}, {"name": "Tahoe-Truckee Unified", "abbr": "TTUSD (PLA)"}, {"name": "Western Placer Unified", "abbr": "WPUSD (PLA)"}], "Plumas County": [{"name": "Plumas County Office of Education", "abbr": "PCOE (PLU)"}, {"name": "Plumas County ROP", "abbr": "PCROP (PLU)"}, {"name": "Plumas Unified", "abbr": "PUSD (PLU)"}], "Riverside County": [{"name": "Alvord Unified", "abbr": "AUSD (RIV)"}, {"name": "Banning Unified", "abbr": "BUSD (RIV)"}, {"name": "Beaumont Unified", "abbr": "BUSD (RIV)"}, {"name": "California School for the Deaf-Riverside (State Special Schl)", "abbr": "CSDR (RIV)"}, {"name": "Coachella Valley Unified", "abbr": "CVUSD (RIV)"}, {"name": "Corona-Norco Unified", "abbr": "CNUSD (RIV)"}, {"name": "Desert Center Unified", "abbr": "DCUSD (RIV)"}, {"name": "Desert Sands Unified", "abbr": "DSUSD (RIV)"}, {"name": "Hemet Unified", "abbr": "HUSD (RIV)"}, {"name": "Jurupa Unified", "abbr": "JUSD (RIV)"}, {"name": "Lake Elsinore Unified", "abbr": "LEUSD (RIV)"}, {"name": "Menifee Union", "abbr": "MUSD (RIV)"}, {"name": "Moreno Valley Unified", "abbr": "MVUSD (RIV)"}, {"name": "Murrieta Valley Unified", "abbr": "MVUSD (RIV)"}, {"name": "Nuview Union", "abbr": "NUSD (RIV)"}, {"name": "Palm Springs Unified", "abbr": "PSUSD (RIV)"}, {"name": "Palo Verde Unified", "abbr": "PVUSD (RIV)"}, {"name": "Perris Elementary", "abbr": "PESD (RIV)"}, {"name": "Perris Union High", "abbr": "PUHSD (RIV)"}, {"name": "Riverside County Office Of Education ROP", "abbr": "RCOEROP (RIV)"}, {"name": "Riverside County Office of Education", "abbr": "RCOE (RIV)"}, {"name": "Riverside Unified", "abbr": "RUSD (RIV)"}, {"name": "Romoland Elementary", "abbr": "RESD (RIV)"}, {"name": "San Jacinto Unified", "abbr": "SJUSD (RIV)"}, {"name": "Temecula Valley Unified", "abbr": "TVUSD (RIV)"}, {"name": "Val Verde Unified", "abbr": "VVUSD (RIV)"}], "Sacramento County": [{"name": "Arcohe Union Elementary", "abbr": "AUESD (SAC)"}, {"name": "Center Joint Unified", "abbr": "CJUSD (SAC)"}, {"name": "Elk Grove Unified", "abbr": "EGUSD (SAC)"}, {"name": "Elverta Joint Elementary", "abbr": "EJESD (SAC)"}, {"name": "Folsom-Cordova Unified", "abbr": "FCUSD (SAC)"}, {"name": "Galt Joint Union Elementary", "abbr": "GJUESD (SAC)"}, {"name": "Galt Joint Union High", "abbr": "GJUHSD (SAC)"}, {"name": "Natomas Unified", "abbr": "NUSD (SAC)"}, {"name": "River Delta Joint Unified", "abbr": "RDJUSD (SAC)"}, {"name": "Robla Elementary", "abbr": "RESD (SAC)"}, {"name": "Sacramento City Unified", "abbr": "SCUSD (SAC)"}, {"name": "Sacramento County Office of Education", "abbr": "SCOE (SAC)"}, {"name": "Sacramento County ROP", "abbr": "SCROP (SAC)"}, {"name": "San Juan Unified", "abbr": "SJUSD (SAC)"}, {"name": "Twin Rivers Unified", "abbr": "TRUSD (SAC)"}], "San Benito County": [{"name": "Aromas - San Juan Unified", "abbr": "ASJUSD (SBT)"}, {"name": "Bitterwater-Tully Elementary", "abbr": "BTESD (SBT)"}, {"name": "Cienega Union Elementary", "abbr": "CUESD (SBT)"}, {"name": "Hollister", "abbr": "H (SBT)"}, {"name": "Jefferson Elementary", "abbr": "JESD (SBT)"}, {"name": "North County Joint Union Elementary", "abbr": "NCJUESD (SBT)"}, {"name": "Panoche Elementary", "abbr": "PESD (SBT)"}, {"name": "San Benito County Office of Education", "abbr": "SBCOE (SBT)"}, {"name": "San Benito High", "abbr": "SBHSD (SBT)"}, {"name": "Southside Elementary", "abbr": "SESD (SBT)"}, {"name": "Tres Pinos Union Elementary", "abbr": "TPUESD (SBT)"}, {"name": "Willow Grove Union Elementary", "abbr": "WGUESD (SBT)"}], "San Bernardino County": [{"name": "Adelanto Elementary", "abbr": "AESD (SBD)"}, {"name": "Alta Loma Elementary", "abbr": "ALESD (SBD)"}, {"name": "Apple Valley Unified", "abbr": "AVUSD (SBD)"}, {"name": "Baker Valley Unified", "abbr": "BVUSD (SBD)"}, {"name": "Baldy View ROP", "abbr": "BVROP (SBD)"}, {"name": "Barstow Unified", "abbr": "BUSD (SBD)"}, {"name": "Bear Valley Unified", "abbr": "BVUSD (SBD)"}, {"name": "Central Elementary", "abbr": "CESD (SBD)"}, {"name": "Chaffey Joint Union High", "abbr": "CJUHSD (SBD)"}, {"name": "Chino Valley Unified", "abbr": "CVUSD (SBD)"}, {"name": "Colton Joint Unified", "abbr": "CJUSD (SBD)"}, {"name": "Colton-Redlands-Yucaipa ROP", "abbr": "CRYROP (SBD)"}, {"name": "Cucamonga Elementary", "abbr": "CESD (SBD)"}, {"name": "Etiwanda Elementary", "abbr": "EESD (SBD)"}, {"name": "Fontana Unified", "abbr": "FUSD (SBD)"}, {"name": "Helendale Elementary", "abbr": "HESD (SBD)"}, {"name": "Hesperia Unified", "abbr": "HUSD (SBD)"}, {"name": "Lucerne Valley Unified", "abbr": "LVUSD (SBD)"}, {"name": "Morongo Unified", "abbr": "MUSD (SBD)"}, {"name": "Mountain View Elementary", "abbr": "MVESD (SBD)"}, {"name": "Mt. Baldy Joint Elementary", "abbr": "MBJESD (SBD)"}, {"name": "Needles Unified", "abbr": "NUSD (SBD)"}, {"name": "Ontario-Montclair", "abbr": "OM (SBD)"}, {"name": "Oro Grande", "abbr": "OG (SBD)"}, {"name": "Redlands Unified", "abbr": "RUSD (SBD)"}, {"name": "Rialto Unified", "abbr": "RUSD (SBD)"}, {"name": "Rim of the World Unified", "abbr": "RWUSD (SBD)"}, {"name": "San Bernardino City Unified", "abbr": "SBCUSD (SBD)"}, {"name": "San Bernardino County Office of Education", "abbr": "SBCOE (SBD)"}, {"name": "San Bernardino County ROP", "abbr": "SBCROP (SBD)"}, {"name": "Silver Valley Unified", "abbr": "SVUSD (SBD)"}, {"name": "Snowline Joint Unified", "abbr": "SJUSD (SBD)"}, {"name": "Trona Joint Unified", "abbr": "TJUSD (SBD)"}, {"name": "Upland Unified", "abbr": "UUSD (SBD)"}, {"name": "Victor Elementary", "abbr": "VESD (SBD)"}, {"name": "Victor Valley Union High", "abbr": "VVUHSD (SBD)"}, {"name": "Yucaipa-Calimesa Joint Unified", "abbr": "YCJUSD (SBD)"}], "San Diego County": [{"name": "Alpine Union Elementary", "abbr": "AUESD (SD)"}, {"name": "Bonsall Unified", "abbr": "BUSD (SD)"}, {"name": "Borrego Springs Unified", "abbr": "BSUSD (SD)"}, {"name": "Cajon Valley Union", "abbr": "CVUSD (SD)"}, {"name": "Cardiff Elementary", "abbr": "CESD (SD)"}, {"name": "Carlsbad Unified", "abbr": "CUSD (SD)"}, {"name": "Chula Vista Elementary", "abbr": "CVESD (SD)"}, {"name": "Coronado Unified", "abbr": "CUSD (SD)"}, {"name": "Dehesa Elementary", "abbr": "DESD (SD)"}, {"name": "Del Mar Union Elementary", "abbr": "DMUESD (SD)"}, {"name": "Encinitas Union Elementary", "abbr": "EUESD (SD)"}, {"name": "Escondido Union", "abbr": "EUSD (SD)"}, {"name": "Escondido Union High", "abbr": "EUHSD (SD)"}, {"name": "Fallbrook Union Elementary", "abbr": "FUESD (SD)"}, {"name": "Fallbrook Union High", "abbr": "FUHSD (SD)"}, {"name": "Grossmont Union High", "abbr": "GUHSD (SD)"}, {"name": "Jamul-Dulzura Union Elementary", "abbr": "JDUESD (SD)"}, {"name": "Julian Union Elementary", "abbr": "JUESD (SD)"}, {"name": "Julian Union High", "abbr": "JUHSD (SD)"}, {"name": "La Mesa-Spring Valley", "abbr": "LMSV (SD)"}, {"name": "Lakeside Union", "abbr": "LUSD (SD)"}, {"name": "Lemon Grove", "abbr": "LG (SD)"}, {"name": "Mountain Empire Unified", "abbr": "MEUSD (SD)"}, {"name": "National Elementary", "abbr": "NESD (SD)"}, {"name": "Oceanside Unified", "abbr": "OUSD (SD)"}, {"name": "Poway Unified", "abbr": "PUSD (SD)"}, {"name": "Ramona City Unified", "abbr": "RCUSD (SD)"}, {"name": "Rancho Santa Fe Elementary", "abbr": "RSFESD (SD)"}, {"name": "SBE - Baypoint Preparatory Academy San Diego", "abbr": "SBE-BPASD (SD)"}, {"name": "SBE - College Preparatory Middle", "abbr": "SBE-CPM (SD)"}, {"name": "SBE - Vista Springs Charter", "abbr": "SBE-VSC (SD)"}, {"name": "San Diego County Office of Education", "abbr": "SDCOE (SD)"}, {"name": "San Diego County ROP", "abbr": "SDCROP (SD)"}, {"name": "San Diego Unified", "abbr": "SDUSD (SD)"}, {"name": "San Dieguito Union High", "abbr": "SDUHSD (SD)"}, {"name": "San Marcos Unified", "abbr": "SMUSD (SD)"}, {"name": "San Pasqual Union Elementary", "abbr": "SPUESD (SD)"}, {"name": "San Ysidro Elementary", "abbr": "SYESD (SD)"}, {"name": "Santee", "abbr": "S (SD)"}, {"name": "Solana Beach Elementary", "abbr": "SBESD (SD)"}, {"name": "South Bay Union", "abbr": "SBUSD (SD)"}, {"name": "Spencer Valley Elementary", "abbr": "SVESD (SD)"}, {"name": "Sweetwater Union High", "abbr": "SUHSD (SD)"}, {"name": "Vallecitos Elementary", "abbr": "VESD (SD)"}, {"name": "Valley Center-Pauma Unified", "abbr": "VCPUSD (SD)"}, {"name": "Vista Unified", "abbr": "VUSD (SD)"}, {"name": "Warner Unified", "abbr": "WUSD (SD)"}], "San Francisco County": [{"name": "SBE - KIPP Bayview Elementary", "abbr": "SBE-KIPPBESD (SF)"}, {"name": "SBE - The New School of San Francisco", "abbr": "SBE-NSSF (SF)"}, {"name": "San Francisco County Office of Education", "abbr": "SFCOE (SF)"}, {"name": "San Francisco County ROP", "abbr": "SFCROP (SF)"}, {"name": "San Francisco Unified", "abbr": "SFUSD (SF)"}], "San Joaquin County": [{"name": "Banta Unified", "abbr": "BUSD (SJ)"}, {"name": "Escalon Unified", "abbr": "EUSD (SJ)"}, {"name": "Jefferson Elementary", "abbr": "JESD (SJ)"}, {"name": "Lammersville Joint Unified", "abbr": "LJUSD (SJ)"}, {"name": "Lincoln Unified", "abbr": "LUSD (SJ)"}, {"name": "Linden Unified", "abbr": "LUSD (SJ)"}, {"name": "Lodi Unified", "abbr": "LUSD (SJ)"}, {"name": "Manteca Unified", "abbr": "MUSD (SJ)"}, {"name": "New Hope Elementary", "abbr": "NHESD (SJ)"}, {"name": "New Jerusalem Elementary", "abbr": "NJESD (SJ)"}, {"name": "Oak View Union Elementary", "abbr": "OVUESD (SJ)"}, {"name": "Ripon Unified", "abbr": "RUSD (SJ)"}, {"name": "San Joaquin County Office of Education", "abbr": "SJCOE (SJ)"}, {"name": "San Joaquin County ROP", "abbr": "SJCROP (SJ)"}, {"name": "Stockton Unified", "abbr": "SUSD (SJ)"}, {"name": "Tracy Joint Unified", "abbr": "TJUSD (SJ)"}], "San Luis Obispo County": [{"name": "Atascadero Unified", "abbr": "AUSD (SLO)"}, {"name": "Cayucos Elementary", "abbr": "CESD (SLO)"}, {"name": "Coast Unified", "abbr": "CUSD (SLO)"}, {"name": "Lucia Mar Unified", "abbr": "LMUSD (SLO)"}, {"name": "Paso Robles Joint Unified", "abbr": "PRJUSD (SLO)"}, {"name": "Pleasant Valley Joint Union Elementary", "abbr": "PVJUESD (SLO)"}, {"name": "San Luis Coastal Unified", "abbr": "SLCUSD (SLO)"}, {"name": "San Luis Obispo County Office of Education", "abbr": "SLOCOE (SLO)"}, {"name": "San Miguel Joint Union", "abbr": "SMJUSD (SLO)"}, {"name": "Shandon Joint Unified", "abbr": "SJUSD (SLO)"}, {"name": "Templeton Unified", "abbr": "TUSD (SLO)"}], "San Mateo County": [{"name": "Bayshore Elementary", "abbr": "BESD (SM)"}, {"name": "Belmont-Redwood Shores Elementary", "abbr": "BRSESD (SM)"}, {"name": "Brisbane Elementary", "abbr": "BESD (SM)"}, {"name": "Burlingame Elementary", "abbr": "BESD (SM)"}, {"name": "Cabrillo Unified", "abbr": "CUSD (SM)"}, {"name": "Hillsborough City Elementary", "abbr": "HCESD (SM)"}, {"name": "Jefferson Elementary", "abbr": "JESD (SM)"}, {"name": "Jefferson Union High", "abbr": "JUHSD (SM)"}, {"name": "La Honda-Pescadero Unified", "abbr": "LHPUSD (SM)"}, {"name": "Las Lomitas Elementary", "abbr": "LLESD (SM)"}, {"name": "Menlo Park City Elementary", "abbr": "MPCESD (SM)"}, {"name": "Millbrae Elementary", "abbr": "MESD (SM)"}, {"name": "Pacifica", "abbr": "P (SM)"}, {"name": "Portola Valley Elementary", "abbr": "PVESD (SM)"}, {"name": "Ravenswood City Elementary", "abbr": "RCESD (SM)"}, {"name": "Redwood City Elementary", "abbr": "RCESD (SM)"}, {"name": "San Bruno Park Elementary", "abbr": "SBPESD (SM)"}, {"name": "San Carlos Elementary", "abbr": "SCESD (SM)"}, {"name": "San Mateo County Office of Education", "abbr": "SMCOE (SM)"}, {"name": "San Mateo Union High", "abbr": "SMUHSD (SM)"}, {"name": "San Mateo-Foster City", "abbr": "SMFC (SM)"}, {"name": "Sequoia Union High", "abbr": "SUHSD (SM)"}, {"name": "South San Francisco Unified", "abbr": "SSFUSD (SM)"}, {"name": "Woodside Elementary", "abbr": "WESD (SM)"}], "Santa Barbara County": [{"name": "Ballard Elementary", "abbr": "BESD (SB)"}, {"name": "Blochman Union Elementary", "abbr": "BUESD (SB)"}, {"name": "Buellton Union Elementary", "abbr": "BUESD (SB)"}, {"name": "Carpinteria Unified", "abbr": "CUSD (SB)"}, {"name": "Cold Spring Elementary", "abbr": "CSESD (SB)"}, {"name": "College Elementary", "abbr": "CESD (SB)"}, {"name": "Cuyama Joint Unified", "abbr": "CJUSD (SB)"}, {"name": "Goleta Union Elementary", "abbr": "GUESD (SB)"}, {"name": "Guadalupe Union Elementary", "abbr": "GUESD (SB)"}, {"name": "Hope Elementary", "abbr": "HESD (SB)"}, {"name": "Lompoc Unified", "abbr": "LUSD (SB)"}, {"name": "Los Olivos Elementary", "abbr": "LOESD (SB)"}, {"name": "Montecito Union Elementary", "abbr": "MUESD (SB)"}, {"name": "Orcutt Union Elementary", "abbr": "OUESD (SB)"}, {"name": "SBE - Olive Grove Charter - Buellton", "abbr": "SBE-OGCB (SB)"}, {"name": "SBE - Olive Grove Charter - Lompoc", "abbr": "SBE-OGCL (SB)"}, {"name": "SBE - Olive Grove Charter - Orcutt/Santa Maria", "abbr": "SBE-OGCOSM (SB)"}, {"name": "SBE - Olive Grove Charter - Santa Barbara", "abbr": "SBE-OGCSB (SB)"}, {"name": "Santa Barbara County Office of Education", "abbr": "SBCOE (SB)"}, {"name": "Santa Barbara County ROP", "abbr": "SBCROP (SB)"}, {"name": "Santa Barbara Unified", "abbr": "SBUSD (SB)"}, {"name": "Santa Maria Joint Union High", "abbr": "SMJUHSD (SB)"}, {"name": "Santa Maria-Bonita", "abbr": "SMB (SB)"}, {"name": "Santa Ynez Valley Union High", "abbr": "SYVUHSD (SB)"}, {"name": "Solvang Elementary", "abbr": "SESD (SB)"}, {"name": "Vista del Mar Union", "abbr": "VDMUSD (SB)"}], "Santa Clara County": [{"name": "Alum Rock Union Elementary", "abbr": "ARUESD (SCL)"}, {"name": "Berryessa Union Elementary", "abbr": "BUESD (SCL)"}, {"name": "Cambrian", "abbr": "C (SCL)"}, {"name": "Campbell Union", "abbr": "CUSD (SCL)"}, {"name": "Campbell Union High", "abbr": "CUHSD (SCL)"}, {"name": "Cupertino Union", "abbr": "CUSD (SCL)"}, {"name": "East Side Union High", "abbr": "ESUHSD (SCL)"}, {"name": "Evergreen Elementary", "abbr": "EESD (SCL)"}, {"name": "Franklin-McKinley Elementary", "abbr": "FMESD (SCL)"}, {"name": "Fremont Union High", "abbr": "FUHSD (SCL)"}, {"name": "Gilroy Unified", "abbr": "GUSD (SCL)"}, {"name": "Lakeside Joint", "abbr": "LJ (SCL)"}, {"name": "Loma Prieta Joint Union Elementary", "abbr": "LPJUESD (SCL)"}, {"name": "Los Altos Elementary", "abbr": "LAESD (SCL)"}, {"name": "Los Gatos Union Elementary", "abbr": "LGUESD (SCL)"}, {"name": "Los Gatos-Saratoga Union High", "abbr": "LGSUHSD (SCL)"}, {"name": "Luther Burbank", "abbr": "LB (SCL)"}, {"name": "Metro Education", "abbr": "ME (SCL)"}, {"name": "Milpitas Unified", "abbr": "MUSD (SCL)"}, {"name": "Moreland", "abbr": "M (SCL)"}, {"name": "Morgan Hill Unified", "abbr": "MHUSD (SCL)"}, {"name": "Mount Pleasant Elementary", "abbr": "MPESD (SCL)"}, {"name": "Mountain View Whisman", "abbr": "MVW (SCL)"}, {"name": "Mountain View-Los Altos Union High", "abbr": "MVLAUHSD (SCL)"}, {"name": "Oak Grove Elementary", "abbr": "OGESD (SCL)"}, {"name": "Orchard Elementary", "abbr": "OESD (SCL)"}, {"name": "Palo Alto Unified", "abbr": "PAUSD (SCL)"}, {"name": "SBE - KIPP Navigate College Prep", "abbr": "SBE-KIPPNCP (SCL)"}, {"name": "San Jose Unified", "abbr": "SJUSD (SCL)"}, {"name": "Santa Clara County Office of Education", "abbr": "SCCOE (SCL)"}, {"name": "Santa Clara County ROP", "abbr": "SCCROP (SCL)"}, {"name": "Santa Clara Unified", "abbr": "SCUSD (SCL)"}, {"name": "Saratoga Union Elementary", "abbr": "SUESD (SCL)"}, {"name": "Sunnyvale", "abbr": "S (SCL)"}, {"name": "Union Elementary", "abbr": "UESD (SCL)"}], "Santa Cruz County": [{"name": "Bonny Doon Union Elementary", "abbr": "BDUESD (SCR)"}, {"name": "Happy Valley Elementary", "abbr": "HVESD (SCR)"}, {"name": "Live Oak Elementary", "abbr": "LOESD (SCR)"}, {"name": "Mountain Elementary", "abbr": "MESD (SCR)"}, {"name": "Pacific Elementary", "abbr": "PESD (SCR)"}, {"name": "Pajaro Valley Unified", "abbr": "PVUSD (SCR)"}, {"name": "SBE - Watsonville Prep", "abbr": "SBE-WP (SCR)"}, {"name": "San Lorenzo Valley Unified", "abbr": "SLVUSD (SCR)"}, {"name": "Santa Cruz City Elementary", "abbr": "SCCESD (SCR)"}, {"name": "Santa Cruz City High", "abbr": "SCCHSD (SCR)"}, {"name": "Santa Cruz County Office of Education", "abbr": "SCCOE (SCR)"}, {"name": "Santa Cruz County ROP", "abbr": "SCCROP (SCR)"}, {"name": "Scotts Valley Unified", "abbr": "SVUSD (SCR)"}, {"name": "Soquel Union Elementary", "abbr": "SUESD (SCR)"}], "Shasta County": [{"name": "Anderson Union High", "abbr": "AUHSD (SHA)"}, {"name": "Bella Vista Elementary", "abbr": "BVESD (SHA)"}, {"name": "Black Butte Union Elementary", "abbr": "BBUESD (SHA)"}, {"name": "Cascade Union Elementary", "abbr": "CUESD (SHA)"}, {"name": "Castle Rock Union Elementary", "abbr": "CRUESD (SHA)"}, {"name": "Columbia Elementary", "abbr": "CESD (SHA)"}, {"name": "Cottonwood Union Elementary", "abbr": "CUESD (SHA)"}, {"name": "Enterprise Elementary", "abbr": "EESD (SHA)"}, {"name": "Fall River Joint Unified", "abbr": "FRJUSD (SHA)"}, {"name": "French Gulch-Whiskeytown Elementary", "abbr": "FGWESD (SHA)"}, {"name": "Gateway Unified", "abbr": "GUSD (SHA)"}, {"name": "Grant Elementary", "abbr": "GESD (SHA)"}, {"name": "Happy Valley Union Elementary", "abbr": "HVUESD (SHA)"}, {"name": "Igo, Ono, Platina Union Elementary", "abbr": "IOPUESD (SHA)"}, {"name": "Junction Elementary", "abbr": "JESD (SHA)"}, {"name": "Millville Elementary", "abbr": "MESD (SHA)"}, {"name": "Mountain Union Elementary", "abbr": "MUESD (SHA)"}, {"name": "North Cow Creek Elementary", "abbr": "NCCESD (SHA)"}, {"name": "Oak Run Elementary", "abbr": "ORESD (SHA)"}, {"name": "Pacheco Union Elementary", "abbr": "PUESD (SHA)"}, {"name": "Redding Elementary", "abbr": "RESD (SHA)"}, {"name": "Shasta County Office of Education", "abbr": "SCOE (SHA)"}, {"name": "Shasta Union Elementary", "abbr": "SUESD (SHA)"}, {"name": "Shasta Union High", "abbr": "SUHSD (SHA)"}, {"name": "Shasta-Trinity ROP", "abbr": "STROP (SHA)"}, {"name": "Whitmore Union Elementary", "abbr": "WUESD (SHA)"}], "Sierra County": [{"name": "Sierra County Office of Education", "abbr": "SCOE (SIE)"}, {"name": "Sierra-Plumas Joint Unified", "abbr": "SPJUSD (SIE)"}, {"name": "WIlliam (R) Rouse ROP", "abbr": "WRROP (SIE)"}], "Siskiyou County": [{"name": "Big Springs Union Elementary", "abbr": "BSUESD (SIS)"}, {"name": "Bogus Elementary", "abbr": "BESD (SIS)"}, {"name": "Butte Valley Unified", "abbr": "BVUSD (SIS)"}, {"name": "Butteville Union Elementary", "abbr": "BUESD (SIS)"}, {"name": "Delphic Elementary", "abbr": "DESD (SIS)"}, {"name": "Dunsmuir Elementary", "abbr": "DESD (SIS)"}, {"name": "Dunsmuir Joint Union High", "abbr": "DJUHSD (SIS)"}, {"name": "Gazelle Union Elementary", "abbr": "GUESD (SIS)"}, {"name": "Grenada Elementary", "abbr": "GESD (SIS)"}, {"name": "Happy Camp Union Elementary", "abbr": "HCUESD (SIS)"}, {"name": "Hornbrook Elementary", "abbr": "HESD (SIS)"}, {"name": "Junction Elementary", "abbr": "JESD (SIS)"}, {"name": "Klamath River Union Elementary", "abbr": "KRUESD (SIS)"}, {"name": "Little Shasta Elementary", "abbr": "LSESD (SIS)"}, {"name": "McCloud Union Elementary", "abbr": "MUESD (SIS)"}, {"name": "Montague Elementary", "abbr": "MESD (SIS)"}, {"name": "Mt. Shasta Union Elementary", "abbr": "MSUESD (SIS)"}, {"name": "Scott Valley Unified", "abbr": "SVUSD (SIS)"}, {"name": "Seiad Elementary", "abbr": "SESD (SIS)"}, {"name": "Siskiyou County Office of Education", "abbr": "SCOE (SIS)"}, {"name": "Siskiyou ROP", "abbr": "SROP (SIS)"}, {"name": "Siskiyou Union High", "abbr": "SUHSD (SIS)"}, {"name": "Weed Union Elementary", "abbr": "WUESD (SIS)"}, {"name": "Willow Creek Elementary", "abbr": "WCESD (SIS)"}, {"name": "Yreka Union Elementary", "abbr": "YUESD (SIS)"}, {"name": "Yreka Union High", "abbr": "YUHSD (SIS)"}], "Solano County": [{"name": "Benicia Unified", "abbr": "BUSD (SOL)"}, {"name": "Dixon Unified", "abbr": "DUSD (SOL)"}, {"name": "Fairfield-Suisun Unified", "abbr": "FSUSD (SOL)"}, {"name": "Solano County Office of Education", "abbr": "SCOE (SOL)"}, {"name": "Travis Unified", "abbr": "TUSD (SOL)"}, {"name": "Vacaville Unified", "abbr": "VUSD (SOL)"}, {"name": "Vallejo City Unified", "abbr": "VCUSD (SOL)"}], "Sonoma County": [{"name": "Alexander Valley Union Elementary", "abbr": "AVUESD (SON)"}, {"name": "Bellevue Union", "abbr": "BUSD (SON)"}, {"name": "Bennett Valley Union Elementary", "abbr": "BVUESD (SON)"}, {"name": "Cinnabar Elementary", "abbr": "CESD (SON)"}, {"name": "Cloverdale Unified", "abbr": "CUSD (SON)"}, {"name": "Cotati-Rohnert Park Unified", "abbr": "CRPUSD (SON)"}, {"name": "Dunham Elementary", "abbr": "DESD (SON)"}, {"name": "Forestville Union Elementary", "abbr": "FUESD (SON)"}, {"name": "Fort Ross Elementary", "abbr": "FRESD (SON)"}, {"name": "Geyserville Unified", "abbr": "GUSD (SON)"}, {"name": "Gravenstein Union Elementary", "abbr": "GUESD (SON)"}, {"name": "Guerneville Elementary", "abbr": "GESD (SON)"}, {"name": "Harmony Union Elementary", "abbr": "HUESD (SON)"}, {"name": "Healdsburg Unified", "abbr": "HUSD (SON)"}, {"name": "Horicon Elementary", "abbr": "HESD (SON)"}, {"name": "Kashia Elementary", "abbr": "KESD (SON)"}, {"name": "Kenwood", "abbr": "K (SON)"}, {"name": "Liberty Elementary", "abbr": "LESD (SON)"}, {"name": "Mark West Union Elementary", "abbr": "MWUESD (SON)"}, {"name": "Monte Rio Union Elementary", "abbr": "MRUESD (SON)"}, {"name": "Montgomery Elementary", "abbr": "MESD (SON)"}, {"name": "Oak Grove Union Elementary", "abbr": "OGUESD (SON)"}, {"name": "Old Adobe Union", "abbr": "OAUSD (SON)"}, {"name": "Petaluma City Elementary", "abbr": "PCESD (SON)"}, {"name": "Petaluma Joint Union High", "abbr": "PJUHSD (SON)"}, {"name": "Piner-Olivet Union Elementary", "abbr": "POUESD (SON)"}, {"name": "Rincon Valley Union Elementary", "abbr": "RVUESD (SON)"}, {"name": "Roseland", "abbr": "R (SON)"}, {"name": "Santa Rosa Elementary", "abbr": "SRESD (SON)"}, {"name": "Santa Rosa High", "abbr": "SRHSD (SON)"}, {"name": "Sebastopol Union Elementary", "abbr": "SUESD (SON)"}, {"name": "Sonoma County Office of Education", "abbr": "SCOE (SON)"}, {"name": "Sonoma County ROP", "abbr": "SCROP (SON)"}, {"name": "Sonoma Valley Unified", "abbr": "SVUSD (SON)"}, {"name": "Twin Hills Union Elementary", "abbr": "THUESD (SON)"}, {"name": "Two Rock Union", "abbr": "TRUSD (SON)"}, {"name": "Waugh Elementary", "abbr": "WESD (SON)"}, {"name": "West Side Union Elementary", "abbr": "WSUESD (SON)"}, {"name": "West Sonoma County Union High", "abbr": "WSCUHSD (SON)"}, {"name": "Wilmar Union Elementary", "abbr": "WUESD (SON)"}, {"name": "Windsor Unified", "abbr": "WUSD (SON)"}, {"name": "Wright Elementary", "abbr": "WESD (SON)"}], "Stanislaus County": [{"name": "Ceres Unified", "abbr": "CUSD (STA)"}, {"name": "Chatom Union", "abbr": "CUSD (STA)"}, {"name": "Denair Unified", "abbr": "DUSD (STA)"}, {"name": "Empire Union Elementary", "abbr": "EUESD (STA)"}, {"name": "Gratton Elementary", "abbr": "GESD (STA)"}, {"name": "Hart-Ransom Union Elementary", "abbr": "HRUESD (STA)"}, {"name": "Hickman Community Charter", "abbr": "HCC (STA)"}, {"name": "Hughson Unified", "abbr": "HUSD (STA)"}, {"name": "Keyes Union", "abbr": "KUSD (STA)"}, {"name": "Knights Ferry Elementary", "abbr": "KFESD (STA)"}, {"name": "Modesto City Elementary", "abbr": "MCESD (STA)"}, {"name": "Modesto City High", "abbr": "MCHSD (STA)"}, {"name": "Newman-Crows Landing Unified", "abbr": "NCLUSD (STA)"}, {"name": "Oakdale Joint Unified", "abbr": "OJUSD (STA)"}, {"name": "Paradise Elementary", "abbr": "PESD (STA)"}, {"name": "Patterson Joint Unified", "abbr": "PJUSD (STA)"}, {"name": "Riverbank Unified", "abbr": "RUSD (STA)"}, {"name": "Roberts Ferry Union Elementary", "abbr": "RFUESD (STA)"}, {"name": "Salida Union Elementary", "abbr": "SUESD (STA)"}, {"name": "Shiloh Elementary", "abbr": "SESD (STA)"}, {"name": "Stanislaus County Office of Education", "abbr": "SCOE (STA)"}, {"name": "Stanislaus Union Elementary", "abbr": "SUESD (STA)"}, {"name": "Sylvan Union Elementary", "abbr": "SUESD (STA)"}, {"name": "Turlock Unified", "abbr": "TUSD (STA)"}, {"name": "Valley Home Joint Elementary", "abbr": "VHJESD (STA)"}, {"name": "Waterford Unified", "abbr": "WUSD (STA)"}, {"name": "Yosemite ROP", "abbr": "YROP (STA)"}], "Sutter County": [{"name": "Brittan Elementary", "abbr": "BESD (SUT)"}, {"name": "Browns Elementary", "abbr": "BESD (SUT)"}, {"name": "East Nicolaus Joint Union High", "abbr": "ENJUHSD (SUT)"}, {"name": "Franklin Elementary", "abbr": "FESD (SUT)"}, {"name": "Live Oak Unified", "abbr": "LOUSD (SUT)"}, {"name": "Marcum-Illinois Union Elementary", "abbr": "MIUESD (SUT)"}, {"name": "Meridian Elementary", "abbr": "MESD (SUT)"}, {"name": "Nuestro Elementary", "abbr": "NESD (SUT)"}, {"name": "Pleasant Grove Joint Union", "abbr": "PGJUSD (SUT)"}, {"name": "Sutter County Office of Education", "abbr": "SCOE (SUT)"}, {"name": "Sutter Union High", "abbr": "SUHSD (SUT)"}, {"name": "Tri-County ROP", "abbr": "TCROP (SUT)"}, {"name": "Winship-Robbins", "abbr": "WR (SUT)"}, {"name": "Yuba City Unified", "abbr": "YCUSD (SUT)"}], "Tehama County": [{"name": "Antelope Elementary", "abbr": "AESD (TEH)"}, {"name": "Corning Union Elementary", "abbr": "CUESD (TEH)"}, {"name": "Corning Union High", "abbr": "CUHSD (TEH)"}, {"name": "Evergreen Union", "abbr": "EUSD (TEH)"}, {"name": "Flournoy Union Elementary", "abbr": "FUESD (TEH)"}, {"name": "Gerber Union Elementary", "abbr": "GUESD (TEH)"}, {"name": "Kirkwood Elementary", "abbr": "KESD (TEH)"}, {"name": "Lassen View Union Elementary", "abbr": "LVUESD (TEH)"}, {"name": "Los Molinos Unified", "abbr": "LMUSD (TEH)"}, {"name": "Red Bluff Joint Union High", "abbr": "RBJUHSD (TEH)"}, {"name": "Red Bluff Union Elementary", "abbr": "RBUESD (TEH)"}, {"name": "Reeds Creek Elementary", "abbr": "RCESD (TEH)"}, {"name": "Richfield Elementary", "abbr": "RESD (TEH)"}, {"name": "Tehama County Department of Education", "abbr": "TCDE (TEH)"}], "Trinity County": [{"name": "Burnt Ranch Elementary", "abbr": "BRESD (TRI)"}, {"name": "Coffee Creek Elementary", "abbr": "CCESD (TRI)"}, {"name": "Douglas City Elementary", "abbr": "DCESD (TRI)"}, {"name": "Junction City Elementary", "abbr": "JCESD (TRI)"}, {"name": "Lewiston Elementary", "abbr": "LESD (TRI)"}, {"name": "Mountain Valley Unified", "abbr": "MVUSD (TRI)"}, {"name": "Southern Trinity Joint Unified", "abbr": "STJUSD (TRI)"}, {"name": "Trinity Alps Unified", "abbr": "TAUSD (TRI)"}, {"name": "Trinity Center Elementary", "abbr": "TCESD (TRI)"}, {"name": "Trinity County Office of Education", "abbr": "TCOE (TRI)"}], "Tulare County": [{"name": "Allensworth Elementary", "abbr": "AESD (TUL)"}, {"name": "Alpaugh Unified", "abbr": "AUSD (TUL)"}, {"name": "Alta Vista Elementary", "abbr": "AVESD (TUL)"}, {"name": "Buena Vista Elementary", "abbr": "BVESD (TUL)"}, {"name": "Burton Elementary", "abbr": "BESD (TUL)"}, {"name": "Columbine Elementary", "abbr": "CESD (TUL)"}, {"name": "Cutler-Orosi Joint Unified", "abbr": "COJUSD (TUL)"}, {"name": "Dinuba Unified", "abbr": "DUSD (TUL)"}, {"name": "Ducor Union Elementary", "abbr": "DUESD (TUL)"}, {"name": "Earlimart Elementary", "abbr": "EESD (TUL)"}, {"name": "Exeter Unified", "abbr": "EUSD (TUL)"}, {"name": "Farmersville Unified", "abbr": "FUSD (TUL)"}, {"name": "Hope Elementary", "abbr": "HESD (TUL)"}, {"name": "Hot Springs Elementary", "abbr": "HSESD (TUL)"}, {"name": "Kings River Union Elementary", "abbr": "KRUESD (TUL)"}, {"name": "Liberty Elementary", "abbr": "LESD (TUL)"}, {"name": "Lindsay Unified", "abbr": "LUSD (TUL)"}, {"name": "Monson-Sultana Joint Union Elementary", "abbr": "MSJUESD (TUL)"}, {"name": "Oak Valley Union Elementary", "abbr": "OVUESD (TUL)"}, {"name": "Outside Creek Elementary", "abbr": "OCESD (TUL)"}, {"name": "Palo Verde Union Elementary", "abbr": "PVUESD (TUL)"}, {"name": "Pixley Union Elementary", "abbr": "PUESD (TUL)"}, {"name": "Pleasant View Elementary", "abbr": "PVESD (TUL)"}, {"name": "Porterville Unified", "abbr": "PUSD (TUL)"}, {"name": "Richgrove Elementary", "abbr": "RESD (TUL)"}, {"name": "Rockford Elementary", "abbr": "RESD (TUL)"}, {"name": "Saucelito Elementary", "abbr": "SESD (TUL)"}, {"name": "Sequoia Union Elementary", "abbr": "SUESD (TUL)"}, {"name": "Springville Union Elementary", "abbr": "SUESD (TUL)"}, {"name": "Stone Corral Elementary", "abbr": "SCESD (TUL)"}, {"name": "Strathmore Union Elementary", "abbr": "SUESD (TUL)"}, {"name": "Sundale Union Elementary", "abbr": "SUESD (TUL)"}, {"name": "Sunnyside Union Elementary", "abbr": "SUESD (TUL)"}, {"name": "Terra Bella Union Elementary", "abbr": "TBUESD (TUL)"}, {"name": "Three Rivers Union Elementary", "abbr": "TRUESD (TUL)"}, {"name": "Tipton Elementary", "abbr": "TESD (TUL)"}, {"name": "Traver Joint Elementary", "abbr": "TJESD (TUL)"}, {"name": "Tulare City", "abbr": "TC (TUL)"}, {"name": "Tulare County Office of Education", "abbr": "TCOE (TUL)"}, {"name": "Tulare Joint Union High", "abbr": "TJUHSD (TUL)"}, {"name": "Visalia Unified", "abbr": "VUSD (TUL)"}, {"name": "Waukena Joint Union Elementary", "abbr": "WJUESD (TUL)"}, {"name": "Woodlake Unified", "abbr": "WUSD (TUL)"}, {"name": "Woodville Union Elementary", "abbr": "WUESD (TUL)"}], "Tuolumne County": [{"name": "Belleview Elementary", "abbr": "BESD (TUO)"}, {"name": "Big Oak Flat-Groveland Unified", "abbr": "BOFGUSD (TUO)"}, {"name": "Columbia Union", "abbr": "CUSD (TUO)"}, {"name": "Curtis Creek Elementary", "abbr": "CCESD (TUO)"}, {"name": "Jamestown Elementary", "abbr": "JESD (TUO)"}, {"name": "Sonora Elementary", "abbr": "SESD (TUO)"}, {"name": "Sonora Union High", "abbr": "SUHSD (TUO)"}, {"name": "Soulsbyville Elementary", "abbr": "SESD (TUO)"}, {"name": "Summerville Elementary", "abbr": "SESD (TUO)"}, {"name": "Summerville Union High", "abbr": "SUHSD (TUO)"}, {"name": "Tuolumne County Superintendent of Schools", "abbr": "TCSS (TUO)"}, {"name": "Twain Harte", "abbr": "TH (TUO)"}], "Ventura County": [{"name": "Briggs Elementary", "abbr": "BESD (VEN)"}, {"name": "Conejo Valley Unified", "abbr": "CVUSD (VEN)"}, {"name": "Fillmore Unified", "abbr": "FUSD (VEN)"}, {"name": "Hueneme Elementary", "abbr": "HESD (VEN)"}, {"name": "Mesa Union Elementary", "abbr": "MUESD (VEN)"}, {"name": "Moorpark Unified", "abbr": "MUSD (VEN)"}, {"name": "Mupu Elementary", "abbr": "MESD (VEN)"}, {"name": "Oak Park Unified", "abbr": "OPUSD (VEN)"}, {"name": "Ocean View", "abbr": "OV (VEN)"}, {"name": "Ojai Unified", "abbr": "OUSD (VEN)"}, {"name": "Oxnard", "abbr": "O (VEN)"}, {"name": "Oxnard Union High", "abbr": "OUHSD (VEN)"}, {"name": "Pleasant Valley", "abbr": "PV (VEN)"}, {"name": "Rio Elementary", "abbr": "RESD (VEN)"}, {"name": "Santa Clara Elementary", "abbr": "SCESD (VEN)"}, {"name": "Santa Paula Unified", "abbr": "SPUSD (VEN)"}, {"name": "Simi Valley Unified", "abbr": "SVUSD (VEN)"}, {"name": "Somis Union", "abbr": "SUSD (VEN)"}, {"name": "Ventura County Office of Education", "abbr": "VCOE (VEN)"}, {"name": "Ventura County ROP", "abbr": "VCROP (VEN)"}, {"name": "Ventura Unified", "abbr": "VUSD (VEN)"}], "Yolo County": [{"name": "Davis Joint Unified", "abbr": "DJUSD (YOL)"}, {"name": "Esparto Unified", "abbr": "EUSD (YOL)"}, {"name": "Washington Unified", "abbr": "WUSD (YOL)"}, {"name": "Winters Joint Unified", "abbr": "WJUSD (YOL)"}, {"name": "Woodland Joint Unified", "abbr": "WJUSD (YOL)"}, {"name": "Yolo County Office of Education", "abbr": "YCOE (YOL)"}, {"name": "Yolo County ROP", "abbr": "YCROP (YOL)"}], "Yuba County": [{"name": "Camptonville Elementary", "abbr": "CESD (YUB)"}, {"name": "Marysville Joint Unified", "abbr": "MJUSD (YUB)"}, {"name": "Plumas Lake Elementary", "abbr": "PLESD (YUB)"}, {"name": "Wheatland", "abbr": "W (YUB)"}, {"name": "Wheatland Union High", "abbr": "WUHSD (YUB)"}, {"name": "Yuba County Office of Education", "abbr": "YCOE (YUB)"}]};
+  // Attach a `state` to every district / county record. All existing records are California, so default
+  // to 'CA'. The guard (state==null) leaves any record that already carries its own state untouched, so
+  // districts/counties from other states can be added later and search/filtering can separate by state.
+  Object.keys(DISTRICTS_DATA).forEach(function(_county){
+    (DISTRICTS_DATA[_county]||[]).forEach(function(_rec){ if(_rec && _rec.state==null) _rec.state='CA'; });
+  });
 
   var PLANNING_GUIDES = [
     {id: 'pg-001', name: 'Template 1 - 2026/27'},
@@ -5535,50 +5541,84 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
             function buildDD(){
               $dd.empty();
-              var state={schools:[], cals:[], wks:[]};
+              var state={leaves:[], wks:[]};   // leaves: {ci, si (null = calendar-level), $cb}
 
-              // ── School group ──
-              if(_schoolSlots.length>1){
-                var $grpSch=$('<div>').css({marginBottom:'8px'});
-                var allSchCb=mkCb('All Schools',true);
-                allSchCb.$row.css({fontWeight:'600',marginBottom:'3px'});
-                $grpSch.append(allSchCb.$row);
-                var childSchCbs=[];
-                _schoolSlots.forEach(function(sch){
-                  var nm='School '+(sch.si+1); var sl=(sch.sRow&&(sch.sRow.school||sch.sRow.schoolAbbr))||''; if(sl) nm+='. '+sl;
-                  var cb=mkCb(nm,true);
-                  cb.$row.css({paddingLeft:'14px'});
-                  state.schools.push({si:sch.si,$cb:cb.$cb});
-                  childSchCbs.push(cb.$cb);
-                  $grpSch.append(cb.$row);
-                  cb.$cb.on('change',function(){ var all=childSchCbs.every(function(c){return c.prop('checked');}); allSchCb.$cb.prop('checked',all); });
-                });
-                allSchCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childSchCbs.forEach(function(c){c.prop('checked',v);}); });
-                $dd.append($grpSch);
-              } else if(_schoolSlots.length>0){
-                _schoolSlots.forEach(function(sch){ state.schools.push({si:sch.si,$cb:null}); });
-              }
+              // Destinations: one node per Program Calendar (with its OWN Site Breakdown schools), derived
+              // from the combo list, so schools are grouped under the calendar they actually belong to.
+              var _calNodeMap={}, _calNodeOrder=[];
+              _combos.forEach(function(cm){
+                if(_calNodeMap[cm.ci]===undefined){ _calNodeMap[cm.ci]={ci:cm.ci, calRow:cm.calRow, bySch:!!(cm.calOpt&&cm.calOpt.bySchool), schools:[], _seen:{}}; _calNodeOrder.push(cm.ci); }
+                var _nd=_calNodeMap[cm.ci];
+                if(_nd.bySch && cm.si!==null && _nd._seen[cm.si]===undefined){ _nd._seen[cm.si]=1; _nd.schools.push({si:cm.si, sRow:cm.sRow}); }
+              });
+              var _calNodes=_calNodeOrder.map(function(k){ return _calNodeMap[k]; });
+              function _calNm(nd){ return (nd.calRow&&nd.calRow.name&&String(nd.calRow.name).trim())||('Calendar '+(nd.ci+1)); }
+              function _schNm(sc){ var s2=(sc.sRow&&(sc.sRow.school||sc.sRow.schoolAbbr))||''; s2=String(s2).trim(); return s2||('School '+(sc.si+1)); }
+              var _leafN=0; _calNodes.forEach(function(nd){ _leafN += nd.bySch ? nd.schools.length : 1; });
 
-              // ── Calendar group ──
-              if(_calSlots.length>1){
-                var $grpCal=$('<div>').css({marginBottom:'8px'});
-                var allCalCb=mkCb('All Calendars',true);
-                allCalCb.$row.css({fontWeight:'600',marginBottom:'3px'});
-                $grpCal.append(allCalCb.$row);
-                var childCalCbs=[];
-                _calSlots.forEach(function(cal){
-                  var nm=(cal.calRow&&cal.calRow.name&&cal.calRow.name.trim())||('Calendar '+(cal.ci+1));
-                  var cb=mkCb(nm,true);
-                  cb.$row.css({paddingLeft:'14px'});
-                  state.cals.push({ci:cal.ci,$cb:cb.$cb});
-                  childCalCbs.push(cb.$cb);
-                  $grpCal.append(cb.$row);
-                  cb.$cb.on('change',function(){ var all=childCalCbs.every(function(c){return c.prop('checked');}); allCalCb.$cb.prop('checked',all); });
-                });
-                allCalCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childCalCbs.forEach(function(c){c.prop('checked',v);}); });
-                $dd.append($grpCal);
-              } else if(_calSlots.length>0){
-                _calSlots.forEach(function(cal){ state.cals.push({ci:cal.ci,$cb:null}); });
+              if(_anyBySchool){
+                // Separate by School: nested "All Schools" -> Program Calendar -> School checkboxes.
+                if(_leafN>1){
+                  var $grp=$('<div>').css({marginBottom:'8px'});
+                  var _allTop=mkCb('All Schools',true); _allTop.$row.css({fontWeight:'600',marginBottom:'3px'});
+                  $grp.append(_allTop.$row);
+                  var _calEntries=[];
+                  function _refreshTop(){
+                    var _all=state.leaves.every(function(lf){return lf.$cb&&lf.$cb.prop('checked');});
+                    var _none=state.leaves.every(function(lf){return lf.$cb&&!lf.$cb.prop('checked');});
+                    _allTop.$cb.prop('checked',_all).prop('indeterminate',!_all&&!_none);
+                  }
+                  function _refreshParents(){
+                    _calEntries.forEach(function(en){
+                      if(!en.node.bySch||!en.schCbs.length) return;
+                      var _n=en.schCbs.filter(function(c){return c.prop('checked');}).length;
+                      en.$cb.prop('checked',_n===en.schCbs.length).prop('indeterminate',_n>0&&_n<en.schCbs.length);
+                    });
+                    _refreshTop();
+                  }
+                  _calNodes.forEach(function(nd){
+                    var _cCb=mkCb(_calNm(nd),true); _cCb.$row.css({paddingLeft:'14px',fontWeight:nd.bySch?'600':'400'});
+                    $grp.append(_cCb.$row);
+                    var _en={node:nd,$cb:_cCb.$cb,schCbs:[]}; _calEntries.push(_en);
+                    if(nd.bySch){
+                      nd.schools.forEach(function(sc){
+                        var _sCb=mkCb(_schNm(sc),true); _sCb.$row.css({paddingLeft:'30px'});
+                        $grp.append(_sCb.$row);
+                        state.leaves.push({ci:nd.ci,si:sc.si,$cb:_sCb.$cb});
+                        _en.schCbs.push(_sCb.$cb);
+                        _sCb.$cb.on('change',function(){ _refreshParents(); });
+                      });
+                      _cCb.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _en.schCbs.forEach(function(c){ c.prop('checked',v).prop('indeterminate',false); }); _refreshTop(); });
+                    } else {
+                      state.leaves.push({ci:nd.ci,si:null,$cb:_cCb.$cb});
+                      _cCb.$cb.on('change',function(){ $(this).prop('indeterminate',false); _refreshTop(); });
+                    }
+                  });
+                  _allTop.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _calEntries.forEach(function(en){ en.$cb.prop('checked',v).prop('indeterminate',false); en.schCbs.forEach(function(c){ c.prop('checked',v).prop('indeterminate',false); }); }); });
+                  $dd.append($grp);
+                  _refreshParents();
+                } else {
+                  _calNodes.forEach(function(nd){ if(nd.bySch){ nd.schools.forEach(function(sc){ state.leaves.push({ci:nd.ci,si:sc.si,$cb:null}); }); } else { state.leaves.push({ci:nd.ci,si:null,$cb:null}); } });
+                }
+              } else {
+                // Not Separate by School: keep the flat "All Calendars" group (unchanged behavior).
+                if(_calNodes.length>1){
+                  var $grpCal=$('<div>').css({marginBottom:'8px'});
+                  var _allCal=mkCb('All Calendars',true); _allCal.$row.css({fontWeight:'600',marginBottom:'3px'});
+                  $grpCal.append(_allCal.$row);
+                  var _calChild=[];
+                  _calNodes.forEach(function(nd){
+                    var cb=mkCb(_calNm(nd),true); cb.$row.css({paddingLeft:'14px'});
+                    state.leaves.push({ci:nd.ci,si:null,$cb:cb.$cb});
+                    _calChild.push(cb.$cb);
+                    $grpCal.append(cb.$row);
+                    cb.$cb.on('change',function(){ var _n=_calChild.filter(function(c){return c.prop('checked');}).length; _allCal.$cb.prop('checked',_n===_calChild.length).prop('indeterminate',_n>0&&_n<_calChild.length); });
+                  });
+                  _allCal.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _calChild.forEach(function(c){c.prop('checked',v);}); });
+                  $dd.append($grpCal);
+                } else {
+                  _calNodes.forEach(function(nd){ state.leaves.push({ci:nd.ci,si:null,$cb:null}); });
+                }
               }
 
               // ── Week group ──
@@ -5617,13 +5657,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 e.stopPropagation();
                 ddClose();
 
-                // Determine which si/ci/wk values are selected
-                var selSi=state.schools.length
-                  ? state.schools.filter(function(x){ return !x.$cb||x.$cb.prop('checked'); }).map(function(x){return x.si;})
-                  : [null];
-                var selCi=state.cals.length
-                  ? state.cals.filter(function(x){ return !x.$cb||x.$cb.prop('checked'); }).map(function(x){return x.ci;})
-                  : [null];
+                // Determine which (calendar, school) destinations + weeks are selected.
+                var selLeaf={};
+                state.leaves.forEach(function(lf){ if(!lf.$cb || lf.$cb.prop('checked')) selLeaf[lf.ci+'|'+(lf.si===null?'':lf.si)]=true; });
                 var selWk=state.wks.length
                   ? state.wks.filter(function(x){ return !x.$cb||x.$cb.prop('checked'); }).map(function(x){return x.wk;})
                   : [''];
@@ -5633,10 +5669,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var _fmt=window._PICKER_FMT||function(v){return v;};
                 _comboResults.forEach(function(tgt){
                   var tc=tgt.combo;
-                  var siOk=(tc.si===null)||selSi.indexOf(tc.si)>=0;
-                  var ciOk=selCi.indexOf(tc.ci)>=0;
+                  var pairOk=!!selLeaf[tc.ci+'|'+(tc.si===null?'':tc.si)];
                   var wkOk=(!tc.wk)||selWk.indexOf(tc.wk)>=0;
-                  if(!siOk||!ciOk||!wkOk) return;
+                  if(!pairOk||!wkOk) return;
 
                   // Copy start/end for every role and every day — no count guard
                   ROLES.forEach(function(role){
@@ -6042,6 +6077,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // Shared context menu
     var $ctxMenu=$('<div class="cal-ctx-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'140px',maxHeight:'70vh',overflowY:'auto',padding:'4px',display:'none',fontSize:'12px'});
+    // Multi-cell selection mode flag — when a spreadsheet-style cell selection is active, the per-cell
+    // breakdown hover/click below is suppressed. Set by the selection module near the end of this section.
+    var _calMultiSel=false;
     $('body').append($ctxMenu);
     var _ctxRaf=null;
     var _ctxAnchor=null; // {x,y,$dots} or {$td} used to recompute position on scroll/resize
@@ -6869,6 +6907,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _thisHasPopup=false;
               $td.on('mouseenter',function(){
                 if(_tipPinned) return;   // hover must not disturb a click-pinned popup
+                if(_calMultiSel) return;   // multi-cell selection active → suppress hover breakdown
                 cancelHide();
                 $td.addClass(_hoverClass);
                 var hrsVal=parseFloat($td.find('.cal-combined-sum').text());
@@ -6880,6 +6919,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 else { _thisHasPopup=false; }
               }).on('click',function(e){
                 // Click a combined cell with hours → open the SAME breakdown, pinned open until outside-click/Esc.
+                if(_calMultiSel){ e.stopPropagation(); return; }   // multi-cell selection active → no single-cell breakdown
                 if(document.querySelector('.xs-editor')) return; // Extra Shift editor open → don't re-pin a different day underneath it
                 // Active day → pin even with zero hours, so + Add Extra Shift is always reachable.
                 e.stopPropagation();
@@ -7026,6 +7066,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _hoverClass=isWknd?'cal-hovered-wknd':'cal-hovered';
               $td.on('mouseenter',function(){
                 if(_tipPinned) return;   // hover must not disturb a click-pinned popup
+                if(_calMultiSel) return;   // multi-cell selection active → suppress hover breakdown
                 cancelHide();
                 // Apply hover via CSS class — never touch inline background
                 $td.addClass(_hoverClass);
@@ -7056,6 +7097,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 }
               }).on('click',function(e){
                 // Click a cell with hours → open the SAME breakdown, pinned open until an outside-click/Esc.
+                if(_calMultiSel){ e.stopPropagation(); return; }   // multi-cell selection active → no single-cell breakdown
                 if(document.querySelector('.xs-editor')) return; // Extra Shift editor open → don't re-pin a different day underneath it
                 // In-range day → pin the breakdown even with zero hours, so + Add Extra Shift is always reachable.
                 e.stopPropagation();               // don't let this click reach the outside-close handler
@@ -8588,6 +8630,202 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
     }
 
+    // ══════════════ Multi-cell selection → bulk Special Days (spreadsheet-style) ══════════════
+    // Select a rectangular range (Shift+click / Shift+drag / Shift+Arrows) or toggle individual cells
+    // (Cmd/Ctrl+click), across the calendar. While a selection is active, per-cell breakdown popups are
+    // suppressed. Right-clicking inside the selection opens a Special Days menu (no school list) whose Apply
+    // writes the chosen Special Day to every school of every selected cell. Works in individual + Combined.
+    (function setupMultiSelect(){
+      var secEl=$section[0]; if(!secEl) return;
+      var SEL={};              // key -> live cell element
+      var anchorEl=null;       // range anchor (Shift) / arrow-key base
+      var focusEl=null;        // arrow-key head
+      var dragging=false;
+      var SEL_OUT='2px solid #7faae2';   // muted blue — a clear but soft selection border (was the harsher saturated #1a73e8)
+
+      function isCell(el){ return el&&el.nodeType===1&&el.classList&&(el.classList.contains('cal-combined-day')||(el.classList.contains('cal-day-cell')&&!el.classList.contains('cal-combined-carrier'))); }
+      function cellOf(t){ return t&&t.closest?t.closest('.cal-combined-day, .cal-day-cell:not(.cal-combined-carrier)'):null; }
+      function applicable(el){ if(!isCell(el)) return false; if(el.classList.contains('cal-combined-day')) return el.style.cursor==='pointer'; return el.getAttribute('data-orig-bg')!=null; }
+      function keyOf(el){ return el.classList.contains('cal-combined-day')?('C|'+el.getAttribute('data-date-key')):('I|'+(el.getAttribute('data-cal-id')||'')+'|'+el.getAttribute('data-date-key')); }
+      function count(){ return Object.keys(SEL).length; }
+      function anySel(){ return count()>0; }
+
+      function paint(){
+        secEl.querySelectorAll('.cal-cell-selected').forEach(function(el){ el.classList.remove('cal-cell-selected'); el.style.outline=el.getAttribute('data-sel-oo')||''; el.style.outlineOffset=''; el.removeAttribute('data-sel-oo'); });
+        Object.keys(SEL).forEach(function(k){ var el=SEL[k]; if(!el||!el.isConnected) return; el.setAttribute('data-sel-oo', el.style.outline||''); el.classList.add('cal-cell-selected'); el.style.outline=SEL_OUT; el.style.outlineOffset='-2px'; });
+        _calMultiSel=anySel();
+        if(_calMultiSel){ _tipPinned=false; hideCalTooltip(); }   // suppress any live breakdown the moment we enter select mode
+      }
+      function clearSel(){ SEL={}; anchorEl=null; focusEl=null; paint(); }
+      function addCell(el){ if(applicable(el)) SEL[keyOf(el)]=el; }
+      function toggleCell(el){ if(!applicable(el)) return; var k=keyOf(el); if(SEL[k]) delete SEL[k]; else SEL[k]=el; }
+
+      function gridInfo(el){
+        var tr=el.parentNode, tbody=tr.parentNode;
+        var rows=Array.prototype.filter.call(tbody.children,function(r){ return r.querySelector&&r.querySelector('.cal-day-cell:not(.cal-combined-carrier), .cal-combined-day'); });
+        var dayCells=function(r){ return Array.prototype.filter.call(r.children,function(c){ return isCell(c); }); };
+        return {tbody:tbody, rows:rows, rowIdx:rows.indexOf(tr), colIdx:dayCells(tr).indexOf(el), dayCells:dayCells};
+      }
+      function selectRange(a,b){
+        if(!a||!b){ if(b){ SEL={}; addCell(b); } return; }
+        if(a.parentNode.parentNode!==b.parentNode.parentNode){ SEL={}; addCell(b); return; }   // different calendar grids → just the target
+        var ga=gridInfo(a), gb=gridInfo(b);
+        var r0=Math.min(ga.rowIdx,gb.rowIdx), r1=Math.max(ga.rowIdx,gb.rowIdx);
+        var c0=Math.min(ga.colIdx,gb.colIdx), c1=Math.max(ga.colIdx,gb.colIdx);
+        SEL={};
+        for(var r=r0;r<=r1;r++){ var cells=ga.dayCells(ga.rows[r]); for(var c=c0;c<=c1&&c<cells.length;c++){ addCell(cells[c]); } }
+      }
+
+      // ── mouse (capture phase → preempt the cell's own breakdown handlers) ──
+      secEl.addEventListener('mousedown',function(e){
+        if(e.button!==0) return;
+        var cell=cellOf(e.target);
+        if(e.shiftKey&&cell){ e.preventDefault(); e.stopPropagation(); if(!anchorEl||!anchorEl.isConnected) anchorEl=cell; selectRange(anchorEl,cell); focusEl=cell; paint(); dragging=true; }
+        else if((e.metaKey||e.ctrlKey)&&cell){ e.preventDefault(); e.stopPropagation(); toggleCell(cell); anchorEl=cell; focusEl=cell; paint(); }
+      },true);
+      secEl.addEventListener('mouseover',function(e){ if(!dragging) return; var cell=cellOf(e.target); if(!cell) return; e.stopPropagation(); selectRange(anchorEl||cell,cell); focusEl=cell; paint(); },true);
+
+      // ── click (capture) — modified clicks are selection; a plain click clears (and suppresses breakdown) ──
+      secEl.addEventListener('click',function(e){
+        var cell=cellOf(e.target);
+        if((e.shiftKey||e.metaKey||e.ctrlKey)&&cell){ e.preventDefault(); e.stopPropagation(); return; }   // handled on mousedown; swallow so no breakdown
+        if(anySel()){ e.stopPropagation(); clearSel(); }                                                    // plain click while selected → clear + swallow
+      },true);
+
+      // ── right-click over the selection → multi-cell Special Days menu (do NOT clear) ──
+      secEl.addEventListener('contextmenu',function(e){
+        var cell=cellOf(e.target);
+        if(anySel()&&cell&&SEL[keyOf(cell)]){ e.preventDefault(); e.stopPropagation(); openMultiSdMenu(e); }
+      },true);
+
+      // ── document listeners (self-cleaning: they drop themselves once this section is gone) ──
+      function onUp(){ if(!secEl.isConnected){ teardown(); return; } if(dragging) dragging=false; }
+      function onDocClick(e){
+        if(!secEl.isConnected){ teardown(); return; }
+        if(!anySel()) return;
+        if(secEl.contains(e.target)) return;                                   // inside section handled above
+        if(e.target.closest&&e.target.closest('.cal-sd-multi-menu')) return;   // inside the multi menu
+        clearSel();
+      }
+      function onKey(e){
+        if(!secEl.isConnected){ teardown(); return; }
+        if(!e.shiftKey||!anySel()) return;
+        if(/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'')) return;
+        var mv={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}[e.key]; if(!mv) return;
+        var base=focusEl||anchorEl; if(!base||!base.isConnected) return;
+        var gi=gridInfo(base); var nr=gi.rowIdx+mv[0], nc=gi.colIdx+mv[1];
+        if(nr<0||nr>=gi.rows.length) nr=gi.rowIdx;
+        var rowCells=gi.dayCells(gi.rows[nr]); if(!rowCells.length) return;
+        if(nc<0) nc=0; if(nc>=rowCells.length) nc=rowCells.length-1;
+        var target=rowCells[nc]; if(!target) return;
+        e.preventDefault();
+        if(!anchorEl||!anchorEl.isConnected) anchorEl=base;
+        selectRange(anchorEl,target); focusEl=target; paint();
+      }
+      function teardown(){ document.removeEventListener('mouseup',onUp,true); document.removeEventListener('click',onDocClick,true); document.removeEventListener('keydown',onKey,true); closeMulti(); }
+      document.addEventListener('mouseup',onUp,true);
+      document.addEventListener('click',onDocClick,true);
+      document.addEventListener('keydown',onKey,true);
+      $section.on('remove',teardown);
+
+      // test / integration hooks
+      secEl._selCount=count; secEl._selKeys=function(){ return Object.keys(SEL); }; secEl._clearSel=clearSel;
+
+      // ══════ multi-cell Special Days menu (own element, standard .cal-ctx-menu styling, no school list) ══════
+      $('body > .cal-sd-multi-menu[data-cal-mm="'+g.id+'"]').remove();   // drop any stale menu from a previous render of this guide
+      var $mMenu=$('<div class="cal-sd-multi-menu">').attr('data-cal-mm',g.id).css({position:'fixed',zIndex:'1000001',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'190px',maxWidth:'320px',maxHeight:'70vh',overflowY:'auto',padding:'4px',display:'none',fontSize:'12px'});
+      $('body').append($mMenu);
+      $mMenu.on('mousedown click contextmenu',function(e){ e.stopPropagation(); });
+      function closeMulti(){ $mMenu.hide().empty(); $(document).off('.sdmulti'); }
+
+      function selectedTargets(){
+        var out=[], det=guideDetails[String(g.id)]||{}, calRows=det.calendarRows||[];
+        Object.keys(SEL).forEach(function(k){
+          var el=SEL[k]; if(!el) return; var dk=el.getAttribute('data-date-key');
+          if(el.classList.contains('cal-combined-day')){
+            el.querySelectorAll('.cal-combined-carrier').forEach(function(car){
+              var oi=parseInt(car.getAttribute('data-cal-orig-idx')); var cr=calRows[oi];
+              if(cr&&cr.calId!=null) out.push({calId:cr.calId, dateKey:dk, schoolIdxs:getSchoolIndices(oi)});
+            });
+          } else {
+            var oi2=parseInt(el.getAttribute('data-cal-orig-idx')); var cr2=calRows[oi2];
+            var cid=(cr2&&cr2.calId!=null)?cr2.calId:el.getAttribute('data-cal-id');
+            out.push({calId:cid, dateKey:dk, schoolIdxs:getSchoolIndices(isNaN(oi2)?null:oi2)});
+          }
+        });
+        return out;
+      }
+      function openMultiSdMenu(evt){
+        closeMulti(); $mMenu.empty(); hideCalTooltip(); $('.sf-action-menu').hide(); $('.brk-dd').hide(); closeCtx();
+        var sds=getSpecialDays(g.id);
+        var targets=selectedTargets();
+        var totalPairs=0; targets.forEach(function(t){ totalPairs+=t.schoolIdxs.length; });
+        var _pick=undefined;   // undefined = nothing staged; null = clear; sdId = apply that Special Day
+        var $applyBtn, redraws=[];
+        function appliedCount(sdId){ var c=0; targets.forEach(function(t){ t.schoolIdxs.forEach(function(si){ if(getMarkerSdId(t.calId,t.dateKey,si)===sdId) c++; }); }); return c; }
+
+        $mMenu.append($('<div>').css({padding:'5px 12px 4px',fontSize:'10px',fontWeight:'700',color:'#6c757d',textTransform:'uppercase',letterSpacing:'.04em'}).text('Special Day \u2192 '+count()+' cell'+(count()===1?'':'s')));
+        if(!sds.length){
+          $mMenu.append($('<div>').css({padding:'9px 14px',fontSize:'11px',color:'#6c757d',fontStyle:'italic',maxWidth:'230px',lineHeight:'1.35'}).text('No Special Days are defined for this Program Guide yet. Add Special Days first, then you can mark days here.'));
+        }
+        sds.forEach(function(sd,sdIdx){
+          var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 12px',cursor:'pointer',borderRadius:'4px'});
+          var $circle=$('<span>').css({width:'10px',height:'10px',background:sd.color||'#fff',border:'1px solid rgb(180,180,180)',borderRadius:'50%',display:'inline-block',flexShrink:'0'});
+          var $name=$('<span>').css({flex:'1',fontSize:'12px'}).text(sdName(sd,sdIdx));
+          var $cnt=$('<span>').css({fontSize:'9.5px',color:'#6c757d',fontWeight:'600',whiteSpace:'nowrap',marginLeft:'auto'});
+          function draw(){
+            var applied=appliedCount(sd.id), staged=(_pick===sd.id);
+            // Partial application indicator: none (blank) / some ("x / y") / all ("all y") — informational,
+            // and stays regardless of the current selection.
+            if(applied>0) $cnt.text(applied>=totalPairs?('all '+totalPairs):(applied+' / '+totalPairs)); else $cnt.text('');
+            // Emphasis (bold + tint): previously-applied Special Days are highlighted only until the user
+            // stages a pick. Once any Special Day label is clicked, ONLY the staged row stays emphasized and
+            // every other label immediately returns to normal weight, so the active selection is unambiguous.
+            $row.css({background: staged?'#e4eefb':((_pick===undefined&&applied>0)?'#eef4fd':'none'), fontWeight:(staged||(_pick===undefined&&applied>0))?'700':'400'});
+          }
+          redraws.push(draw); draw();
+          $row.append($circle,$name,$cnt);
+          $row.on('mouseenter',function(){ $(this).css('background','#f1f3f4'); }).on('mouseleave',draw);
+          $row.on('click',function(ev){ ev.stopPropagation(); _pick=sd.id; if($applyBtn) $applyBtn.css('display',''); redraws.forEach(function(fn){ fn(); }); });
+          $mMenu.append($row);
+        });
+
+        var $btnRow=$('<div>').css({display:'flex',gap:'6px',padding:'7px 12px 4px',borderTop:'1px solid #e9ecef',marginTop:'4px'});
+        var $closeBtn=$('<button type="button">').text('Close').css({fontSize:'11px',padding:'4px 12px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+        var $clearBtn=$('<button type="button">').text('Clear').css({fontSize:'11px',padding:'4px 12px',background:'none',color:'#dc3545',border:'1px solid #f1c2c7',borderRadius:'5px',cursor:'pointer'});
+        $applyBtn=$('<button type="button">').text('Apply').css({fontSize:'11px',padding:'4px 14px',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600',display:'none'});
+        $closeBtn.on('click',function(ev){ ev.stopPropagation(); closeMulti(); });                    // close only — no changes, selection preserved
+        $clearBtn.on('click',function(ev){ ev.stopPropagation(); _pick=null; $applyBtn.css('display',''); redraws.forEach(function(fn){ fn(); }); });   // stage a removal; committed on Apply
+        $applyBtn.on('click',function(ev){
+          ev.stopPropagation();
+          if(_pick===undefined){ closeMulti(); return; }
+          targets.forEach(function(t){
+            var mk=String(t.calId)+'|'+t.dateKey;
+            if(_pick===null){ if(markers[mk]&&markers[mk].schools){ t.schoolIdxs.forEach(function(si){ delete markers[mk].schools[String(si)]; }); if(!Object.keys(markers[mk].schools).length) delete markers[mk]; } }
+            else { if(!markers[mk]) markers[mk]={schools:{}}; t.schoolIdxs.forEach(function(si){ markers[mk].schools[String(si)]=_pick; }); }
+          });
+          closeMulti(); clearSel();
+          var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal);   // re-render cells (markers/labels/bg) + hours
+          refreshSummary(g);
+        });
+        $btnRow.append($closeBtn,$clearBtn,$applyBtn);
+        $mMenu.append($btnRow);
+
+        // position at the cursor, clamped to viewport
+        $mMenu.css({visibility:'hidden',display:'block',top:'-9999px',left:'-9999px'});
+        var mx=(evt&&evt.clientX)||120, my=(evt&&evt.clientY)||120;
+        requestAnimationFrame(function(){
+          var w=$mMenu.outerWidth()||200, h=$mMenu.outerHeight()||200;
+          var px=Math.min(mx, window.innerWidth-w-6), py=Math.min(my, window.innerHeight-h-6);
+          $mMenu.css({top:Math.max(4,py)+'px',left:Math.max(4,px)+'px',visibility:'visible'});
+        });
+        setTimeout(function(){
+          $(document).on('click.sdmulti',function(ev){ if($mMenu[0].contains(ev.target)) return; closeMulti(); })
+                     .on('contextmenu.sdmulti',function(ev){ if($mMenu[0].contains(ev.target)) return; if(secEl.contains(ev.target)&&anySel()) return; closeMulti(); });
+        },0);
+      }
+    })();
+
     // Clean up when section removed
     $section.on('remove',function(){ $ctxMenu.remove(); closeCtx(); $calTip.remove(); if(_rafId){cancelAnimationFrame(_rafId);_rafId=null;} _tipPinned=false; _clearPinBind(); $(document).off('click.caltippin keydown.caltippin'); });
     return $section;
@@ -9147,6 +9385,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ════════ Sheet 5: Summary ════════
       var ws5=wb.addWorksheet('Summary');
       ws5.columns=[{width:4},{width:6},{width:32},{width:14},{width:16}];
+      var guideRows=[];   // per-calendar rollup for the Planning Guide Summary section (mirrors the on-screen table)
       validCals.forEach(function(vc){
         var cr=vc.cr;
         var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;
@@ -9179,9 +9418,29 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           cr2.getCell(4).numFmt=FMT_H; cr2.getCell(5).numFmt=FMT_AMT;
           cr2.getCell(4).alignment={horizontal:'right'}; cr2.getCell(5).alignment={horizontal:'right'};
         }
+        var _gun=(isFinite(unNum)&&unNum>0)?unNum:0;
+        guideRows.push({ name:(cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1)), hours:r2(calTotal+_gun), amount:r2(price*(calTotal+_gun)) });
         blank(ws5);
       });
       if(!validCals.length){ ws5.addRow([null,'No program calendars defined for this Planning Guide.']); }
+
+      // Planning Guide Summary section: one row per Program Calendar (its overall total) + a grand Total row.
+      if(guideRows.length){
+        blank(ws5);
+        secTitle(ws5,'Planning Guide Summary');
+        hdrRow(ws5,[null,'#','Program Calendars','Hours','Amount']);
+        var _pgH=0,_pgA=0;
+        guideRows.forEach(function(gr,gi){
+          _pgH=r2(_pgH+gr.hours); _pgA=r2(_pgA+gr.amount);
+          var grow=dataRow(ws5,[null,gi+1,gr.name,gr.hours,gr.amount]);
+          grow.getCell(4).numFmt=FMT_H; grow.getCell(5).numFmt=FMT_AMT;
+          grow.getCell(4).alignment={horizontal:'right'}; grow.getCell(5).alignment={horizontal:'right'};
+        });
+        var gtot=dataRow(ws5,[null,'Total','Planning Guide',_pgH,_pgA]);
+        gtot.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9E6F6'}}; c.font={name:'Calibri',size:10,bold:true}; });
+        gtot.getCell(4).numFmt=FMT_H; gtot.getCell(5).numFmt=FMT_AMT;
+        gtot.getCell(4).alignment={horizontal:'right'}; gtot.getCell(5).alignment={horizontal:'right'};
+      }
 
       // ── file name: {Guide Name} ({Guide ID}) - mm-dd-yyyy.xlsx (sanitized) ──
       var now=new Date();
@@ -9241,6 +9500,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return $container;
     }
 
+    var guideRollup=[];   // one entry per Program Calendar for the final Planning Guide Summary rollup
     validIdx.forEach(function(origIdx){
       var cr=calRows[origIdx];
       var fd=parseD(cr.firstDay), ld=parseD(cr.lastDay);
@@ -9368,7 +9628,48 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       $tbl.append($tb); $scroll.append($tbl); $card.append($scroll);
       $container.append($card);
+
+      // Roll this calendar's overall total (staffing hours + any Unallocated Hours) into the guide summary.
+      var _guideUn=(isFinite(_unNum)&&_unNum>0)?_unNum:0;
+      guideRollup.push({ name:calName, hours:calTotal+_guideUn, amount:price*(calTotal+_guideUn) });
     });
+
+    // Planning Guide Summary: final guide-level rollup shown after every Calendar Summary. One row per
+    // Program Calendar (its overall total, matching that calendar's Summary bottom line) plus a grand Total
+    // row for the whole Planning Guide. Rebuilt with the rest of the summary on every totals change.
+    if(guideRollup.length){
+      var $gCard=$('<div class="card border-0 shadow-sm rounded-2 mt-2">').attr('data-guide-summary',String(g.id)).css({overflow:'visible',width:'fit-content','min-width':'100%'});
+      $gCard.append($('<div class="px-3 py-2">').css({background:'#eef3f9',borderBottom:'1px solid #dbe3ee',borderRadius:'calc(.375rem - 1px) calc(.375rem - 1px) 0 0'})
+        .append($('<span>').css({fontWeight:'700',fontSize:'13px',color:'#212529'}).text('Planning Guide Summary')));
+      var $gScroll=$('<div style="overflow-x:auto;">');
+      var $gTbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+      var $gHr=$('<tr>');
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('#'));
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('Program Calendars'));
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Amount'));
+      $gTbl.append($('<thead>').append($gHr));
+      var $gTb=$('<tbody>');
+      var _gHours=0,_gAmt=0;
+      guideRollup.forEach(function(row,ri){
+        _gHours+=row.hours; _gAmt+=row.amount;
+        var $r=$('<tr>');
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).text(row.name));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(row.hours)));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.amount)));
+        $gTb.append($r);
+      });
+      // Grand Total row: "Total | Planning Guide" — emphasized, consistent with the calendar total rows.
+      var $gTot=$('<tr>').css({background:'#d9e6f6',borderTop:'2px solid #b0c8e6'});
+      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 8px',fontWeight:'700',color:'#212529',textAlign:'center',whiteSpace:'nowrap',background:'#d9e6f6'}).text('Total'));
+      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Planning Guide'));
+      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_gHours)));
+      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(_gAmt)));
+      $gTb.append($gTot);
+      $gTbl.append($gTb); $gScroll.append($gTbl); $gCard.append($gScroll);
+      $container.append($gCard);
+    }
 
     return $container;
   }
