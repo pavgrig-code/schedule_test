@@ -5389,13 +5389,43 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               if($newCal[0]&&$newCal[0]._updateHours) $newCal[0]._updateHours();
             },0);
           }
+          // When Alternate Weeks (A/B) is first enabled for this calendar, seed BOTH Week A and Week B
+          // from the current (base) Staffing Hours so the existing values become the starting point for
+          // each week. Only seeds when no A/B values have been entered yet (both week slots empty), and
+          // persists the seed so later single-week edits don't lose the other week on reload.
+          function _seedABForCal(){
+            var det=guideDetails[String(g.id)]; if(!det) return;
+            var slots=det.staffingHoursSlots||(det.staffingHoursSlots={});
+            var calRows=det.calendarRows||[]; var ci=-1;
+            for(var i=0;i<calRows.length;i++){ if(String(calRows[i].calId)===String(_calId)){ ci=i; break; } }
+            if(ci<0) return;
+            var bySch=!!calStaffOpts(g,_calId).bySchool;
+            var siList=bySch?((siteRowsFor(g,_calId)||[]).map(function(_r,_i){return _i;})):[null];
+            function K(si,wk){ return (si!==null?'s'+si:'')+'c'+ci+(wk||''); }
+            var seeded=false;
+            siList.forEach(function(si){
+              var base=slots[K(si,'')];
+              if(!base||!Object.keys(base).length) return;              // nothing to copy from
+              var aK=K(si,'a'), bK=K(si,'b');
+              var aEmpty=!slots[aK]||!Object.keys(slots[aK]).length;
+              var bEmpty=!slots[bK]||!Object.keys(slots[bK]).length;
+              if(aEmpty&&bEmpty){ slots[aK]=JSON.parse(JSON.stringify(base)); slots[bK]=JSON.parse(JSON.stringify(base)); seeded=true; }
+            });
+            if(seeded) setGuideDetail(g.id,'staffingHoursSlots',slots);
+          }
+          function _applyCalOpt(key,v){
+            var was=!!calStaffOpts(g,_calId)[key];
+            calStaffOpts(g,_calId)[key]=v;
+            if(key==='alternateWeeks' && v && !was) _seedABForCal();   // seed on the off->on transition
+            _persist();
+          }
           function optRowCal(label,key){
             var _co=calStaffOpts(g,_calId);
             var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
             var $chk=$('<input type="checkbox">').css({width:'14px',height:'14px',cursor:'pointer',accentColor:'#0d6efd',margin:'0'}).prop('checked',!!_co[key]);
             $row.append($chk,$('<span>').css({fontSize:'12px'}).text(label));
-            $row.on('click',function(e){ if(e.target!==$chk[0]){ $chk.prop('checked',!$chk.prop('checked')); } calStaffOpts(g,_calId)[key]=$chk.prop('checked'); _persist(); });
-            $chk.on('click',function(e){ e.stopPropagation(); calStaffOpts(g,_calId)[key]=$(this).prop('checked'); _persist(); });
+            $row.on('click',function(e){ if(e.target!==$chk[0]){ $chk.prop('checked',!$chk.prop('checked')); } _applyCalOpt(key,$chk.prop('checked')); });
+            $chk.on('click',function(e){ e.stopPropagation(); _applyCalOpt(key,$(this).prop('checked')); });
             return $row;
           }
           function buildDD(){
@@ -5530,11 +5560,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             function ddTrack(){ if($dd.is(':visible')){ ddPos(); _raf=requestAnimationFrame(ddTrack); } else { _raf=null; } }
             $section.on('remove',function(){ ddClose(); $dd.remove(); });
 
-            function mkCb(lbl,checked){
+            function mkCb(lbl,checked,color){
               var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'2px 0',cursor:'pointer'});
               var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',margin:'0',width:'12px',height:'12px'});
               var $lbl=$('<span>').text(lbl).css({fontSize:'11px',color:'#212529',userSelect:'none'});
-              $row.append($cb,$lbl);
+              if(color!==undefined) $row.append($cb,_calCircle(color),$lbl); else $row.append($cb,$lbl);
               $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
               return {$row:$row,$cb:$cb};
             }
@@ -5577,7 +5607,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     _refreshTop();
                   }
                   _calNodes.forEach(function(nd){
-                    var _cCb=mkCb(_calNm(nd),true); _cCb.$row.css({paddingLeft:'14px',fontWeight:nd.bySch?'600':'400'});
+                    var _cCb=mkCb(_calNm(nd),true,(nd.calRow&&nd.calRow.color)||'#ffffff'); _cCb.$row.css({paddingLeft:'14px',fontWeight:nd.bySch?'600':'400'});
                     $grp.append(_cCb.$row);
                     var _en={node:nd,$cb:_cCb.$cb,schCbs:[]}; _calEntries.push(_en);
                     if(nd.bySch){
@@ -5608,7 +5638,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   $grpCal.append(_allCal.$row);
                   var _calChild=[];
                   _calNodes.forEach(function(nd){
-                    var cb=mkCb(_calNm(nd),true); cb.$row.css({paddingLeft:'14px'});
+                    var cb=mkCb(_calNm(nd),true,(nd.calRow&&nd.calRow.color)||'#ffffff'); cb.$row.css({paddingLeft:'14px'});
                     state.leaves.push({ci:nd.ci,si:null,$cb:cb.$cb});
                     _calChild.push(cb.$cb);
                     $grpCal.append(cb.$row);
@@ -9631,7 +9661,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Roll this calendar's overall total (staffing hours + any Unallocated Hours) into the guide summary.
       var _guideUn=(isFinite(_unNum)&&_unNum>0)?_unNum:0;
-      guideRollup.push({ name:calName, hours:calTotal+_guideUn, amount:price*(calTotal+_guideUn) });
+      guideRollup.push({ name:calName, color:(cr&&cr.color)||'#ffffff', hours:calTotal+_guideUn, amount:price*(calTotal+_guideUn) });
     });
 
     // Planning Guide Summary: final guide-level rollup shown after every Calendar Summary. One row per
@@ -9655,7 +9685,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         _gHours+=row.hours; _gAmt+=row.amount;
         var $r=$('<tr>');
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1));
-        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).text(row.name));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).append(_calCircle(row.color).css({marginRight:'6px'})).append($('<span>').text(row.name)));
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(row.hours)));
         $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.amount)));
         $gTb.append($r);
@@ -10909,11 +10939,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function ddClose(){ $dd.hide(); if(_raf){cancelAnimationFrame(_raf);_raf=null;} $(document).off('click.'+_uid); }
       function ddTrack(){ if($dd.is(':visible')){ ddPos(); _raf=requestAnimationFrame(ddTrack); } else { _raf=null; } }
 
-      function mkCb(lbl,checked,locked){
+      function mkCb(lbl,checked,locked,color){
         var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'2px 0',cursor:locked?'default':'pointer'});
         var $cb=$('<input type="checkbox">').prop('checked',checked).prop('disabled',!!locked).css({cursor:locked?'default':'pointer',margin:'0',width:'12px',height:'12px'});
         var $lbl=$('<span>').text(lbl).css({fontSize:'11px',color:'#212529',userSelect:'none'});
-        $row.append($cb,$lbl);
+        if(color!==undefined) $row.append($cb,_calCircle(color),$lbl); else $row.append($cb,$lbl);
         if(!locked) $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); } });
         return {$row:$row,$cb:$cb};
       }
@@ -10924,7 +10954,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var cbs=[];
         _dests.forEach(function(cr){
           var nm=(cr.name&&cr.name.trim())||('Calendar '+(_allCals.indexOf(cr)+1));
-          var cb=mkCb(nm,true,single);   // single destination → checked + locked
+          var cb=mkCb(nm,true,single,cr.color||'#ffffff');   // single destination → checked + locked
           cbs.push({calId:cr.calId,$cb:cb.$cb});
           $dd.append(cb.$row);
         });
@@ -11593,11 +11623,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         .append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'#495057'}).text('Remaining Hours:'))
         .append($remVal);
       $secHd.append($remSeg);
+      // Each allocated row contributes its editable "Total, Hrs" value directly to the allocated sum;
+      // legacy rows saved with the old Hrs/Staff x Staff columns fall back to that product until edited.
+      function _unRowTot(r){ return (r.total!==undefined)?r.total:_unFmtTotal(r.hrsPer,r.staff); }
       function updateRemaining(){
         var un=parseFloat(data.unalloc), unValid=isFinite(un)&&un>0;
         var sum=0, hasRow=false;
-        (data.rows||[]).forEach(function(r){ var t=_unFmtTotal(r.hrsPer,r.staff); if(t!==''){ var tv=parseFloat(t); if(isFinite(tv)&&tv>0){ sum+=tv; hasRow=true; } } });
-        if(unValid&&hasRow){ var rem=Math.round((un-sum)*100)/100; $remVal.text(rem).css('color', rem<0?'red':'#495057'); $remSeg.css('display','inline-flex'); }
+        (data.rows||[]).forEach(function(r){ var t=_unRowTot(r); if(t!==''&&t!=null){ var tv=parseFloat(t); if(isFinite(tv)&&tv>0){ sum+=tv; hasRow=true; } } });
+        if(unValid&&hasRow){ var rem=Math.round((un-sum)*100)/100; $remVal.text(rem).css('color',rem<0?'#dc3545':'rgb(13, 110, 253)'); $remSeg.css('display','inline-flex'); }
         else { $remSeg.css('display','none'); }
       }
       updateRemaining();
@@ -11618,7 +11651,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
         var $thead=$('<thead>'); var $hr=$('<tr>');
         // [label, compact?] — compact columns shrink to content; Notes keeps the remaining width.
-        [['Date','1%'],['# of Hrs/Staff','100px'],['# of Staff','100px'],['Total, Hrs','1%'],['Notes',null],['Del','1%']].forEach(function(col){
+        [['Date','1%'],['Total, Hrs','120px'],['Notes',null],['Del','1%']].forEach(function(col){
           var thCss={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
           if(col[1]) thCss.width=col[1];
           $hr.append($('<th>').css(thCss).text(col[0]));
@@ -11627,46 +11660,35 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $tbody=$('<tbody>'); $tbl.append($tbody);
         data.rows.forEach(function(row,ri){
           var $tr=$('<tr>').css(ri%2===1?{background:'#fafafa'}:{});
-          // Total, Hrs — read-only calculated field (exactly Site Breakdown's calculated total cell + input)
-          var $totInp=$('<input type="text" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'36px',fontWeight:'600',color:'#495057'}).val(_unFmtTotal(row.hrsPer,row.staff));
-          function recalc(){ $totInp.val(_unFmtTotal(data.rows[ri].hrsPer,data.rows[ri].staff)); }
-          // Focus/blur — exactly Site Breakdown's editable-input behavior (white bg + blue focus ring)
+          // Total, Hrs is entered directly by the user now; the old "# of Hrs/Staff" and "# of Staff" calc
+          // columns are gone. The value is stored on the row and drives the Remaining Hours calculation.
           function applyEditFocus($inp){
             $inp.on('focus',function(){$(this).css({background:'#fff','border-color':'#0d6efd','boxShadow':'inset 0 1px 2px rgba(0,0,0,.04), 0 0 0 2px rgba(13,110,253,.12)'});})
                 .on('blur',function(){$(this).css({background:'#f7f9fc','border-color':'#dde3ea','boxShadow':'inset 0 1px 2px rgba(0,0,0,.06)'});});
           }
-          // Date — calendar picker (same #f7f9fc bordered widget as First/Last Day) in an editable (#f2f4f8) cell; compact width
+          // Date - calendar picker in an editable cell; compact width
           var $dateTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'1%',whiteSpace:'nowrap'});
           var $dp=mkDatePicker(row.date||'',function(v){ data.rows[ri].date=v; saveUnsched(); },{width:'108px'});
           $dateTd.append($dp);
-          // # of Hrs/Staff (decimals) — exactly Site Breakdown's numeric cell + input; compact width
-          var $hpsTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'100px',whiteSpace:'nowrap'});
-          var $hpsInp=$('<input type="text" autocomplete="off" inputmode="decimal">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.hrsPer||'');
-          applyEditFocus($hpsInp);
-          $hpsInp.on('input',function(){ var f=_unNumFilter(this.value,true); if(f!==this.value) this.value=f; data.rows[ri].hrsPer=f; recalc(); saveUnsched(); updateRemaining(); });
-          $hpsTd.append($hpsInp);
-          // # of Staff (integer) — exactly Site Breakdown's numeric cell + input; compact width
-          var $stTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'100px',whiteSpace:'nowrap'});
-          var $stInp=$('<input type="text" autocomplete="off" inputmode="numeric">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.staff||'');
-          applyEditFocus($stInp);
-          $stInp.on('input',function(){ var f=_unNumFilter(this.value,false); if(f!==this.value) this.value=f; data.rows[ri].staff=f; recalc(); saveUnsched(); updateRemaining(); });
-          $stTd.append($stInp);
-          // Total cell (#f0f4f8) holding the read-only input; compact width
-          var $totTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8',width:'1%',whiteSpace:'nowrap'});
+          // Total, Hrs - editable numeric (decimals), entered directly; drives Remaining Hours
+          var $totTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8',width:'120px',whiteSpace:'nowrap'});
+          var $totInp=$('<input type="text" autocomplete="off" inputmode="decimal">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(_unRowTot(row));
+          applyEditFocus($totInp);
+          $totInp.on('input',function(){ var f=_unNumFilter(this.value,true); if(f!==this.value) this.value=f; data.rows[ri].total=f; saveUnsched(); updateRemaining(); });
           $totTd.append($totInp);
-          // Notes — exactly Site Breakdown's name cell + input (text variant); FLEXIBLE column (no width:1%) — takes the remaining width
+          // Notes - flexible column
           var $notesTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',minWidth:'160px'});
           var $notesInp=$('<input type="text" autocomplete="off">').css({width:'100%',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',outline:'none',padding:'2px 6px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'}).val(row.notes||'');
           applyEditFocus($notesInp);
           $notesInp.on('input',function(){ data.rows[ri].notes=this.value; saveUnsched(); });
           $notesTd.append($notesInp);
-          // Del — exactly Site Breakdown's Del cell + button; compact width
+          // Del button
           var $delBtn=$('<button type="button" title="Delete row">').text('Del').css({background:'#fff1f0',border:'1px solid #ffccc7',borderRadius:'5px',cursor:'pointer',color:'#cf1322',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'3px 8px',whiteSpace:'nowrap',minWidth:'36px'});
           $delBtn.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});});
           $delBtn.on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
           $delBtn.on('click',function(){ data.rows.splice(ri,1); saveUnsched(); refreshTable(); updateRemaining(); });
           var $delTd=$('<td>').css({border:'1px solid #dee2e6',padding:'4px 6px',textAlign:'center',verticalAlign:'middle',background:'#fafafa',whiteSpace:'nowrap',width:'1%'}).append($delBtn);
-          $tr.append($dateTd,$hpsTd,$stTd,$totTd,$notesTd,$delTd);
+          $tr.append($dateTd,$totTd,$notesTd,$delTd);
           $tbody.append($tr);
         });
         $scroll.append($tbl); $tableHolder.append($scroll);
@@ -11675,7 +11697,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // + Allocated Hours button (same style as + Add Role / + Add School)
       var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 12px;">').text('+ Allocated Hours');
-      $addBtn.on('click',function(){ data.rows.push({date:'',hrsPer:'',staff:'',notes:''}); saveUnsched(); refreshTable(); updateRemaining(); });
+      $addBtn.on('click',function(){ data.rows.push({date:'',total:'',notes:''}); saveUnsched(); refreshTable(); updateRemaining(); });
       $body.append($addBtn);
 
       $section.append($body);
