@@ -9492,6 +9492,54 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
   }
 
+  // JSON EXPORT - "Export to -> JSON" on the Planning Guide header. Emits a single, self-describing .json
+  // file: the guide's full saved state (authoritative for a future Import / restore) plus a calculated
+  // snapshot (per-calendar + guide totals) for IT / integration / debugging use. Versioned + structured so
+  // another system can parse it predictably.
+  function exportGuideToJson(g){
+    function jsonError(){
+      var $ov=$('<div>').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
+      var $box=$('<div>').css({background:'#fff',borderRadius:'10px',padding:'22px 26px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'280px',maxWidth:'380px'});
+      $box.append($('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529',marginBottom:'8px'}).text('JSON export failed'));
+      $box.append($('<div>').css({fontSize:'12px',color:'#495057',lineHeight:'1.5'}).text('The JSON file could not be created. Please try again.'));
+      var $ok=$('<button type="button">').css({background:'#0d6efd',border:'none',borderRadius:'6px',padding:'6px 18px',cursor:'pointer',fontSize:'12px',fontWeight:'600',color:'#fff',marginTop:'14px',float:'right'}).text('OK');
+      $ok.on('click',function(){ $ov.remove(); });
+      $box.append($ok);
+      $ov.append($box).on('click',function(e){ if($(e.target).is($ov)) $ov.remove(); });
+      $('body').append($ov);
+    }
+    try{
+      var det=getGuideDetail(g.id);
+      // Calculated snapshot - reuse buildSummarySection's exact figures (no divergence from the on-screen
+      // Summary / Excel). Building the fragment has no side effects; we only read the stashed numbers.
+      var calc={ calendars:[], totals:{ hours:0, amount:0 } };
+      try{ var $sum=buildSummarySection(g); if($sum&&$sum[0]&&$sum[0].__pgCalc) calc=$sum[0].__pgCalc; }catch(_e){}
+      var now=new Date();
+      var payload={
+        schemaVersion:'1.0',
+        type:'planning-guide',
+        exportKind:'full',
+        exportedAt:now.toISOString(),
+        application:{ name:'Planning Guide' },
+        guide:{ id:g.id, name:g.name, status:(det&&det.status)||null },
+        // Full saved state (deep-cloned) - the authoritative source for a future Import / restore.
+        data:JSON.parse(JSON.stringify(det||{})),
+        // Derived, read-only snapshot - convenience for integrations / debugging; recomputed on import.
+        calculated:calc
+      };
+      var json=JSON.stringify(payload,null,2);
+      var mm=String(now.getMonth()+1).padStart(2,'0'), dd2=String(now.getDate()).padStart(2,'0');
+      var fname=(g.name+' ('+g.id+') - '+mm+'-'+dd2+'-'+now.getFullYear()+'.json')
+        .replace(/[\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
+      var blob=new Blob([json],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url; a.download=fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ try{URL.revokeObjectURL(url);}catch(e){} a.remove(); },0);
+    }catch(e){ jsonError(); }
+  }
   function buildSummarySection(g){
     var det=getGuideDetail(g.id);
     var calRows=det.calendarRows||[];
@@ -9527,10 +9575,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $emptyCard.append($('<div class="px-3 py-2">').css({background:'#f8f9fb',borderBottom:'1px solid #e9ecef',borderRadius:'calc(.375rem - 1px) calc(.375rem - 1px) 0 0'}).append($('<span>').css({fontWeight:'700',fontSize:'13px',color:'#212529'}).text('Summary')));
       $emptyCard.append($('<div>').css({padding:'16px 14px',fontSize:'12px',color:'#6c757d'}).text('No program calendars defined for this Planning Guide.'));
       $container.append($emptyCard);
+      $container[0].__pgCalc={ calendars:[], totals:{ hours:0, amount:0 } };
       return $container;
     }
 
     var guideRollup=[];   // one entry per Program Calendar for the final Planning Guide Summary rollup
+    var _guideCalc=[];    // parallel calculated snapshot (raw numbers) reused by the JSON export
     validIdx.forEach(function(origIdx){
       var cr=calRows[origIdx];
       var fd=parseD(cr.firstDay), ld=parseD(cr.lastDay);
@@ -9662,6 +9712,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Roll this calendar's overall total (staffing hours + any Unallocated Hours) into the guide summary.
       var _guideUn=(isFinite(_unNum)&&_unNum>0)?_unNum:0;
       guideRollup.push({ name:calName, color:(cr&&cr.color)||'#ffffff', hours:calTotal+_guideUn, amount:price*(calTotal+_guideUn) });
+      _guideCalc.push({ calId:(cr&&cr.calId)||null, name:calName, pricePerHour:price, staffingHours:Math.round(calTotal*100)/100, unallocatedHours:Math.round(_guideUn*100)/100, totalHours:Math.round((calTotal+_guideUn)*100)/100, amount:Math.round(price*(calTotal+_guideUn)*100)/100, schools:schoolTotals.filter(function(st){return st.hours>0;}).map(function(st){ return { name:st.name, hours:Math.round(st.hours*100)/100, amount:Math.round(price*st.hours*100)/100 }; }) });
     });
 
     // Planning Guide Summary: final guide-level rollup shown after every Calendar Summary. One row per
@@ -9698,6 +9749,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $container.append($gCard);
     }
 
+    $container[0].__pgCalc={ calendars:_guideCalc, totals:{ hours:Math.round(_guideCalc.reduce(function(a,c){return a+c.totalHours;},0)*100)/100, amount:Math.round(_guideCalc.reduce(function(a,c){return a+c.amount;},0)*100)/100 } };
     return $container;
   }
   function refreshSummary(g){ var $s=$('#summary-section-'+g.id); if($s.length) $s.replaceWith(buildSummarySection(g)); _maybeRefreshCombined(g); }
@@ -9796,7 +9848,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
         boxShadow:'0 4px 14px rgba(0,0,0,.12)',minWidth:'140px',padding:'4px',display:'none'
       });
-      ['Excel'].forEach(function(opt){
+      ['Excel','JSON'].forEach(function(opt){
         var $opt=$('<button type="button">').css({
           display:'flex',alignItems:'center',gap:'8px',width:'100%',
           background:'none',border:'none',padding:'6px 10px',borderRadius:'6px',
@@ -9808,6 +9860,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           e.stopPropagation(); $menu.hide();   // dropdown always closes on selection
           // Excel → generate the workbook from the CURRENT stores (always the latest values).
           if(opt==='Excel') exportGuideToExcel(g);
+          else if(opt==='JSON') exportGuideToJson(g);
         });
         $menu.append($opt);
       });
