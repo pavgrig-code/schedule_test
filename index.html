@@ -3660,8 +3660,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _rdBillable=calRowBillable(origIdx!=null?calRows[origIdx]:null);
       var out=[];
       roles.forEach(function(role){
-        var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return;
-        var d=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
+        var cnt=parseInt(siteRow[role.countKey])||0;
+        var baseTm=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
+        var d=baseTm;
+        // Apply any saved Start / End / Count override for this exact cell (same source the Calendar Hours
+        // Breakdown, Summary and Excel use), so schedule blocks reflect overridden times and counts.
+        var _ov=getCellOv(g.id,_rdCalId,dateKey,si,role.key);
+        if(_ov){ var _ea=applyCellOv(_ov,baseTm,cnt); d=_ea.d; cnt=_ea.cnt; }
+        if(!cnt) return;
         var _raw=calcH(d.start,d.end);
         var h=adjForBillable(_raw,(origIdx!=null?calRows[origIdx]:null)); if(!h||h<=0) return;
         out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:billableStatus(_raw,(origIdx!=null?calRows[origIdx]:null))});
@@ -3669,11 +3675,43 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return {noHours:false, sd:sd, blocks:out};
     }
 
-    // Role-instance rows for a school (expanded by count; only count>0; labels match Staffing Hours)
-    function roleInstances(si, origIdx){
-      var _riRows=(origIdx!=null&&calRows[origIdx]&&calRows[origIdx].calId!=null)?siteRowsFor(g,calRows[origIdx].calId):siteRows;
-      var siteRow=_riRows[si]||{}; var out=[];
-      roles.forEach(function(role){ var cnt=parseInt(siteRow[role.countKey])||0; for(var i=1;i<=cnt;i++) out.push({roleKey:role.key, roleLabel:role.label, num:i}); });
+    // Role-instance rows for a school. Row count = the MAX effective staff count across the visible
+    // dates (base count with any per-day Count override applied), so a Count override that raises the
+    // count on some day gets enough rows, and days that lower it simply gate their extra instances
+    // (see the inst.num <= b.count checks in the grid builders). Labels match Staffing Hours.
+    function roleInstances(si, origIdx, dates){
+      var out=[];
+      roles.forEach(function(role){
+        var maxc=0;
+        (dates||[]).forEach(function(dt){
+          var r=resolveDay(si, origIdx, dt);
+          if(r && !r.noHours){ for(var j=0;j<r.blocks.length;j++){ if(r.blocks[j].roleKey===role.key){ if(r.blocks[j].count>maxc) maxc=r.blocks[j].count; break; } } }
+        });
+        for(var i=1;i<=maxc;i++) out.push({roleKey:role.key, roleLabel:role.label, num:i});
+      });
+      return out;
+    }
+
+    // Extra Shifts for one school on one date, expanded into schedule-block descriptors. Mirrors the
+    // Calendar Hours Breakdown / Excel treatment (xsValidRows): each shift row with a parsable Start<End
+    // and count>0 yields a block whose hours honour the calendar's Billable / meal-break rules. The
+    // roleKey is a stable "xs:<shiftId>:<rowIndex>" token so these blocks get their own assignable shift
+    // keys and are re-resolved in the per-staff view (see _ssResolveShift).
+    function xsBlocksFor(origIdx, dateKey, schoolName){
+      var cr=(origIdx!=null)?calRows[origIdx]:null;
+      var calId=(cr&&cr.calId!=null)?cr.calId:null;
+      if(calId==null||!schoolName) return [];
+      var out=[];
+      getExtraShifts(g.id, calId, dateKey).forEach(function(sh){
+        if(!sh||sh.school!==schoolName||!sh.rows) return;
+        sh.rows.forEach(function(row,ri){
+          if(!row||!row.role) return;
+          var raw=calcH(row.start,row.end); var cnt=parseInt(row.cnt);
+          if(raw==null||raw<=0||isNaN(cnt)||cnt<=0) return;
+          var h=adjForBillable(raw,cr); if(!(h>0)) return;
+          out.push({xsKey:'xs:'+sh.id+':'+ri, roleLabel:String(row.role), start:row.start, end:row.end, count:cnt, hrsEach:h, status:billableStatus(raw,cr)});
+        });
+      });
       return out;
     }
 
@@ -3708,7 +3746,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var visSchsCal=schedFilterSchool ? calSchs.filter(function(s){ return String(s.id)===String(schedFilterSchool); }) : calSchs;
       visSchsCal.forEach(function(sch){
         var si=sch.idx;
-        var insts=roleInstances(si, origIdx);
+        var insts=roleInstances(si, origIdx, datesInRange);
+        var _hasXs=datesInRange.some(function(dt){ return xsBlocksFor(origIdx, isoD(dt), sch.name).length>0; });
 
         // Total hours over the visible period + SD usage for the header
         var totalHours=0, sdIdsSeen={}, inRangeCount=0;
@@ -3756,7 +3795,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         }
         $mx.append($h);
 
-        if(!insts.length){
+        if(!insts.length && !_hasXs){
           $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('No staffed roles (all counts are 0) for this school.'));
         } else if(!datesInRange.length){
           $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('This calendar has no days in the selected '+viewMode+'.'));
@@ -3781,6 +3820,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function buildDayGrid(si, origIdx, dateObj, insts, schoolName, calendarName){
       var dayRes=resolveDay(si, origIdx, dateObj);
       var byRole={}; dayRes.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
+      // Extra Shifts for this school/date -> additional assignable blocks
+      var _xsB=xsBlocksFor(origIdx, isoD(dateObj), schoolName), _xsInsts=[];
+      _xsB.forEach(function(xb){ byRole[xb.xsKey]=xb; for(var _n=1;_n<=xb.count;_n++) _xsInsts.push({roleKey:xb.xsKey, roleLabel:xb.roleLabel, num:_n}); });
+      insts=insts.concat(_xsInsts);
 
       var LBLW=184, STAFFW=46, ROLEW=LBLW-STAFFW;
       var $scrollWrap=$('<div>').css({overflowX:'auto',overflowY:'hidden',width:'100%'});
@@ -3808,7 +3851,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $cells=$('<div>').css({display:'flex',width:TW+'px',position:'relative'});
         for(var c=0;c<NHRS;c++) $cells.append($('<div>').addClass('grid-cell'+(c%2===0?' alt':'')).css({cursor:'default'}));
         var b=byRole[inst.roleKey];
-        if(b){
+        if(b && inst.num<=b.count){
           var ds=decH(b.start), de=decH(b.end);
           if(ds!=null&&de!=null&&de>ds){
             var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=RH-8;
@@ -3841,8 +3884,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dayCols=dates.map(function(d){
         var r=resolveDay(si, origIdx, d);
         var byRole={}; r.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
+        xsBlocksFor(origIdx, isoD(d), schoolName).forEach(function(xb){ byRole[xb.xsKey]=xb; });   // Extra Shifts as blocks
         return {date:d, noHours:r.noHours, sd:r.sd, byRole:byRole};
       });
+      // Extra-Shift rows = union of xs instances across the visible dates; each block shows only on its own date
+      var _xsUnion={};
+      dayCols.forEach(function(col){ Object.keys(col.byRole).forEach(function(k){ if(k.indexOf('xs:')===0){ var b=col.byRole[k]; for(var _n=1;_n<=b.count;_n++){ _xsUnion[k+'|'+_n]={roleKey:k, roleLabel:b.roleLabel, num:_n}; } } }); });
+      insts=insts.concat(Object.keys(_xsUnion).map(function(k){ return _xsUnion[k]; }));
       var DOWS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       var $scroll=$('<div>').css({overflowX:'auto'});
       var $tbl=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px',width:'100%'});
@@ -3895,9 +3943,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $td=$('<td>').css({border:'1px solid #eef1f4',borderLeft:isTod?'2px solid #7faae2':'1px solid #eef1f4',borderRight:isTod?'2px solid #7faae2':'1px solid #eef1f4',padding:'3px 4px',textAlign:'center',verticalAlign:'middle',background:isTod?'#edf4fc':(isWknd?'#fbfcfe':'#fff')});
           if(sepTop) $td.css('borderTop', sepTop);
           var b=col.byRole[inst.roleKey];
-          if(col.noHours){
+          if(col.noHours && inst.roleKey.indexOf('xs:')!==0){
             $td.append($('<span>').css({fontSize:'8px',color:'#adb5bd'}).text('—'));
-          } else if(b){
+          } else if(b && inst.num<=b.count){
             var ds=decH(b.start), de=decH(b.end);
             var $chip=$('<div class="sched-chip">').css({display:'inline-block',maxWidth:'172px',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(col.date)+'|'+inst.roleKey+'|'+inst.num;
@@ -4008,7 +4056,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     try{ roles=rolesToStaffingRoles(getRoles(guideId)).map(function(r){ return {key:r.key,label:r.label,countKey:r.countKey}; }); }
     catch(e){ return null; }
     var role=null; for(var ri=0;ri<roles.length;ri++){ if(roles[ri].key===roleKey){ role=roles[ri]; break; } }
-    if(!role) return null;                                   // role no longer exists
+    var _isXsKey=String(roleKey||'').indexOf('xs:')===0;
+    if(!role && !_isXsKey) return null;                      // role no longer exists
 
     var dateObj=new Date(dateStr+'T00:00:00');
     if(isNaN(dateObj.getTime())) return null;
@@ -4029,6 +4078,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return (wi%2===0)?'a':'b';
     }
 
+    // Extra-Shift shift: re-resolve from calExtraShifts against the current guide (so edits/deletes flow
+    // through and the block drops out when the shift row is removed or zeroed).
+    if(_isXsKey){
+      var _xm=/^xs:(.+):(\d+)$/.exec(roleKey); if(!_xm) return null;
+      var _shId=_xm[1], _rowIdx=parseInt(_xm[2],10);
+      var _crx=(origIdx!=null)?calRows[origIdx]:null;
+      var _calIdx=(_crx&&_crx.calId!=null)?_crx.calId:null; if(_calIdx==null) return null;
+      var _shifts=getExtraShifts(guideId,_calIdx,dateStr), _sh=null;
+      for(var _q=0;_q<_shifts.length;_q++){ if(String(_shifts[_q].id)===String(_shId)){ _sh=_shifts[_q]; break; } }
+      if(!_sh||!_sh.rows||!_sh.rows[_rowIdx]) return null;
+      var _row=_sh.rows[_rowIdx];
+      var _rawx=calcH(_row.start,_row.end); if(_rawx==null||_rawx<=0) return null;
+      var _cntx=parseInt(_row.cnt); if(isNaN(_cntx)||_cntx<=0) return null;
+      var _hx=adjForBillable(_rawx,_crx); if(!_hx||_hx<=0) return null;
+      return {
+        start:_ssDecH(_row.start), end:_ssDecH(_row.end),
+        hrsEach:_hx, status:billableStatus(_rawx,_crx), isBillable:calRowBillable(_crx),
+        calId:(_calIdx!=null?_calIdx:null),
+        calName:_crx?((_crx.name&&_crx.name.trim())?_crx.name:('Calendar '+(origIdx+1))):'\u2014',
+        calColor:_crx?(_crx.color||'#ffffff'):'#cfcfcf',
+        firstDay:_crx?_crx.firstDay:'', lastDay:_crx?_crx.lastDay:'',
+        roleLabel:String(_row.role||''),
+        schoolName:_sh.school
+      };
+    }
     var dateKey=dateStr;
     var dayKey=DOWKEY[dateObj.getDay()];
     var abWeek=abWeekFor(origIdx, dateObj);
@@ -4045,8 +4119,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _rdRows=(cr&&cr.calId!=null)?siteRowsFor(g,cr.calId):siteRows;
     var siteRow=_rdRows[si]||{};
     var isBil=calRowBillable(cr);
-    var cnt=parseInt(siteRow[role.countKey])||0; if(!cnt) return null;          // role not staffed for this school
+    var cnt=parseInt(siteRow[role.countKey])||0;
     var dd=(slot[role.key]&&slot[role.key][srcKey])||{start:'',end:''};
+    // Apply any saved Start / End / Count override for this cell so the per-staff schedule mirrors the
+    // Calendar Hours Breakdown (overridden times/counts), not just the base Staffing Hours.
+    var _ov=getCellOv(guideId,_rdCalId,dateKey,si,role.key);
+    if(_ov){ var _ea=applyCellOv(_ov,dd,cnt); dd=_ea.d; cnt=_ea.cnt; }
+    if(!cnt) return null;                                                     // role not staffed / count override 0
     var raw=calcH(dd.start, dd.end);
     var h=adjForBillable(raw, cr); if(!h||h<=0) return null;                  // no hours configured
     return {
@@ -6955,6 +7034,51 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var weeks=[], cur=new Date(weekStart);
       while(cur<=weekEnd){ var days=[]; for(var i=0;i<7;i++){ days.push(new Date(cur)); cur.setDate(cur.getDate()+1); } weeks.push(days); }
 
+      // ── Right-side Program Calendar brackets ──
+      // One narrow vertical bracket per Program Calendar, running from the first week to the last week it
+      // covers, in the calendar's colour, with the name as vertical text. Calendars are greedily packed into
+      // "tracks" (columns): calendars that don't share any week share a track (compact); calendars that
+      // overlap get separate tracks so their lines sit side by side with a clear gap between them.
+      var CCBW=20; // bracket column width (px) - narrow but wide enough for a readable vertical label
+      function _ccBracketColor(hex){                    // darken very light colours so the line/label stay visible on white
+        var m=/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(String(hex||'').trim());
+        if(!m) return '#8a8a8a';
+        var h=m[1], r,gg,b;
+        if(h.length===3){ r=parseInt(h[0]+h[0],16); gg=parseInt(h[1]+h[1],16); b=parseInt(h[2]+h[2],16); }
+        else { r=parseInt(h.slice(0,2),16); gg=parseInt(h.slice(2,4),16); b=parseInt(h.slice(4,6),16); }
+        var lum=0.299*r+0.587*gg+0.114*b;
+        if(lum>215){ var sc=130/lum; r=Math.round(r*sc); gg=Math.round(gg*sc); b=Math.round(b*sc); }
+        return 'rgb('+r+','+gg+','+b+')';
+      }
+      function _ccWeekIndex(dateStr){ var d=parseD(dateStr); if(!d) return -1; return Math.round((toMonday(d)-weekStart)/(7*86400000)); }
+      var _brCals=_calRowsWithIdx.map(function(it){
+        return { row:it.row, origIdx:it.origIdx, color:it.row.color||'#ffffff',
+                 name:(it.row.name&&it.row.name.trim())||('Calendar '+(it.origIdx+1)),
+                 fw:_ccWeekIndex(it.row.firstDay), lw:_ccWeekIndex(it.row.lastDay) };
+      }).filter(function(b){ return b.fw>=0 && b.lw>=b.fw; });
+      _brCals.sort(function(a,b){ return (a.fw-b.fw) || (a.lw-b.lw) || (a.origIdx-b.origIdx); });
+      var _brTracks=[];                                 // each = {cals:[...], lastLw}
+      _brCals.forEach(function(b){
+        for(var t=0;t<_brTracks.length;t++){ if(_brTracks[t].lastLw < b.fw){ _brTracks[t].cals.push(b); _brTracks[t].lastLw=b.lw; b.track=t; return; } }
+        b.track=_brTracks.length; _brTracks.push({cals:[b], lastLw:b.lw});
+      });
+      var _nBrTracks=_brTracks.length;
+      function _brPlanAt(wi,t){                          // 'start' (rowspan begins) | 'covered' | 'empty'
+        var cals=_brTracks[t].cals;
+        for(var k=0;k<cals.length;k++){ var cc=cals[k]; if(cc.fw<=wi && wi<=cc.lw){ return (wi===cc.fw)?{type:'start',cal:cc,span:(cc.lw-cc.fw+1)}:{type:'covered'}; } }
+        return {type:'empty'};
+      }
+      function _brCell(cal,span){
+        var col=_ccBracketColor(cal.color);
+        var $td=$('<td rowspan="'+span+'">').attr('data-br-track',cal.track).css({position:'relative',border:'none',padding:'0',width:CCBW+'px',minWidth:CCBW+'px',verticalAlign:'middle',background:'transparent'});
+        $td.append($('<div>').css({position:'absolute',top:'4px',bottom:'4px',left:'5px',width:'3px',borderRadius:'2px',background:col}));
+        var $lw=$('<div>').css({position:'absolute',top:'4px',bottom:'4px',left:'9px',right:'1px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
+        $lw.append($('<span>').attr('title',cal.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxHeight:'100%',fontSize:'9px',fontWeight:'700',letterSpacing:'.02em',lineHeight:'1',color:col}).text(cal.name));
+        $td.append($lw);
+        return $td;
+      }
+      function _brEmpty(){ return $('<td>').css({border:'none',padding:'0',width:CCBW+'px',minWidth:CCBW+'px',background:'transparent'}); }
+
       var $scroll=$('<div style="overflow-x:auto;">').attr('data-combined-grid','1');
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
 
@@ -6965,6 +7089,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var isWknd=i>=5;
         $hr.append($('<th>').css(Object.assign({},TH_CSS,{minWidth:'66px',background:isWknd?'#dde8f5':TH_CSS.background,color:isWknd?'#3d5a80':TH_CSS.color})).text(d));
       });
+      for(var _bt=0;_bt<_nBrTracks;_bt++){ $hr.append($('<th>').css(Object.assign({},TH_CSS,{width:CCBW+'px',minWidth:CCBW+'px',padding:'0',background:'#f8f9fb',borderBottom:BDR}))); }
       $tbl.append($('<thead>').append($hr));
 
       var $tbody=$('<tbody>');
@@ -7050,6 +7175,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
           $tr.append($td);
         });
+        for(var _bt=0;_bt<_nBrTracks;_bt++){
+          var _bp=_brPlanAt(wi,_bt);
+          if(_bp.type==='covered') continue;                 // spanned by a rowspan cell from a week above
+          if(_bp.type==='start'){ $tr.append(_brCell(_bp.cal,_bp.span)); }
+          else { $tr.append(_brEmpty()); }
+        }
         $tbody.append($tr);
       });
 
