@@ -172,6 +172,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
 .block-time-row{display:flex;align-items:center;gap:4px;position:relative;z-index:2;flex-shrink:0;margin-top:2px;overflow:hidden;}
 .block-time{font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;}
+/* Site Schedule day-matrix blocks: border-box so the block never overflows its compact row, a touch
+   more interior padding, and tighter spacing between the role line and the time line — so both lines
+   sit balanced with even breathing room top and bottom, consistent with the rest of the app. */
+.sched-block.site-sched-block{box-sizing:border-box;padding:6px 10px;}
+.sched-block.site-sched-block .block-title{line-height:1.2;}
+.sched-block.site-sched-block .block-time-row{margin-top:1px;}
+/* Extra-Shift blocks carry an amber left accent (survives re-styling on assign/unassign via !important),
+   pairing with the amber "Extra Shift" tag on the row label. */
+.sched-block.xs-sched-block{border-left:3px solid #d99a00!important;}
 .block-staff-type-line{font-size:9px;font-weight:500;opacity:.65;white-space:nowrap;}
 .block-days-badge{display:flex;gap:2px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden;}
 .day-dot{font-size:7.5px;font-weight:700;padding:1px 3px;border-radius:3px;background:rgba(0,0,0,.13);line-height:1.5;white-space:nowrap;}
@@ -2940,6 +2949,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // generated time/hours, nor makes the block draggable/resizable.
   // ══════════════════════════════════════════════════════════════════════════
   var scheduleAssignments = {}; // shiftKey -> staffId
+  var scheduleShiftNotes = {}; // shiftKey -> Notes HTML (per-shift, mirrors scheduleAssignments persistence)
 
   // ── Schedule conflict detection ──────────────────────────────────────────────
   // Registry of the shifts currently rendered in the Schedule matrix (rebuilt each full
@@ -3111,6 +3121,228 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $('body').append($pop); place(); refresh();
     window.addEventListener('scroll',onScroll,true); window.addEventListener('resize',onScroll);
     $inp.focus();
+  }
+
+  // ── Shift Details window ──────────────────────────────────────────────────────
+  // Opens when a Site Schedule shift block/chip is clicked (Day / Week / Month). Mirrors the block's
+  // info, lets the user (re)assign staff and edit Notes as a DRAFT, and protects unsaved changes.
+  // Start–End, Total hours and Meal break are read-only (the same figures the matrix shows). Staff
+  // assignment reuses the same search + overlap/conflict logic as the inline block picker but commits
+  // to a draft; Save writes the draft into the live stores (scheduleAssignments + scheduleShiftNotes),
+  // refreshes the block, and recomputes conflicts. Notes persist per shiftKey exactly like assignments.
+  function openShiftDetails(shiftKey){
+    var det = _assignmentDetails[shiftKey];
+    if(!det) return;   // no captured details for this key → nothing to show
+
+    var origAssign = (scheduleAssignments[shiftKey]!=null) ? scheduleAssignments[shiftKey] : null;
+    var origNotes  = scheduleShiftNotes[shiftKey] || '';
+    var draftAssign = origAssign;   // staffId or null
+    var _notesHost = null;
+    var confirmOpen = false;
+
+    function notesHtml(){ return _notesHost ? (_notesHost.innerHTML||'') : origNotes; }
+    function notesIsEmpty(h){ return !h || !h.replace(/<br\s*\/?>/gi,'').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').replace(/\u00a0/g,' ').trim().length; }
+    function isDirty(){ return (String(draftAssign)!==String(origAssign)) || (notesHtml()!==origNotes); }
+
+    // ---- overlay + modal shell (reuses the app's shared modal chrome) ----
+    var $ov = $('<div class="modal-overlay">').css({zIndex:'100050'});
+    var $modal = $('<div class="sched-modal">');
+    var $header = $('<div class="modal-header">');
+    $header.append($('<span class="modal-header-title">').text('Shift Details'));
+    var $x = $('<button type="button" class="modal-close" title="Close">').html('&#215;');
+    $header.append($x);
+    $modal.append($header);
+    var $body = $('<div class="modal-body">');
+    $modal.append($body);
+    var $footer = $('<div class="modal-footer">').css({display:'none'});
+    $modal.append($footer);
+    $ov.append($modal);
+
+    // ---- context: ● Calendar · School  (+ Extra Shift tag) ----
+    var $ctx = $('<div>').css({display:'flex',alignItems:'center',flexWrap:'wrap',fontSize:'12px',fontWeight:'700',color:'#212529',marginBottom:'10px'});
+    if(det.calendarName){
+      var $cseg=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px'});
+      $cseg.append($('<span>').css({width:'10px',height:'10px',borderRadius:'50%',background:det.calColor||'#cfd6df',border:'1px solid rgba(0,0,0,.15)',flexShrink:'0',display:'inline-block'}));
+      $cseg.append($('<span>').text(det.calendarName));
+      $ctx.append($cseg);
+    }
+    if(det.schoolName){
+      var _dv={marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'};
+      $ctx.append($('<span>').css(det.calendarName?_dv:{}).text(det.schoolName));
+    }
+    if($ctx.children().length) $body.append($ctx);
+    if(det.isXs){
+      $body.append($('<div>').css({display:'inline-block',fontSize:'9px',fontWeight:'700',color:'#9a6700',background:'#fff8e6',border:'1px solid #f0e0b8',borderRadius:'10px',padding:'2px 9px',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:'12px'}).text('Extra Shift'));
+    }
+
+    // ---- Role ----
+    var $roleField=$('<div class="field">');
+    $roleField.append($('<label>').text('Role'));
+    $roleField.append($('<div>').css({fontSize:'13px',fontWeight:'600',color:'#212529'}).text(det.roleLabel+' #'+det.num));
+    $body.append($roleField);
+
+    // ---- Assigned staff (interactive: click to assign / change / remove) ----
+    var $staffField=$('<div class="field">');
+    $staffField.append($('<label>').text('Assigned staff'));
+    var $staffArea=$('<div>');
+    $staffField.append($staffArea);
+    $body.append($staffField);
+
+    // ---- read-only: Start–End, Total hours, Meal break ----
+    function _fmtBreak(){ if(det.billable) return 'None'; return (det.mealMins>0)?(det.mealMins+' min'):'None'; }
+    function roCell(lbl,val){ var $c=$('<div>'); $c.append($('<label>').text(lbl)); $c.append($('<div>').css({fontSize:'13px',color:'#212529',padding:'2px 0'}).text(val)); return $c; }
+    var $ro=$('<div class="field two-col">');
+    $ro.append(roCell('Start \u2013 End', fmtT(det.start)+' \u2013 '+fmtT(det.end)));
+    $ro.append(roCell('Total hours', fmtHrs(det.hrsEach)||'\u2014'));
+    $body.append($ro);
+    var $ro2=$('<div class="field">');
+    $ro2.append($('<label>').text('Meal break'));
+    $ro2.append($('<div>').css({fontSize:'13px',color:'#212529',padding:'2px 0'}).text(_fmtBreak()));
+    $body.append($ro2);
+
+    // ---- Notes (same WYSIWYG component as the + Availability Description) ----
+    var $notesField=$('<div class="field">').css({marginTop:'2px'});
+    $notesField.append($('<label>').text('Notes'));
+    var $ww=$('<div class="wysiwyg-wrap">');
+    $ww.append($('<div class="wysiwyg-toolbar">')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>'));
+    var $nb=$('<div class="wysiwyg-body" contenteditable="true" data-placeholder="Add notes for this shift\u2026">');
+    $ww.append($nb);
+    $notesField.append($ww);
+    $body.append($notesField);
+    _notesHost=$nb[0];
+    $nb.html(origNotes);
+    origNotes = $nb[0].innerHTML;   // normalized baseline so an unedited field never reads as dirty
+    $nb.on('input',syncFooter);
+
+    // ---- footer (only visible when there are unsaved changes) ----
+    var $cancel=$('<button type="button" class="btn-cancel">').text('Cancel');
+    var $save=$('<button type="button" class="btn-save">').text('Save');
+    $footer.append($cancel,$save);
+    function syncFooter(){ $footer.css('display', isDirty()?'flex':'none'); }
+
+    // ---- draft-aware staff area ----
+    function staffConflicts(){ return (draftAssign!=null) ? _overlapDetailsFor(draftAssign, shiftKey, det) : []; }
+    function renderStaffArea(){
+      $staffArea.empty();
+      var idx=(draftAssign!=null)?_staffIdxById(draftAssign):-1;
+      if(idx>=0){
+        var st=STAFF[idx], conf=staffConflicts();
+        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'8px'});
+        var $pick=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',flex:'1 1 auto',minWidth:'0',cursor:'pointer',border:'1px solid #dee2e6',borderRadius:'7px',padding:'6px 9px',background:'#fff'}).attr('title','Click to change staff');
+        $pick.append(_shiftAvatar(st.n, idx, 22));
+        $pick.append($('<span>').addClass('shift-staff-name').css({flex:'0 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700',fontSize:'13px',color:conf.length?'#E24B4A':'#212529'}).text(st.n));
+        if(conf.length) $pick.append($('<span>').css({flexShrink:'0',fontSize:'10px',fontWeight:'700',color:'#E24B4A'}).text('Conflict'));
+        $pick.on('click',openPicker);
+        $row.append($pick);
+        var $rm=$('<button type="button" title="Remove staff">').css({flexShrink:'0',background:'none',border:'1px solid #dee2e6',borderRadius:'7px',padding:'6px 10px',cursor:'pointer',color:'#6c757d',fontSize:'13px',fontWeight:'700',lineHeight:'1'}).html('&#215;');
+        $rm.on('click',function(){ draftAssign=null; renderStaffArea(); syncFooter(); });
+        $row.append($rm);
+        $staffArea.append($row);
+        if(conf.length){
+          var $warn=$('<div>').css({marginTop:'6px',fontSize:'10.5px',color:'#9a6700',lineHeight:'1.4'});
+          $warn.append($('<div>').css({fontWeight:'700',color:'#E24B4A',marginBottom:'2px'}).text('Schedule conflict \u2014 also assigned this day:'));
+          conf.slice(0,3).forEach(function(t){ $warn.append($('<div>').attr('title',t).css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text('\u2022 '+t)); });
+          if(conf.length>3) $warn.append($('<div>').css({fontStyle:'italic'}).text('+'+(conf.length-3)+' more'));
+          $staffArea.append($warn);
+        }
+      } else {
+        var $assign=$('<div>').css({cursor:'pointer',border:'1px dashed #c9cfd6',borderRadius:'7px',padding:'8px 10px',background:'#faf6ef',color:'#9d8a66',fontSize:'12.5px',fontWeight:'600'}).text('Unassigned \u2014 click to assign staff');
+        $assign.on('click',openPicker);
+        $staffArea.append($assign);
+      }
+    }
+
+    // draft-aware staff picker — same search + overlap surfacing as the inline block picker, but the
+    // selection updates the DRAFT only (nothing is written to scheduleAssignments until Save).
+    function openPicker(){
+      $staffArea.empty();
+      var $inp=$('<input type="text" autocomplete="off" placeholder="Search staff\u2026" class="std-input">').css({fontSize:'13px'});
+      $staffArea.append($inp);
+      var $list=$('<div>').css({marginTop:'6px',maxHeight:'190px',overflowY:'auto',border:'1px solid #e9ecef',borderRadius:'7px'});
+      $staffArea.append($list);
+      function refresh(){
+        var q=$inp.val().trim().toLowerCase(); $list.empty();
+        var arr=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
+        if(!q && draftAssign!=null){ var ai=arr.findIndex(function(s){ return String(s.id)===String(draftAssign); }); if(ai>0) arr.unshift(arr.splice(ai,1)[0]); }
+        if(!arr.length){ $list.append($('<div>').css({padding:'8px 10px',color:'#868e96',fontSize:'12px'}).text('No staff found')); return; }
+        arr.slice(0,20).forEach(function(s){
+          var isCur=(draftAssign!=null && String(s.id)===String(draftAssign));
+          var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'6px 9px',cursor:'pointer',background:isCur?'#e7f1ff':'#fff',borderBottom:'1px solid #f1f3f5'});
+          $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 22));
+          var $info=$('<div>').css({minWidth:'0',flex:'1 1 auto'});
+          var $nl=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',minWidth:'0'});
+          $nl.append($('<span>').css({flex:'0 1 auto',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'600',fontSize:'12.5px',color:'#212529'}).text(s.n));
+          if(isCur) $nl.append($('<span>').css({flexShrink:'0',fontSize:'9px',fontWeight:'700',color:'#3f7fc8'}).text('\u2713 Assigned'));
+          $info.append($nl);
+          var ov=_overlapDetailsFor(s.id, shiftKey, det);
+          if(ov.length){
+            ov.slice(0,2).forEach(function(t){ $info.append($('<div>').attr('title',t).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(t)); });
+            if(ov.length>2) $info.append($('<div>').css({fontSize:'9px',color:'#9a6700',fontStyle:'italic'}).text('+'+(ov.length-2)+' more overlapping'));
+          }
+          $r.append($info);
+          $r.on('mouseenter',function(){ $(this).css('background',isCur?'#d8e8fd':'#eef3fb'); }).on('mouseleave',function(){ $(this).css('background',isCur?'#e7f1ff':'#fff'); });
+          $r.on('click',function(){ if(s.id!=null){ draftAssign=s.id; } renderStaffArea(); syncFooter(); });
+          $list.append($r);
+        });
+      }
+      $inp.on('input',refresh);
+      $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); renderStaffArea(); } });
+      refresh(); $inp.focus();
+    }
+
+    // ---- commit / discard ----
+    function closeWin(){ $ov.remove(); $(document).off('keydown._shiftdet'); }
+    function doSave(){
+      if(draftAssign!=null) scheduleAssignments[shiftKey]=draftAssign; else delete scheduleAssignments[shiftKey];
+      var nh=notesHtml();
+      if(!notesIsEmpty(nh)) scheduleShiftNotes[shiftKey]=nh; else delete scheduleShiftNotes[shiftKey];
+      // refresh the live matrix block(s) for this shift, then recompute conflict styling
+      _shiftRegistry.forEach(function(entry){
+        if(entry.shiftKey!==shiftKey) return;
+        var $host=entry.$host; if(!$host||!$host[0]||!document.body.contains($host[0])) return;
+        var $blk=$host.closest('.sched-block, .sched-chip');
+        renderShiftAssign($host, $blk, shiftKey, det.roleLabel+' #'+det.num, $blk.hasClass('sched-chip'));
+      });
+      _recomputeConflicts();
+      closeWin();
+    }
+    function doCancel(){ closeWin(); }   // draft discarded — stores untouched
+    function attemptClose(){
+      if(confirmOpen) return;
+      if(!isDirty()){ closeWin(); return; }
+      confirmOpen=true;
+      var $c=$('<div class="modal-overlay">').css({zIndex:'100060'});
+      var $cb=$('<div>').css({background:'#fff',borderRadius:'10px',padding:'20px 22px',boxShadow:'0 8px 24px rgba(0,0,0,.2)',width:'300px',maxWidth:'92%'});
+      $cb.append($('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529',marginBottom:'6px'}).text('Unsaved changes'));
+      $cb.append($('<div>').css({fontSize:'12px',color:'#495057',lineHeight:'1.5',marginBottom:'16px'}).text('You have unsaved changes to this shift. What would you like to do?'));
+      var $bwrap=$('<div>').css({display:'flex',flexDirection:'column',gap:'8px'});
+      var $bSave=$('<button type="button" class="btn-save">').css({width:'100%'}).text('Save changes');
+      var $bDisc=$('<button type="button" class="btn-cancel">').css({width:'100%'}).text('Discard changes');
+      var $bCont=$('<button type="button" class="btn-cancel">').css({width:'100%'}).text('Continue editing');
+      function closeConfirm(){ confirmOpen=false; $c.remove(); }
+      $bSave.on('click',function(){ closeConfirm(); doSave(); });
+      $bDisc.on('click',function(){ closeConfirm(); doCancel(); });
+      $bCont.on('click',closeConfirm);
+      $bwrap.append($bSave,$bDisc,$bCont); $cb.append($bwrap);
+      $c.append($cb).addClass('open').on('click',function(e){ if($(e.target).is($c)) closeConfirm(); });   // click-away = continue editing
+      $('body').append($c);
+    }
+
+    $cancel.on('click',doCancel);
+    $save.on('click',doSave);
+    $x.on('click',attemptClose);
+    $ov.on('click',function(e){ if($(e.target).is($ov)) attemptClose(); });
+    $(document).on('keydown._shiftdet',function(e){ if(e.key==='Escape'){ e.preventDefault(); attemptClose(); } });
+
+    renderStaffArea();
+    syncFooter();
+    $('body').append($ov);
+    $ov.addClass('open');
   }
 
   // The Day/Week/Month toggle (.view-toggle) and date navigation (.date-nav) are shared toolbar
@@ -3316,6 +3548,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return _order.map(function(gk){ return _grp[gk]; });
     }
 
+    // Order Extra-Shift instances so each XS row-group sits immediately beneath the regular role
+    // rows that share its label (matched on roleLabel — both sides resolve labels from the same
+    // staffing-role list, so equal strings mean the same role). XS labels that match no regular
+    // role keep their first-seen order and follow at the end. Keeps Extra Shifts next to the role,
+    // calendar, and school they extend (calendar/school grouping is handled by the outer matrix).
+    function _interleaveXs(regInsts, xsInsts){
+      if(!xsInsts || !xsInsts.length) return (regInsts||[]).slice();
+      var xsByLabel={}, xsOrder=[];
+      xsInsts.forEach(function(x){
+        if(!xsByLabel[x.roleLabel]){ xsByLabel[x.roleLabel]=[]; xsOrder.push(x.roleLabel); }
+        xsByLabel[x.roleLabel].push(x);
+      });
+      var out=[], done={};
+      (regInsts||[]).forEach(function(r,i){
+        out.push(r);
+        var groupEnds = (i===regInsts.length-1) || (regInsts[i+1].roleLabel!==r.roleLabel);
+        if(groupEnds && xsByLabel[r.roleLabel] && !done[r.roleLabel]){
+          xsByLabel[r.roleLabel].forEach(function(x){ out.push(x); });
+          done[r.roleLabel]=true;
+        }
+      });
+      xsOrder.forEach(function(lbl){
+        if(!done[lbl]){ xsByLabel[lbl].forEach(function(x){ out.push(x); }); done[lbl]=true; }
+      });
+      return out;
+    }
+
     // Visible schools / calendars (respect filters), as {idx,id,name,color}
     var calsAll=schedGuideCalendars(g), schsAll=schedGuideSchools(g);
     var visCals = schedFilterCalendar ? calsAll.filter(function(c){return String(c.id)===String(schedFilterCalendar);}) : calsAll;
@@ -3425,10 +3684,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Extra Shifts for this school/date -> additional assignable blocks
       var _xsB=xsBlocksFor(origIdx, isoD(dateObj), schoolName), _xsInsts=[];
       _xsB.forEach(function(xb){ byRole[xb.xsKey]=xb; for(var _n=1;_n<=xb.count;_n++) _xsInsts.push({roleKey:xb.xsKey, roleLabel:xb.roleLabel, num:_n}); });
-      insts=insts.concat(_xsInsts);
+      insts=_interleaveXs(insts, _xsInsts);
 
       var LBLW=184, STAFFW=46, ROLEW=LBLW-STAFFW;
-      var CRH=48;   // compact Site Schedule row height (tighter than the shared RH)
+      var CRH=56;   // compact Site Schedule row height (tighter than the shared RH); block height = CRH-8
       var $scrollWrap=$('<div>').css({overflowX:'auto',overflowY:'hidden',width:'100%'});
       var $outer=$('<div>').css({position:'relative',width:(LBLW+TW)+'px'}); // wider than the panel → scrolls
 
@@ -3445,11 +3704,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Body rows: each role-instance = sticky label + hour cells with an absolutely-positioned block
       insts.forEach(function(inst,ri){
+        var isXs = inst.roleKey.indexOf('xs:')===0;   // Extra-Shift row (vs a regular staffing role)
         var firstOfRole = ri>0 && insts[ri-1].roleKey !== inst.roleKey;
         var $row=$('<div>').css({display:'flex',height:CRH+'px',borderTop: ri===0?'none':(firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)')});
-        var $lbl=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:LBLW+'px',height:CRH+'px',display:'flex',alignItems:'stretch',background:ri%2?'#fff':'#fafafa',borderRight:'1px solid var(--bd2)'});
-        $lbl.append($('<div>').css({width:ROLEW+'px',display:'flex',alignItems:'center',padding:'0 8px',fontSize:'11px',fontWeight:'600',color:'#343a40',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',inst.roleLabel).text(inst.roleLabel));
-        $lbl.append($('<div>').css({width:STAFFW+'px',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',fontSize:'11px',fontWeight:'700',color:'#495057',borderLeft:'1px solid var(--bd2)'}).text(inst.num));
+        var $lbl=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:LBLW+'px',height:CRH+'px',display:'flex',alignItems:'stretch',background:isXs?'#fff8e6':(ri%2?'#fff':'#fafafa'),borderRight:'1px solid var(--bd2)'});
+        var $roleCell=$('<div>').css({width:ROLEW+'px',display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 8px',overflow:'hidden'});
+        $roleCell.append($('<div>').css({fontSize:'11px',fontWeight:'600',color:'#343a40',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',inst.roleLabel).text(inst.roleLabel));
+        if(isXs) $roleCell.append($('<span>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',textTransform:'uppercase',letterSpacing:'.04em',whiteSpace:'nowrap',marginTop:'1px'}).text('Extra Shift'));
+        $lbl.append($roleCell);
+        $lbl.append($('<div>').css({width:STAFFW+'px',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',fontSize:'11px',fontWeight:'700',color:isXs?'#9a6700':'#495057',borderLeft:'1px solid var(--bd2)'}).text(inst.num));
         $row.append($lbl);
         var $cells=$('<div>').css({display:'flex',width:TW+'px',position:'relative'});
         for(var c=0;c<NHRS;c++) $cells.append($('<div>').addClass('grid-cell'+(c%2===0?' alt':'')).css({cursor:'default'}));
@@ -3458,19 +3721,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var ds=decH(b.start), de=decH(b.end);
           if(ds!=null&&de!=null&&de>ds){
             var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=CRH-8;
-            var $el=$('<div class="sched-block">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',cursor:'default'});
+            var $el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(dateObj)+'|'+inst.roleKey+'|'+inst.num;
             var $line1=$('<div class="block-title">');
             renderShiftAssign($line1, $el, shiftKey, inst.roleLabel+' #'+inst.num, false);
             $el.append($line1);
             _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(dateObj), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status};
+            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
             $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
             $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(b.hrsEach)));
             if(b.status) $l2.append($('<span class="block-status" style="margin-left:5px;font-weight:800;">').css({fontSize:'9px',color:b.status.color}).text(b.status.text));
             $el.append($l2);
             $el.attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
+            $el.css('cursor','pointer').on('click',function(){ openShiftDetails(shiftKey); });
             $cells.append($el);
           }
         }
@@ -3502,7 +3766,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Extra-Shift rows = union of xs instances across the visible dates; each block shows only on its own date
       var _xsUnion={};
       dayCols.forEach(function(col){ Object.keys(col.byRole).forEach(function(k){ if(k.indexOf('xs:')===0){ var b=col.byRole[k]; for(var _n=1;_n<=b.count;_n++){ _xsUnion[k+'|'+_n]={roleKey:k, roleLabel:b.roleLabel, num:_n}; } } }); });
-      insts=insts.concat(Object.keys(_xsUnion).map(function(k){ return _xsUnion[k]; }));
+      insts=_interleaveXs(insts, Object.keys(_xsUnion).map(function(k){ return _xsUnion[k]; }));
       var DOWS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       var $scroll=$('<div>').css({overflowX:'auto'});
       var $tbl=$('<table>').css({borderCollapse:'collapse',fontSize:'10.5px',width:'100%'});
@@ -3539,15 +3803,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $thead.append($hr); $tbl.append($thead);
       var $tbody=$('<tbody>');
       insts.forEach(function(inst,ri){
+        var isXs = inst.roleKey.indexOf('xs:')===0;   // Extra-Shift row (vs a regular staffing role)
         var firstOfRole = ri>0 && insts[ri-1].roleKey !== inst.roleKey;
         var sepTop = firstOfRole ? '2px solid #cdd4dc' : null;
         var $tr=$('<tr>');
-        var $rTd=$('<td>').css({position:'sticky',left:'0',zIndex:'1',background:ri%2?'#fff':'#fafafa',border:'1px solid #e9ecef',padding:'4px 0',minWidth:'194px',verticalAlign:'middle'});
+        var $rTd=$('<td>').css({position:'sticky',left:'0',zIndex:'1',background:isXs?'#fff8e6':(ri%2?'#fff':'#fafafa'),border:'1px solid #e9ecef',borderLeft:isXs?'3px solid #d99a00':'1px solid #e9ecef',padding:'4px 0',minWidth:'194px',verticalAlign:'middle'});
         if(sepTop) $rTd.css('borderTop', sepTop);
         var $rTdIn=$('<div>').css({display:'flex',alignItems:'center'});
         var $roleCell=$('<div>').css({flex:'1 1 auto',minWidth:'0',padding:'0 8px',overflow:'hidden'});
         $roleCell.append($('<span>').css({display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'600',color:'#343a40'}).attr('title',inst.roleLabel).text(inst.roleLabel));
-        var $numCell=$('<div>').css({flexShrink:'0',width:'46px',textAlign:'center',padding:'0 4px',fontWeight:'700',color:'#495057',borderLeft:'1px solid #eef1f4'}).text(inst.num);
+        if(isXs) $roleCell.append($('<span>').css({display:'block',fontSize:'8px',fontWeight:'700',color:'#9a6700',textTransform:'uppercase',letterSpacing:'.04em',whiteSpace:'nowrap',marginTop:'1px'}).text('Extra Shift'));
+        var $numCell=$('<div>').css({flexShrink:'0',width:'46px',textAlign:'center',padding:'0 4px',fontWeight:'700',color:isXs?'#9a6700':'#495057',borderLeft:'1px solid #eef1f4'}).text(inst.num);
         $rTdIn.append($roleCell).append($numCell);
         $rTd.append($rTdIn); $tr.append($rTd);
         dayCols.forEach(function(col){
@@ -3565,13 +3831,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
             $chip.append($line1);
             _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(col.date), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status};
+            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div>');
             $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
             $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(b.hrsEach)));
             if(b.status) $l2.append($('<span>').css({marginLeft:'4px',fontWeight:'800',color:b.status.color}).text(b.status.text));
             $chip.append($l2);
             $chip.attr('title', inst.roleLabel+' #'+inst.num+' · '+fmtT(ds)+'–'+fmtT(de)+' · '+fmtHrs(b.hrsEach)+(b.status?(' · '+b.status.text):''));
+            $chip.css('cursor','pointer').on('click',function(){ openShiftDetails(shiftKey); });
             $td.append($chip);
           } else {
             $td.append($('<span>').css({fontSize:'8px',color:'#ced4da'}).text('·'));
