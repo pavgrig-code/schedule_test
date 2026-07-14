@@ -436,69 +436,6 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
     
   </div>
 
-  <!-- Modal -->
-  <div class="modal-overlay" id="modal-overlay">
-    <div class="sched-modal">
-      <div class="modal-header">
-        <span class="modal-header-title" id="modal-title-text"></span>
-        <button class="modal-close" id="modal-close-btn">&#215;</button>
-      </div>
-      <div class="modal-body">
-        <div class="field"><label>School</label>
-          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="school-input" placeholder="Search school…" autocomplete="off"/><span class="combo-clear" id="school-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="school-dd"></div></div></div>
-        <div class="field"><label>Discipline</label>
-          <div class="combo-wrap"><div class="combo-input-row"><input type="text" class="combo-input" id="prog-input" placeholder="Search discipline…" autocomplete="off"/><span class="combo-clear" id="prog-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="prog-dd"></div></div></div>
-        <div class="field two-col">
-          <div><label>Staff</label>
-            <div class="combo-wrap" style="width:100%;"><div class="combo-input-row"><input type="text" class="combo-input" id="coach-input" placeholder="Search staff…" autocomplete="off"/><span class="combo-clear" id="coach-clear">&#215;</span><span class="combo-chevron">&#9662;</span></div><div class="combo-dropdown" id="coach-dd"></div></div>
-          </div>
-          <div><label>Staff type</label>
-            <div class="combo-input-row" style="width:100%;">
-              <select id="staff-type-select" style="width:100%;flex:1;font-size:13px;padding:7px 9px;border:none;outline:none;background:transparent;color:var(--tx);cursor:pointer;-webkit-appearance:auto;appearance:auto;">
-                <option value="Coach" selected>Coach</option>
-                <option value="Site Manager">Site Manager</option>
-                <option value="Attendance Coordinator">Attendance Coordinator</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <hr class="section-div"/>
-        <div class="field"><label>Days of week</label>
-          <div class="dow-wrap" id="dow-wrap">
-            <div class="dow-pill" data-d="0">Su</div><div class="dow-pill" data-d="1">Mo</div><div class="dow-pill" data-d="2">Tu</div><div class="dow-pill" data-d="3">We</div><div class="dow-pill" data-d="4">Th</div><div class="dow-pill" data-d="5">Fr</div><div class="dow-pill" data-d="6">Sa</div>
-          </div></div>
-        <hr class="section-div"/>
-        <div class="field two-col">
-          <div><label>Start time</label><input type="text" class="std-input" id="blk-time-start" placeholder="9:00 AM"/></div>
-          <div><label>End time</label><input type="text" class="std-input" id="blk-time-end" placeholder="11:00 AM"/></div>
-        </div>
-        <div class="field two-col">
-          <div><label>Start date</label><input type="date" class="std-input" id="blk-date-start"/></div>
-          <div><label>End date</label><input type="date" class="std-input" id="blk-date-end"/></div>
-        </div>
-        <hr class="section-div"/>
-        <div class="field"><label>Color</label><div class="color-row" id="color-row" style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;"></div></div>
-        <div class="field" style="margin-top:2px;">
-          <label>Description</label>
-          <div class="wysiwyg-wrap" id="sched-wysiwyg-wrap">
-            <div class="wysiwyg-toolbar">
-              <button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-              <button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-              <button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-              <button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>
-              <button type="button" class="wysiwyg-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
-              <button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>
-            </div>
-            <div class="wysiwyg-body" id="sched-desc" contenteditable="true" data-placeholder="Add a description…"></div>
-          </div>
-        </div>
-        <div id="edit-error"></div>
-      </div>
-      <div class="modal-footer" id="modal-footer"></div>
-
-    </div>
-  </div>
-
   <!-- Availability edit modal -->
   <div class="modal-overlay" id="avail-modal-overlay">
     <div class="sched-modal">
@@ -575,26 +512,6 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
     </div>
   </div>
 
-  <!-- Save / Update confirmation popup -->
-  <div class="save-popup-overlay" id="save-popup-overlay">
-    <div class="delete-popup" id="save-popup">
-      <div class="delete-popup-title">&#128190; Save changes?</div>
-      <div class="delete-popup-sub">Choose which meetings to update:</div>
-      <button class="save-opt" id="save-this">
-        <span class="save-opt-icon">&#128197;</span>
-        <div><div>Update this meeting</div><div class="save-opt-desc">Only updates this single occurrence</div></div>
-      </button>
-      <button class="save-opt" id="save-future">
-        <span class="save-opt-icon">&#9193;</span>
-        <div><div>Update future meetings</div><div class="save-opt-desc">Updates this and all upcoming occurrences</div></div>
-      </button>
-      <button class="save-opt" id="save-all">
-        <span class="save-opt-icon">&#128204;</span>
-        <div><div>Update all meetings</div><div class="save-opt-desc">Updates the entire schedule block</div></div>
-      </button>
-      <button class="delete-popup-cancel" id="save-cancel">&#8592; Back</button>
-    </div>
-  </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
 
@@ -953,59 +870,6 @@ $(function(){
       render();
     });
 
-    /* ════════ SCHEDULE grid (#week-table) ════════ */
-    $wc.on('dragstart','#week-table .week-chip',function(e){
-      e.originalEvent.dataTransfer.setData('text/plain','sched:'+$(this).attr('data-bid'));
-      $(this).addClass('dragging');
-      _dragOrigDow=_dateFromStr($(this).attr('data-date')).getDay();
-    });
-    $wc.on('dragend','#week-table .week-chip',function(){
-      $(this).removeClass('dragging'); _dragOrigDow=undefined;
-    });
-    $wc.on('click','#week-table .week-chip',function(e){
-      e.stopPropagation();
-      openEdit(parseInt($(this).attr('data-bid'),10), _dateFromStr($(this).attr('data-date')));
-    });
-    $wc.on('mouseenter','#week-table .week-chip',function(){
-      if(_suppressTooltip) return;
-      var b=blkById(blocks,parseInt($(this).attr('data-bid'),10)); if(!b) return;
-      $t.html(buildBlockTooltipHtml(b,false,_dateFromStr($(this).attr('data-date')).getDay())).show();
-    });
-    $wc.on('mousemove','#week-table .week-chip',function(e){
-      if(!_suppressTooltip) $t.css({left:e.clientX+14,top:e.clientY-10});
-    });
-    $wc.on('mouseleave','#week-table .week-chip',function(){
-      $t.hide(); _suppressTooltip=false;
-    });
-    $wc.on('dragover','#week-table .week-td-day',function(e){
-      if(e.originalEvent.dataTransfer.types.indexOf('text/plain')>-1){ e.preventDefault(); $(this).addClass('drag-over'); }
-    });
-    $wc.on('dragleave','#week-table .week-td-day',function(){ $(this).removeClass('drag-over'); });
-    $wc.on('drop','#week-table .week-td-day',function(e){
-      e.preventDefault(); $(this).removeClass('drag-over');
-      var raw=e.originalEvent.dataTransfer.getData('text/plain'); if(!raw) return;
-      var parts=raw.split(':'),type=parts[0],id=parseInt(parts[1],10);
-      var sn=$(this).attr('data-staff'), dd=_dateFromStr($(this).attr('data-date'));
-      if(type==='sched'){ var blk=blkById(blocks,id); if(blk){ moveBlockToDate(blk,sn,dd,_dragOrigDow); refreshView(); } }
-      else if(type==='avail'){ var ab=blkById(availBlocks,id); if(ab){ moveAvailBlockToDate(ab,sn,dd,_dragOrigDow); refreshView(); } }
-    });
-    $wc.on('click','#week-table .week-td-day',function(e){
-      if($(e.target).closest('.week-chip').length) return;
-      openCreate({coach:$(this).attr('data-staff'),date:$(this).attr('data-date'),days:[+$(this).attr('data-dow')],startTime:'12:00 PM',endTime:'1:00 PM'});
-    });
-    $wc.on('mouseenter','#week-table .week-td-day',function(){
-      $('#week-table thead th').eq($(this).index()).addClass('col-hovered');
-    });
-    $wc.on('mouseleave','#week-table .week-td-day',function(){
-      $('#week-table thead th').removeClass('col-hovered');
-    });
-    $wc.on('mouseenter','#week-table .week-tr',function(){
-      $('#staff-list-scroll .staff-row').removeClass('hovered').eq(+$(this).attr('data-fi')).addClass('hovered');
-    });
-    $wc.on('mouseleave','#week-table .week-tr',function(){
-      $('#staff-list-scroll .staff-row').removeClass('hovered');
-    });
-
     /* ════════ AVAILABILITY grid (#week-avail-table) ════════ */
     $wc.on('dragstart','#week-avail-table .week-chip',function(e){
       var bid=$(this).attr('data-bid');
@@ -1056,69 +920,6 @@ $(function(){
     });
   }
 
-  function rWeekView(){
-    var fs=getFilteredStaff();
-    var days=getViewDays();
-
-    $('#timeline-header,#grid-body').hide();
-    var $ta=$('#timeline-area');
-    if(!$('#week-container').length) $ta.append('<div id="week-container"></div>');
-    var $wc=$('#week-container').show();
-    _bindGridDelegation();
-
-    var staffIdx=_buildStaffIdx();
-    var byCoach=_indexByCoach(blocks);
-    var i, ri, c, b, list, d, dow, isW, isToday, absIdx, wkH, wkOT, col, dstr, s;
-    var H=['<table class="week-table" id="week-table"><thead><tr>'];
-    H.push('<th class="week-th-staff"><input type="text" class="staff-search" placeholder="Search staff\u2026" autocomplete="off" value="'+esc(staffFilter)+'"></th>');
-    for(i=0;i<days.length;i++){
-      d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); isToday=isTodayDate(d);
-      H.push('<th class="week-th-day'+(isToday?' today':'')+(isW?' weekend':'')+'" data-y="'+d.getFullYear()+'" data-m="'+d.getMonth()+'" data-d="'+d.getDate()+'">');
-      H.push('<div class="week-day-name">'+_DOW3[dow]+'</div>');
-      if(isToday) H.push('<div style="display:flex;justify-content:center;"><div class="week-day-num">'+d.getDate()+'</div></div>');
-      else H.push('<div class="week-day-num">'+d.getDate()+'</div>');
-      H.push('</th>');
-    }
-    H.push('</tr></thead><tbody class="staffing-tbody">');
-    if(!fs.length){
-      H.push('<tr><td colspan="'+(days.length+1)+'" style="padding:20px;text-align:center;font-size:12px;color:var(--tx2);">No staff found</td></tr>');
-    } else {
-      for(ri=0;ri<fs.length;ri++){
-        s=fs[ri];
-        absIdx=staffIdx[s.n]; if(absIdx==null) absIdx=0;
-        wkH=calcWeekHours(s.n); wkOT=calcWeekOT(s.n);
-        H.push('<tr class="week-tr" data-fi="'+ri+'">');
-        H.push('<td class="week-td-staff"><div style="display:flex;align-items:center;gap:8px;">');
-        H.push('<div class="staff-avatar" style="flex-shrink:0;background:'+AVATAR_COLORS[absIdx%AVATAR_COLORS.length]+';">'+esc(initials(s.n))+'</div>');
-        H.push('<div><span class="week-staff-name">'+esc(s.n)+'</span>');
-        H.push('<div class="staff-day-hours'+(wkOT>0?' has-ot':'')+'"'+(wkH===0?' style="opacity:.35;"':'')+'>'+(wkH>0?fmtHrs(wkH):'\u2014'));
-        if(wkOT>0) H.push('<span class="staff-ot-badge">+'+fmtHrs(wkOT)+' OT</span>');
-        H.push('</div></div></div></td>');
-        list=byCoach[s.n]||null;
-        for(i=0;i<days.length;i++){
-          d=days[i]; dow=d.getDay(); isW=(dow===0||dow===6); dstr=localDateStr(d);
-          H.push('<td class="week-td-day'+(isTodayDate(d)?' today-col':'')+(isW?' weekend-col':'')+'" data-staff="'+esc(s.n)+'" data-date="'+dstr+'" data-dow="'+dow+'" style="cursor:pointer;">');
-          if(list){
-            for(c=0;c<list.length;c++){
-              b=list[c];
-              if(!isApplicableOnDate(b,d)) continue;
-              if(!isVisible(b)) continue;
-              col=COLORS[b.color%COLORS.length];
-              H.push('<div class="week-chip" style="background:'+col.bg+';color:'+col.tx+';border:1px solid '+col.bd+';" draggable="true" data-bid="'+b.id+'" data-date="'+dstr+'">');
-              H.push('<span class="week-chip-title">'+esc(b.lbl+(b.staffType?' \u00b7 '+b.staffType:''))+'</span>');
-              if(b.school) H.push('<span class="week-chip-school">'+esc(b.school)+'</span>');
-              H.push('<span class="week-chip-time">'+esc(fmtT(b.s))+'\u2013'+esc(fmtT(b.e))+' \u00b7 <strong>'+esc(fmtHrs(b.e-b.s))+'</strong></span>');
-              H.push('</div>');
-            }
-          }
-          H.push('</td>');
-        }
-        H.push('</tr>');
-      }
-    }
-    H.push('</tbody></table>');
-    $wc[0].innerHTML=H.join('');
-  }
 
   function rAvailWeekView(){
     var fs=getFilteredStaff();
@@ -1265,17 +1066,7 @@ $(function(){
 
 
 
-  const blocks=[
-    {id:1,row:1,s:10,   e:13,   lbl:'Baseball',coach:'Aman Khan',      school:'Eastshore Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-06-30',color:0,staffType:'Coach'},
-    {id:2,row:2,s:14,   e:18,   lbl:'Autism Program',  coach:'Andrea Cornelio',school:'Sierra Vista Middle',  days:[1,3,5],    ds:'2026-05-01',de:'2026-07-31',color:1,staffType:'Coach'},
-    {id:3,row:3,s:9.98, e:13.03,lbl:'Gardening',   coach:'Aman Khan',      school:'Crescent Elementary',  days:[2,4],      ds:'2026-05-15',de:'2026-06-15',color:5,staffType:'Coach'},
-    {id:4,row:4,s:14,   e:17.5, lbl:'Piano',  coach:'Andrew Calderon',school:'Deerfield Elementary', days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-08-31',color:2,staffType:'Coach'},
-    {id:5,row:5,s:7.5,  e:14.25,lbl:'Martial Arts',     coach:'Asia Lewis',     school:'Golden Elementary',    days:[1,3],      ds:'2026-04-01',de:'2026-06-30',color:3,staffType:'Coach'},
-    {id:6,row:6,s:11.43,e:14.33,lbl:'Orchestra',           coach:'Asia Lewis',     school:'Golden Elementary',    days:[2,4],      ds:'2026-04-01',de:'2026-06-30',color:4,staffType:'Site Manager'},
-    {id:7,row:7,s:9,    e:11,   lbl:'Team Meeting',         coach:'Adan Rodriguez', school:'Oxford Academy',       days:[5],        ds:'2026-05-22',de:'2026-05-22',color:5,staffType:'Attendance Coordinator'},
-    {id:8,row:8,s:13,   e:15.5, lbl:'Yoga',    coach:'Alexis Navarro', school:'Vista Verde School',   days:[1,2,3,4,5],ds:'2026-05-01',de:'2026-07-15',color:6,staffType:'Coach'},
-    {id:9,row:4,s:11,    e:14.0, lbl:'Knitting',    coach:'Ana Flores',     school:'Patton Elementary',    days:[1,5],      ds:'2026-05-22',de:'2026-06-30',color:7,staffType:'Coach'},
-  ];
+  const blocks=[];  // (legacy schedule removed — demo programs deleted)
 
   /* ── helpers ── */
 
@@ -1724,26 +1515,7 @@ $(function(){
 
 
   var _suppressTooltip=false;
-  function attachDrag($el,b){$el.on('mousedown',function(e){if($(e.target).hasClass('resize-handle')||$(e.target).closest('.edit-btn').length)return;e.preventDefault();var moved=false,sx=e.clientX,sy=e.clientY,os=b.s,dur=b.e-b.s;
-    // Capture element's current visual position — avoids jump from filtered-row mismatch
-    var elLeft=parseInt($el.css('left'))||0, elTop=parseInt($el.css('top'))||0;
-    var curNs=os,curTop=elTop,curRow=b.row;
-    $(document).on('mousemove.drag',function(e2){var dx=e2.clientX-sx,dy=e2.clientY-sy;if(!moved&&Math.sqrt(dx*dx+dy*dy)<5)return;if(!moved){moved=true;$el.addClass('dragging');draggingId=b.id;}
-      curNs=Math.max(SH,Math.min(SH+NHRS-dur,os+snap(dx/HW,.25)));
-      curTop=Math.max(0,elTop+dy);
-      // Snap top to nearest row
-      var fs=getFilteredStaff();
-      var ri=Math.min(fs.length-1,Math.max(0,Math.round((curTop)/RH)));
-      curTop=ri*RH+4;
-      curRow=ri;
-      $el.css({left:(curNs-SH)*HW,top:curTop});
-    });$(document).one('mouseup.drag',function(){$(document).off('mousemove.drag');if(moved){$el.removeClass('dragging');draggingId=null;
-      var fs=getFilteredStaff();
-      b.s=curNs;b.e=curNs+dur;
-      if(curRow<fs.length){var staffMember=fs[curRow];b.coach=staffMember.n;b.row=STAFF.findIndex(function(s){return s.n===staffMember.n;});}
-      refreshView();}else{if(pageMode==='availability'){var ab=availBlocks.find(function(x){return x.id===b.id;});if(ab)openAvailEdit(b.id);}else openEdit(b.id);}});});}
 
-  function attachResize($h,b){$h.on('mousedown',function(e){e.preventDefault();e.stopPropagation();var $el=$h.closest('.sched-block').addClass('resizing'),sx=e.clientX,oe=b.e,curE=oe;$(document).on('mousemove.resize',function(e2){curE=Math.max(b.s+.25,Math.min(SH+NHRS,oe+snap((e2.clientX-sx)/HW,.25)));$el.css('width',Math.max((curE-b.s)*HW-4,52));});$(document).one('mouseup.resize',function(){$el.removeClass('resizing');$(document).off('mousemove.resize');b.e=curE;refreshView();});});}
 
   // Call after any data change — re-renders whichever view is active
   function syncRowHeights(){
@@ -1760,25 +1532,17 @@ $(function(){
 
   function refreshView(replace){
     _invalidateStaffCache();
-    if(pageMode==='people'||pageMode==='staff_schedule'){ render(replace); return; }
+    // Only Availability still uses this staff timeline. Every other mode owns its own render path
+    // (Planning Guides, Site Schedule, People, Staff Schedule) — delegate to render().
+    if(pageMode!=='availability'){ render(replace); return; }
     buildFilterOptions();
     updateFilterUI();
     if(viewMode==='week'||viewMode==='month'){ $('#staff-col').hide(); } else { rStaff(); $('#staff-col').show(); }
     updateSummary();
-    if(pageMode==='people'){
-      rPeople();
-    } else if(pageMode==='availability'){
-      if(viewMode==='week'||viewMode==='month'){
-        rAvailWeekView();
-      } else {
-        rAvailBlocks();
-      }
+    if(viewMode==='week'||viewMode==='month'){
+      rAvailWeekView();
     } else {
-      if(viewMode==='week'||viewMode==='month'){
-        rWeekView();
-      } else {
-        rBlocks();rNow();
-      }
+      rAvailBlocks();
     }
     updateURL(replace);
     // Sync staff row heights with grid row heights after render
@@ -2062,11 +1826,12 @@ $(function(){
       },0);
       return;
     }
+    // Availability is the only mode that reaches this fallthrough — every other mode returned above.
     if(viewMode==='week'||viewMode==='month'){
       $('#date-label').text(viewMode==='month' ? monthRangeLabel() : weekRangeLabel());
       $('#today-badge').removeClass('active');
-      if(viewMode==='week'||viewMode==='month'){ $('#staff-col').hide(); } else { $('#staff-col').show(); rStaff(); }
-      if(pageMode==='availability'){ rAvailWeekView(); } else { rWeekView(); }
+      $('#staff-col').hide();
+      rAvailWeekView();
       buildFilterOptions();
       updateFilterUI();
       updateSummary();
@@ -2078,36 +1843,10 @@ $(function(){
       var _now=new Date();
       var _isToday=(viewYear===_now.getFullYear()&&viewMonth===_now.getMonth()&&viewDay===_now.getDate());
       $('#today-badge').toggleClass('active', _isToday);
-      // Availability day — delegate entirely to rAvailBlocks which handles DOM setup
-      if(pageMode==='availability'){
-        $('#staff-col').show();
-        rStaff();
-        rAvailBlocks();
-        updateSummary();
-        updateURL(replace);
-        return;
-      }
-      // Make sure day-view DOM elements exist and week container is hidden
-      if(!$('#timeline-header').length){
-        $('#timeline-area').prepend('<div class="timeline-header" id="timeline-header"></div>');
-      }
-      if(!$('#grid-body').length){
-        var $gb=$('<div class="grid-body" id="grid-body">').append('<div class="blocks-layer" id="blocks-layer"></div>');
-        $('#timeline-area').append($gb);
-      }
-      if(!$('#blocks-layer').length){
-        $('#grid-body').append('<div class="blocks-layer" id="blocks-layer"></div>');
-      }
-      $('#timeline-header,#grid-body').show();
-      $('#week-container').hide();
+      // rAvailBlocks handles its own day-view DOM setup.
       $('#staff-col').show();
       rStaff();
-      rHeader();
-      rGrid();
-      buildFilterOptions();
-      rBlocks();
-      rNow();
-      updateFilterUI();
+      rAvailBlocks();
       updateSummary();
       updateURL(replace);
     }
@@ -2184,108 +1923,22 @@ $(function(){
     return true;
   }
 
-  function closeModal(){$('#modal-overlay').removeClass('open');$('#delete-popup-overlay').removeClass('open');$('#save-popup-overlay').removeClass('open');pendingSaveData=null;eid=null;creating=false;}
+  function closeModal(){$('#modal-overlay').removeClass('open');$('#delete-popup-overlay').removeClass('open');$('#save-popup-overlay').removeClass('open');eid=null;creating=false;}
 
-  function buildSwatches(sel){const $w=$('#color-row').empty().css({display:'flex',flexWrap:'wrap',gap:'6px',padding:'4px 0'});COLORS.forEach((c,i)=>{const $s=$('<div class="swatch">').css({background:c.bg,border:'2px solid '+c.bd,outline:i===sel?'3px solid #333':'none','outline-offset':'2px'}).on('click',function(){sColor=i;buildSwatches(i);});$w.append($s);});}
 
-  function buildFooter(cr){const $f=$('#modal-footer').empty();if(!cr)$f.append($('<button class="btn-delete">').html('🗑 Delete').on('click',showDeletePopup));$f.append($('<button class="btn-cancel">').text('Cancel').on('click',closeModal),$('<button class="btn-save">').text(cr?'Create block':'Save changes').on('click',doSave));}
 
-  function openEdit(id, onDate){
-    const b=blocks.find(x=>x.id===id);if(!b)return;creating=false;eid=id;
-    var d = onDate || new Date(viewYear,viewMonth,viewDay);
-    editedOnDow = d.getDay();
-    editedOnDs  = localDateStr(d);
-    sProg=b.lbl;sCoach=b.coach||'';sSchool=b.school||'';sColor=b.color;sStaffType=b.staffType||'Coach';
-    $('#modal-title-text').text('✎  Edit schedule block');
-    pcb.sv(b.lbl);ccb.sv(b.coach||'');scb.sv(b.school||'');
-    $('#staff-type-select').val(sStaffType);
-    setDays(b.days||[]);markCurrentDow('dow-wrap',editedOnDow);
-    $('#blk-date-start').val(b.ds||'');$('#blk-date-end').val(b.de||'');
-    $('#blk-time-start').val(fmtT(b.s));$('#blk-time-end').val(fmtT(b.e));
-    $('#sched-desc').html(b.description||'');$('#edit-error').text('');
-    buildSwatches(b.color);buildFooter(false);
-    $('#modal-overlay').addClass('open');markCurrentDow('dow-wrap',editedOnDow);
-  }
 
-  function openCreate(opts){
-    opts = opts || {};
-    creating=true; eid=null; sProg=''; sCoach=''; sSchool=''; sColor=0; sStaffType='Coach';
-    $('#modal-title-text').text('+ Add schedule block');
-    pcb.sv(''); ccb.sv(''); scb.sv('');
-    $('#staff-type-select').val('Coach');
-    var baseD = opts.date
-      ? (function(){ var p=opts.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })()
-      : new Date(viewYear, viewMonth, viewDay);
-    var weekSun = new Date(baseD.getFullYear(), baseD.getMonth(), baseD.getDate() - baseD.getDay());
-    var weekSat = new Date(baseD.getFullYear(), baseD.getMonth(), baseD.getDate() - baseD.getDay() + 6);
-    var dateStr   = localDateStr(weekSun);
-    var endDate   = localDateStr(weekSat);
-    var startTime = opts.startTime || '9:00 AM';
-    var endTime   = opts.endTime   || '10:00 AM';
-    var days      = opts.days      || [1,2,3,4,5];
-    setDays(days);
-    markCurrentDow('dow-wrap', -1);
-    $('#blk-date-start').val(dateStr);$('#blk-date-end').val(endDate);
-    $('#blk-time-start').val(startTime);$('#blk-time-end').val(endTime);
-    if(opts.coach){ ccb.sv(opts.coach); sCoach = opts.coach; }
-    $('#sched-desc').html('');$('#edit-error').text('');
-    buildSwatches(0);buildFooter(true);$('#modal-overlay').addClass('open');
-  }
 
-  var pendingSaveData=null;
 
-  function isMultiMeeting(ds,de,days){
-    if(!ds||!de||!days||!days.length)return false;
-    return!(days.length===1&&ds===de);
-  }
 
-  function doSave(){
-    const ns=parseT($('#blk-time-start').val()),ne=parseT($('#blk-time-end').val()),ds=$('#blk-date-start').val(),de=$('#blk-date-end').val(),$e=$('#edit-error');
-    if(!sProg){$e.text('Please select a discipline.');return;}if(!sCoach){$e.text('Please select a coach.');return;}if(!sSchool){$e.text('Please select a school.');return;}if(!sDays.length){$e.text('Select at least one day of the week.');return;}if(!ds){$e.text('Please set a start date.');return;}if(!de){$e.text('Please set an end date.');return;}if(de<ds){$e.text('End date must be on or after start date.');return;}if(ns===null){$e.text('Invalid start time.');return;}if(ne===null){$e.text('Invalid end time.');return;}if(ne<=ns){$e.text('End time must be after start time.');return;}
-    var _prog=progByName(sProg), _coach=coachByName(sCoach)||staffByName(sCoach), _school=schoolByName(sSchool);
-    const row=(()=>{const i=STAFF.findIndex(s=>s.n===sCoach);return i>-1?i:0;})();
-    const data={lbl:sProg,progId:_prog?_prog.id:null,coach:sCoach,coachId:_coach?_coach.id:null,school:sSchool,schoolId:_school?_school.id:null,days:sDays.slice(),ds,de,s:ns,e:ne,row,color:sColor,staffType:$('#staff-type-select').val()||'Coach',description:$('#sched-desc').html()||''};
-    if(creating){
-      blocks.push({id:nid++,...data});
-      closeModal();refreshView();
-    } else if(!isMultiMeeting(ds,de,sDays)){
-      const b=blocks.find(x=>x.id===eid);
-      const onlyDescChanged = b && (b.lbl===data.lbl && b.coach===data.coach && b.school===data.school && b.s===data.s && b.e===data.e && b.color===data.color && b.staffType===data.staffType && b.ds===data.ds && b.de===data.de && JSON.stringify((b.days||[]).slice().sort())===JSON.stringify((data.days||[]).slice().sort()));
-      if(onlyDescChanged){ b.description=data.description; closeModal();refreshView(); }
-      else { if(b)Object.assign(b,data); closeModal();refreshView(); }
-    } else {
-      const b=blocks.find(x=>x.id===eid);
-      const onlyDescChanged = b && (b.lbl===data.lbl && b.coach===data.coach && b.school===data.school && b.s===data.s && b.e===data.e && b.color===data.color && b.staffType===data.staffType && b.ds===data.ds && b.de===data.de && JSON.stringify((b.days||[]).slice().sort())===JSON.stringify((data.days||[]).slice().sort()));
-      if(onlyDescChanged){ b.description=data.description; closeModal();refreshView(); }
-      else { pendingSaveData=data; $('#save-popup-overlay').addClass('open'); }
-    }
-  }
 
-  function applySave(scope){
-    if(!pendingSaveData)return;
-    const b=blocks.find(x=>x.id===eid);
-    if(b){
-      if(scope==='this'){
-        b.days=b.days.filter(function(d){return d!==editedOnDow;});
-        if(!b.days.length)blocks.splice(blocks.findIndex(x=>x.id===eid),1);
-        else { var nb={...pendingSaveData,id:nid++,days:[editedOnDow],ds:editedOnDs,de:editedOnDs}; blocks.push(nb); }
-      } else if(scope==='future'){
-        const today=new Date(); today.setDate(today.getDate()-1); b.de=today.toISOString().slice(0,10);
-        blocks.push({id:nid++,...pendingSaveData,ds:editedOnDs});
-      } else {
-        Object.assign(b,pendingSaveData);
-      }
-    }
-    pendingSaveData=null;$('#save-popup-overlay').removeClass('open');
-    closeModal();refreshView();
-  }
 
-  $('#save-cancel').on('click',function(){$('#save-popup-overlay').removeClass('open');});
-  $('#save-this').on('click',function(){applySave('this');});
-  $('#save-future').on('click',function(){applySave('future');});
-  $('#save-all').on('click',function(){applySave('all');});
 
-  function showDeletePopup(){ deleteContext='schedule'; editedOnDow=new Date(viewYear,viewMonth,viewDay).getDay(); editedOnDs=viewDateStr(); $('#delete-popup-overlay').addClass('open'); }
+
+
+
+
+
 
 
   function rNow(){$('#blocks-layer .now-line').remove();const now=new Date(),h=now.getHours()+now.getMinutes()/60;if(h<SH||h>SH+NHRS)return;$('#blocks-layer').append($('<div class="now-line">').css('left',(h-SH)*HW).append('<div class="now-dot">'));}
@@ -2316,37 +1969,6 @@ $(function(){
     });
   }
 
-  function rBlocks(){
-    var fs=getFilteredStaff();
-    const $l=$('#blocks-layer').css({width:TW,height:fs.length*RH}).empty();
-    rAvailOverlay();
-    $.each(blocks,function(_,b){
-      if(!isApplicableToday(b) || !isVisible(b) || !coachIsVisible(b)) return;
-      var displayRow=fs.findIndex(function(s){return s.n===b.coach;});
-      if(displayRow===-1) return;
-      const c=COLORS[b.color%COLORS.length];
-      const sg=getSegs(b);
-      const x=(b.s-SH)*HW, w=Math.max((b.e-b.s)*HW-4,52), bh=RH-8;
-      var y=displayRow*RH+4;
-      const $el=$('<div class="sched-block">').attr('data-id',b.id).css({left:x,top:y,width:w,height:bh,background:c.bg,borderColor:c.bd,color:c.tx});
-      $.each(sg,function(_,seg){const zl=(seg[0]-b.s)*HW,zw=(seg[1]-seg[0])*HW;$el.append($('<div class="overlap-zone">').css({left:zl,width:zw}).append('<svg xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="url(#sr)"/></svg>',$('<div class="overlap-zone-border-l">'),$('<div class="overlap-zone-border-r">')));});
-      const $timeRow=$('<div class="block-time-row">');
-      $timeRow.append($('<span class="block-time">').text(fmtT(b.s)+' – '+fmtT(b.e)));
-      $timeRow.append($('<span style="opacity:.5;margin:0 3px;font-size:9px;"> · </span>'));
-      $timeRow.append($('<span class="block-time" style="font-weight:700;">').text(fmtHrs(b.e - b.s)));
-      if(b.days&&b.days.length){const $badge=$('<div class="block-days-badge">');b.days.forEach(d=>$('<span class="day-dot">').text(DN[d]).appendTo($badge));$timeRow.append($badge);}
-      const dr=(b.ds&&b.de)?fmtDs(b.ds)+' – '+fmtDs(b.de):'';
-      $el.append(
-        $('<div class="block-title">').append($('<span>').text(b.lbl),$('<span class="block-staff-type-line">').text(' · '+(b.staffType||'Coach'))),
-        $('<div class="block-school">').text(b.school||''),
-        $timeRow,
-        $('<div class="block-daterange">').text(dr),
-        $('<div class="resize-handle">')
-      );
-      attachDrag($el,b);attachResize($el.find('.resize-handle'),b);attachDayTip($el,b,false);
-      $l.append($el);
-    });
-  }
 
   function rAvailBlocks(){
     if(!$('#timeline-header').length) $('#timeline-area').prepend('<div class="timeline-header" id="timeline-header"></div>');
@@ -2546,41 +2168,6 @@ $(function(){
     });
   }
 
-  function moveBlockToDate(b, newCoach, newDate, origDow){
-    var oldDow = (origDow !== undefined) ? origDow : new Date(b.ds ? b.ds+'T00:00:00' : Date.now()).getDay();
-    var newDow = newDate.getDay();
-    var newDs = localDateStr(newDate);
-    b.coach = newCoach;
-    b.row = STAFF.findIndex(function(s){ return s.n === newCoach; });
-    if(b.row < 0) b.row = 0;
-    if(!b.days) b.days = [];
-    // Replace only the dragged day; leave all other recurring days intact
-    var oldIdx = b.days.indexOf(oldDow);
-    if(oldIdx !== -1) b.days.splice(oldIdx, 1);
-    if(b.days.indexOf(newDow) === -1) b.days.push(newDow);
-    b.days.sort();
-    // Check if this is a single-day, exactly-one-week block
-    var isSingleWeek = (function(){
-      if(!b.ds || !b.de) return false;
-      var ds = new Date(b.ds+'T00:00:00'), de = new Date(b.de+'T00:00:00');
-      var diffDays = Math.round((de - ds) / 86400000);
-      return diffDays === 6; // exactly Sun-Sat (7 days = 6 day difference)
-    })();
-    if(isSingleWeek){
-      // If new date falls outside current week range, shift range to contain it
-      if(newDs < b.ds || newDs > b.de){
-        // Set range to the Sun-Sat week containing newDate
-        var weekSun = new Date(newDate); weekSun.setDate(newDate.getDate() - newDate.getDay());
-        var weekSat = new Date(weekSun); weekSat.setDate(weekSun.getDate() + 6);
-        b.ds = localDateStr(weekSun);
-        b.de = localDateStr(weekSat);
-      }
-    } else {
-      // General case: extend range if new date is outside
-      if(!b.ds || newDs < b.ds) b.ds = newDs;
-      if(!b.de || newDs > b.de) b.de = newDs;
-    }
-  }
 
   function moveAvailBlockToDate(b, newCoach, newDate, origDow){
     var oldDow = (origDow !== undefined) ? origDow : (b.days && b.days.length ? b.days[0] : new Date().getDay());
@@ -3475,7 +3062,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var onScroll=function(){ place(); };
     function close(){ $pop.remove(); window.removeEventListener('scroll',onScroll,true); window.removeEventListener('resize',onScroll); }
     function revert(){ close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
-    function commit(s){ scheduleAssignments[shiftKey]=s.id; close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); }
+    function commit(s){
+      // Site Schedule assignments are ALWAYS keyed by the staff member's stable staff_id, never by
+      // name — the name is used only for display (see renderShiftAssign). Guard against a staff record
+      // that somehow lacks an id so we never fall back to storing anything else.
+      if(s && s.id!=null){ scheduleAssignments[shiftKey]=s.id; }
+      close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts();
+    }
     function refresh(){
       var curKey=shiftKey, curDet=_assignmentDetails[shiftKey];
       var assignedId=scheduleAssignments[shiftKey];
@@ -3701,7 +3294,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var cr=(origIdx!=null)?calRows[origIdx]:null;
       var calId=(cr&&cr.calId!=null)?cr.calId:null;
       if(calId==null||!schoolName) return [];
-      var out=[];
+      // Extra Shift rows store the role KEY (e.g. 'ctkk'); resolve it to the display label the Calendar
+      // Hours Breakdown shows so Site Schedule never renders a raw key.
+      var _roleLbl={}; try{ rolesToStaffingRoles(getRoles(g.id)).forEach(function(r){ _roleLbl[r.key]=r.label; }); }catch(e){}
+      // Group rows with the same role + start + end (same school/calendar/date) into one block, summing
+      // their counts, so duplicate Extra Shifts don't render as separate identical blocks. The group keeps
+      // the first contributing shift's key, so assignments and the per-staff view resolve unchanged.
+      var _grp={}, _order=[];
       getExtraShifts(g.id, calId, dateKey).forEach(function(sh){
         if(!sh||sh.school!==schoolName||!sh.rows) return;
         sh.rows.forEach(function(row,ri){
@@ -3709,10 +3308,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var raw=calcH(row.start,row.end); var cnt=parseInt(row.cnt);
           if(raw==null||raw<=0||isNaN(cnt)||cnt<=0) return;
           var h=adjForBillable(raw,cr); if(!(h>0)) return;
-          out.push({xsKey:'xs:'+sh.id+':'+ri, roleLabel:String(row.role), start:row.start, end:row.end, count:cnt, hrsEach:h, status:billableStatus(raw,cr)});
+          var gk=String(row.role)+'|'+row.start+'|'+row.end;
+          if(!_grp[gk]){ _grp[gk]={xsKey:'xs:'+sh.id+':'+ri, roleLabel:(_roleLbl[row.role]||String(row.role)), start:row.start, end:row.end, count:0, hrsEach:h, status:billableStatus(raw,cr)}; _order.push(gk); }
+          _grp[gk].count+=cnt;
         });
       });
-      return out;
+      return _order.map(function(gk){ return _grp[gk]; });
     }
 
     // Visible schools / calendars (respect filters), as {idx,id,name,color}
@@ -3761,7 +3362,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(inRangeCount>0 && seenKeys.length===1 && seenKeys[0]!=='__none__'){ var _sd=getSdById(g.id, seenKeys[0]); if(_sd){ sdLabel=_sd.name; sdColor=_sd.color||'#ffffff'; } }
 
         anyMatrix=true;
-        var $mx=$('<div>').css({marginBottom:'22px',border:'1px solid #e3e7ec',borderRadius:'10px',overflow:'hidden',background:'#fff'});
+        var $mx=$('<div>').css({marginBottom:'22px',border:'1px solid #e3e7ec',borderLeft:'4px solid '+(cal.color||'#cfd6df'),borderRadius:'10px',overflow:'hidden',background:'#fff'});   // left accent = Program Calendar color (matches Site Breakdown / Staffing Hours)
 
         // Header order: ● Calendar | School | ● Special Day | N hrs
         // Subtle vertical divider (same style as Site Breakdown / Staffing headers) between groups,
@@ -3813,6 +3414,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     $panel.append($wrap);
     _recomputeConflicts(); // mark any overlapping same-staff assignments (red name) now the matrix is built
+    if(!_siteNowTimer) _siteNowTimer=setInterval(_siteUpdateNowLine, 60000);   // keep today's current-time line moving (1-min tick, position-only)
 
     // ── DAY view: roles × 6am–midnight timeline (same look as the Availability day grid) ──
     // Everything (pinned label column + 6am→midnight hours) lives in ONE horizontal-scroll
@@ -3826,6 +3428,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       insts=insts.concat(_xsInsts);
 
       var LBLW=184, STAFFW=46, ROLEW=LBLW-STAFFW;
+      var CRH=48;   // compact Site Schedule row height (tighter than the shared RH)
       var $scrollWrap=$('<div>').css({overflowX:'auto',overflowY:'hidden',width:'100%'});
       var $outer=$('<div>').css({position:'relative',width:(LBLW+TW)+'px'}); // wider than the panel → scrolls
 
@@ -3843,8 +3446,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Body rows: each role-instance = sticky label + hour cells with an absolutely-positioned block
       insts.forEach(function(inst,ri){
         var firstOfRole = ri>0 && insts[ri-1].roleKey !== inst.roleKey;
-        var $row=$('<div>').css({display:'flex',height:RH+'px',borderTop: ri===0?'none':(firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)')});
-        var $lbl=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:LBLW+'px',height:RH+'px',display:'flex',alignItems:'stretch',background:ri%2?'#fff':'#fafafa',borderRight:'1px solid var(--bd2)'});
+        var $row=$('<div>').css({display:'flex',height:CRH+'px',borderTop: ri===0?'none':(firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)')});
+        var $lbl=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:LBLW+'px',height:CRH+'px',display:'flex',alignItems:'stretch',background:ri%2?'#fff':'#fafafa',borderRight:'1px solid var(--bd2)'});
         $lbl.append($('<div>').css({width:ROLEW+'px',display:'flex',alignItems:'center',padding:'0 8px',fontSize:'11px',fontWeight:'600',color:'#343a40',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',inst.roleLabel).text(inst.roleLabel));
         $lbl.append($('<div>').css({width:STAFFW+'px',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',fontSize:'11px',fontWeight:'700',color:'#495057',borderLeft:'1px solid var(--bd2)'}).text(inst.num));
         $row.append($lbl);
@@ -3854,7 +3457,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(b && inst.num<=b.count){
           var ds=decH(b.start), de=decH(b.end);
           if(ds!=null&&de!=null&&de>ds){
-            var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=RH-8;
+            var x=(ds-SH)*HW, w=Math.max((de-ds)*HW-4,52), bh=CRH-8;
             var $el=$('<div class="sched-block">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(dateObj)+'|'+inst.roleKey+'|'+inst.num;
             var $line1=$('<div class="block-title">');
@@ -3875,6 +3478,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $outer.append($row);
       });
 
+      // Current-time line — day view only, when the shown date is today (mirrors the Staff Schedule line).
+      // Lives in a TW-wide overlay pinned at the start of the time axis, below the sticky label column.
+      if(isTodayDate(dateObj)){
+        var _nowH=new Date().getHours()+new Date().getMinutes()/60;
+        var _nx=(_nowH<SH)?0:((_nowH>SH+NHRS)?(NHRS*HW):((_nowH-SH)*HW));
+        var $_nowOv=$('<div>').css({position:'absolute',left:LBLW+'px',top:'36px',bottom:'0',width:TW+'px',pointerEvents:'none',zIndex:'3'});
+        $_nowOv.append($('<div class="now-line">').css({left:_nx+'px',top:'0',bottom:'0'}).append('<div class="now-dot">'));
+        $outer.append($_nowOv);
+      }
       $scrollWrap.append($outer);
       return $scrollWrap;
     }
@@ -4035,6 +3647,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $line.css('left', nx+'px');
   }
 
+  var _siteNowTimer=null;      // 1-minute ticker for the Site Schedule current-time line (created once)
+  // Lightweight: only repositions the existing red current-time line(s) in the day matrix — no re-render.
+  function _siteUpdateNowLine(){
+    if(pageMode!=='schedule') return;                       // only relevant while Site Schedule is on screen
+    var $lines=$('#schedule-panel .now-line'); if(!$lines.length) return;   // not day view / today not shown
+    var nowH=new Date().getHours()+new Date().getMinutes()/60;
+    var nx=(nowH<SH)?0:((nowH>SH+NHRS)?(NHRS*HW):((nowH-SH)*HW));
+    $lines.css('left', nx+'px');
+  }
+
   function _ssEnsureMonth(){ if(_ssY==null||_ssM==null){ var t=new Date(); _ssY=t.getFullYear(); _ssM=t.getMonth(); } }
   function _ssMonthLabel(){ return new Date(_ssY,_ssM,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
   function _ssStep(delta){ _ssEnsureMonth(); var d=new Date(_ssY,_ssM+delta,1); _ssY=d.getFullYear(); _ssM=d.getMonth(); _ssScrollDate=null; renderStaffSchedule(); updateURL(false); }
@@ -4089,6 +3711,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       for(var _q=0;_q<_shifts.length;_q++){ if(String(_shifts[_q].id)===String(_shId)){ _sh=_shifts[_q]; break; } }
       if(!_sh||!_sh.rows||!_sh.rows[_rowIdx]) return null;
       var _row=_sh.rows[_rowIdx];
+      var _xrl={}; roles.forEach(function(r){ _xrl[r.key]=r.label; });   // resolve Extra Shift role KEY -> display label
       var _rawx=calcH(_row.start,_row.end); if(_rawx==null||_rawx<=0) return null;
       var _cntx=parseInt(_row.cnt); if(isNaN(_cntx)||_cntx<=0) return null;
       var _hx=adjForBillable(_rawx,_crx); if(!_hx||_hx<=0) return null;
@@ -4099,7 +3722,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         calName:_crx?((_crx.name&&_crx.name.trim())?_crx.name:('Calendar '+(origIdx+1))):'\u2014',
         calColor:_crx?(_crx.color||'#ffffff'):'#cfcfcf',
         firstDay:_crx?_crx.firstDay:'', lastDay:_crx?_crx.lastDay:'',
-        roleLabel:String(_row.role||''),
+        roleLabel:(_xrl[_row.role]||String(_row.role||'')),
         schoolName:_sh.school
       };
     }
@@ -12773,26 +12396,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var endSnapped = Math.min(SH + NHRS, snapped + 1);
     var dow = new Date(viewYear, viewMonth, viewDay).getDay();
 
-    if(pageMode === 'availability'){
-      openAvailCreate({
-        coach:     staffMember.n,
-        date:      viewDateStr(),
-        days:      [dow],
-        startTime: fmtT(snapped),
-        endTime:   fmtT(endSnapped),
-      });
-    } else {
-      openCreate({
-        coach:     staffMember.n,
-        date:      viewDateStr(),
-        days:      [dow],
-        startTime: fmtT(snapped),
-        endTime:   fmtT(endSnapped),
-      });
-    }
+    // Grid click-to-create is availability-only; the legacy schedule create modal was removed.
+    if(pageMode !== 'availability') return;
+    openAvailCreate({
+      coach:     staffMember.n,
+      date:      viewDateStr(),
+      days:      [dow],
+      startTime: fmtT(snapped),
+      endTime:   fmtT(endSnapped),
+    });
   });
-  $('#modal-close-btn').on('click',closeModal);
-  $('#modal-overlay').on('click',e=>{if($(e.target).is('#modal-overlay'))closeModal();});
   $('#prev-btn').on('click', function(){
     var d;
     if(viewMode==='month'){
