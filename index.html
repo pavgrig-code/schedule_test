@@ -8058,7 +8058,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
 
       // ── Overlay + card ──
-      var $ov=$('<div class="isb-ui isb-overlay">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.28)',zIndex:'100050',display:'flex',alignItems:'center',justifyContent:'center'});
+      var $ov=$('<div class="isb-ui isb-overlay">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.28)',zIndex:'999999',display:'flex',alignItems:'center',justifyContent:'center'});   // above the pinned Calendar Hours Breakdown popup (z 999998); its own X-confirm dialog sits above this at 1000000
       var $card=$('<div>').css({position:'relative',background:'#fff',borderRadius:'12px',boxShadow:'0 12px 40px rgba(0,0,0,.22)',minWidth:'380px',maxWidth:'520px',maxHeight:'86vh',overflow:'hidden',fontFamily:'inherit',display:'flex',flexDirection:'column'});
       _isbOverlay=$ov;
 
@@ -8101,21 +8101,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $thead.append($hr); $tbl.append($thead);
       var $tb=$('<tbody>');
       $tbl.append($tb);
+      // Total row UNDER the table, right-aligned with its value in the Total column — same placement and
+      // style as the Subtotal / Total rows in the main Calendar Hours Breakdown tables (muted band, a
+      // right-aligned bold label spanning the left columns, billable-green value in the rightmost column).
+      var $tfoot=$('<tfoot>'), $totTr=$('<tr>').css({background:'#eef2f7'});
+      $totTr.append($('<td>').attr('colspan',5).css({padding:'5px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057',borderTop:'2px solid #dee2e6'}).text('Total'));
+      var $totVal=$('<td>').css({padding:'5px 6px',textAlign:'center',fontWeight:'800',fontSize:'11px',color:STATUS_COLORS.billable,borderTop:'2px solid #dee2e6'}).text('0');
+      $totTr.append($totVal); $tfoot.append($totTr); $tbl.append($tfoot);
       $body.append($tbl);
       $card.append($body);
 
-      // Footer (Total + Save/Discard)
-      var $foot=$('<div>').css({padding:'8px 14px 12px 14px',borderTop:'2px solid #dee2e6',flexShrink:'0'});
-      var $totRow=$('<div>').css({display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'});
-      var $totLbl=$('<div>').css({fontWeight:'700',fontSize:'11px',color:'#495057'}).text('Total');
-      var $totVal=$('<div>').css({fontWeight:'800',fontSize:'12px',color:'#0d6efd'}).text('0');
-      var $totLeft=$('<div>').css({display:'flex',alignItems:'center',gap:'8px'}).append($totLbl).append($totVal);
+      // Footer holds only Save / Discard (right-aligned); the school Total now lives in the table above.
+      var $foot=$('<div>').css({padding:'8px 14px 12px 14px',borderTop:'1px solid #e9ecef',flexShrink:'0',display:'flex',justifyContent:'flex-end'});
       var $btns=$('<div>').css({display:'none',gap:'8px'});
       var $discard=$('<button type="button" class="isb-discard">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'6px',padding:'5px 13px',cursor:'pointer',fontSize:'11px',fontWeight:'600',color:'#495057'}).text('Discard');
       var $save=$('<button type="button" class="isb-save">').css({background:'#0d6efd',border:'none',borderRadius:'6px',padding:'5px 13px',cursor:'pointer',fontSize:'11px',fontWeight:'600',color:'#fff'}).text('Save');
       $btns.append($discard).append($save);
-      $totRow.append($totLeft).append($btns);
-      $foot.append($totRow);
+      $foot.append($btns);
       $card.append($foot);
 
       // ── Editable value cell (amber override display + click-to-edit) ──
