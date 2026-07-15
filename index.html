@@ -7300,7 +7300,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _tipLiveRecalc=null; // set by each individual-popup render; recomputes VISIBLE popup totals from pending edits (display-only until Save)
     var _tipPickGrace=0;   // timestamp of the last time-picker commit inside the pinned popup (see _calTipOutside)
 
-    function _tipEditKey(r,field){ return r.roleKey+'|'+(r.siList||[]).join(',')+'|'+field; }
+    function _tipEditKey(r,field){ return (r&&r._calId!=null?String(r._calId)+'|':'')+r.roleKey+'|'+(r.siList||[]).join(',')+'|'+field; }
     function _tipHasEdits(){ for(var k in _tipEdits){ if(_tipEdits[k].changed) return true; } return false; }
     function _tipHasInvalid(){ for(var k in _tipEdits){ if(!_tipEdits[k].valid) return true; } return false; }
     // Parse an edited time in the same formats Staffing Hours accepts (12h picker format or plain HH:MM 24h).
@@ -7445,7 +7445,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var FULL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):dateKey;
       var roles=_xsRoleList(gid);
-      var calOpts=[]; (det.calendarRows||[]).forEach(function(cr,i){ if(cr&&cr.calId!=null) calOpts.push({calId:cr.calId,label:(cr.name&&cr.name.trim())||('Calendar '+(i+1))}); });
+      function _xsCalActive(cr){ if(!cr||cr.calId==null) return false; var f=parseD(cr.firstDay), l=parseD(cr.lastDay); return !!(f&&l&&cellDate&&cellDate>=f&&cellDate<=l); }
+      var calOpts=[]; (det.calendarRows||[]).forEach(function(cr,i){ if(!cr||cr.calId==null) return; if(a.combined && !_xsCalActive(cr) && !(editing && String(cr.calId)===String(origCalId))) return; calOpts.push({calId:cr.calId,label:(cr.name&&cr.name.trim())||('Calendar '+(i+1))}); });
       function schoolsFor(calId){ var by=det.siteRowsByCal||{}; var rows=by[calId]||by[String(calId)]||[]; return rows.map(function(r,i){ return _siteName(r,i); }); }
 
       // State — editing preloads the saved values; new starts on this popup's calendar with one blank row.
@@ -7701,10 +7702,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function _saveTipEdits(){
       if(_tipHasInvalid()) return;
       var a=_tipShowArgs; if(!a||!a.ctx) return;
-      var gid=a.gObj.id, calId=a.ctx.calId, dateKey=a.ctx.dateKey;
+      var gid=a.gObj.id, _ctxCalId=a.ctx.calId, dateKey=a.ctx.dateKey;
       Object.keys(_tipEdits).forEach(function(k){
         var ed=_tipEdits[k]; if(!ed.changed||!ed.valid) return;
         var r=ed.row, siL=r.siList||[];
+        var calId=(r._calId!=null?r._calId:_ctxCalId);
         if(ed.field==='cnt'){
           if(siL.length===1){
             var si0=siL[0], b0=(r.base[si0]&&parseInt(r.base[si0].cnt))||0;
@@ -8040,7 +8042,100 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return out;
     }
 
+      // Subtotal label with the number of schools folded into it: "Subtotal (1 school)" / "Subtotal (2 schools)".
+      function _tipSubtotalLabel(n){ n=(n!=null&&n>0)?(n|0):1; return 'Subtotal ('+n+(n===1?' school':' schools')+')'; }
+
+      function _valCell(r,field){
+        function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
+        var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'});
+        var editable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length && field!=='cnt';   // Count is a calculated/source value (Staffing Hours × Site Breakdown counts) — read-only here; Start/End remain editable
+        function paint(){
+          $td.empty();
+          var ed=_tipEdits[_tipEditKey(r,field)];
+          if(ed){
+            // Pending (unsaved) edit: show its display value; highlight when it differs from the BASE
+            // Staffing Hours value; invalid values get a subtle red state instead.
+            var origDisp=field==='cnt'?String(r.origCnt):(field==='start'?r.origStart:r.origEnd);
+            if(!ed.valid){
+              $td.append($('<span>').css({background:'#fdecea',borderRadius:'3px',padding:'0 3px',color:'#b02a37',fontWeight:'600'}).attr('title','Invalid value').text(ed.disp));
+            } else {
+              $td.append(_tipOvVal(ed.disp, String(ed.disp)!==String(origDisp), origDisp));
+            }
+          } else {
+            var isOv=field==='cnt'?r.ovC:(field==='start'?r.ovS:r.ovE);   // each field highlights ONLY against its own source value
+            var val=field==='cnt'?String(r.cnt):(field==='start'?r.start:r.end);
+            var orig=field==='cnt'?String(r.origCnt!=null?r.origCnt:r.cnt):(field==='start'?r.origStart:r.origEnd);
+            $td.append(_tipOvVal(val,isOv,orig));
+          }
+        }
+        paint();
+        if(editable){
+          $td.css({cursor:'pointer'}).attr('title','Click to edit');
+          $td.on('mouseenter.tipedit',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
+          $td.on('mouseleave.tipedit',function(){ $td.css({background:'',boxShadow:''}); });
+          $td.on('click.tipedit',function(e){
+            e.stopPropagation();
+            if($td.find('input').length) return;   // already editing
+            var ed=_tipEdits[_tipEditKey(r,field)];
+            // Recorded an edit (or cancelled): repaint the cell, refresh the Save/Discard bar, and live-update
+            // every visible total in the popup (row Hrs/Total, Subtotals, footer Total) — display-only until Save.
+            function recordDone(){ paint(); _updEditBar(); if(_tipLiveRecalc)_tipLiveRecalc(); }
+            if(field==='cnt'){
+              var cur=ed?ed.disp:String(r.cnt);
+              var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center',color:'#212529',background:'#fff'}).val(cur==='—'?'':cur);
+              $td.empty().append($inp);
+              $inp.on('click',function(e2){ e2.stopPropagation(); });
+              $inp.on('keydown',function(e2){
+                if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
+                else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); recordDone(); }  // cancel this field only
+              });
+              $inp.on('blur',function(){
+                var raw=String($inp.val()||'').trim();
+                var key=_tipEditKey(r,field);
+                var okNum=/^\d+$/.test(raw);
+                var effCur=String(r.cnt);
+                if(raw===effCur){ delete _tipEdits[key]; }
+                else { _tipEdits[key]={row:r,field:field,disp:raw,norm:okNum?parseInt(raw,10):null,valid:okNum,changed:true}; }
+                recordDone();
+              });
+              $inp.trigger('focus'); if($inp[0].select) $inp[0].select();
+            } else {
+              // Start / End use the SAME time dropdown as the Staffing Hours table (mkTimePicker): identical
+              // 15-minute increments, 12h formatting, type-to-filter, validation (unparseable input is
+              // rejected with the picker's red state and never recorded), and keyboard behaviour. The picker
+              // wrapper is widened to 70px here so 12h times like "12:00pm" render in full. Selecting or committing a time
+              // records the pending edit and immediately live-updates the popup totals.
+              var eff=(field==='start'?r.effStart:r.effEnd);
+              var cur24=ed?ed.norm:eff;
+              var $tp=mkTimePicker(cur24||'',function(v24){
+                _tipPickGrace=Date.now();   // the gesture that committed this may still deliver a click "outside"
+                var key=_tipEditKey(r,field);
+                if(!v24 || v24===eff){ delete _tipEdits[key]; }         // cleared / back to source value → no pending edit
+                else { _tipEdits[key]={row:r,field:field,disp:fmt12(v24),norm:v24,valid:true,changed:true}; }
+                recordDone();
+              });
+              $td.empty().append($tp);
+              $tp.on('click',function(e2){ e2.stopPropagation(); });
+              var $pin=$tp.find('input');
+              $tp.css({width:'70px'}); $pin.css({width:'70px'});   // wide enough that 12h times like "12:00pm" are never clipped, squeezed, or hidden
+              $pin.on('keydown.tipesc',function(e2){ if(e2.key==='Escape'){ e2.stopPropagation(); recordDone(); } });  // cancel this field only; keep the popup open
+              // If the field blurs WITHOUT a change, the picker never calls onChange — exit edit mode ourselves
+              // once its own commit window (200ms) has passed and the input is still in the DOM.
+              $pin.on('blur.tipdone',function(){ setTimeout(function(){ if($pin[0]&&$.contains(document.documentElement,$pin[0])) recordDone(); },240); });
+              $pin.trigger('focus');
+            }
+          });
+        }
+        return $td;
+      }
+
     function showCombinedCalTooltip($td, dayKey, gObj, cellDate){
+      _tipLiveRecalc=null;
+      // Live (pre-Save) recalculation registry for the Combined view — mirrors the individual view so
+      // editing a Start/End time immediately updates that row's Hrs + Total, its section Subtotal, and the
+      // Combined Total (display-only until Save). _cCalcH gives raw hours from two 24h "HH:MM" strings.
+      var _cLive={rows:[],subs:[],total:null,mark:0,xsConst:0};
+      function _cCalcH(s,e2){ if(!s||!e2)return null; var sp=s.split(':'),ep=e2.split(':'); var sm2=parseInt(sp[0])*60+(parseInt(sp[1])||0),em2=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em2>sm2?(Math.round((em2-sm2)/60*100)/100):null; }
       $calTip.css({minWidth:'300px', maxWidth:'480px'});   // combined table is auto-layout; only reserve extra room when overrides render (max reset clears any width widened by the individual Extra Shift sub-card)
 
       if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){ _tipAnchor.removeClass('cal-hovered cal-hovered-wknd cal-tip-active'); _tipCellBg=null; }
@@ -8156,19 +8251,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var sub=0, parity=0;
         // Renders one role row; also returns its Total so each section can accumulate its own subtotal.
         function _combRoleRow(r){
+          r._calId=(cr&&cr.calId!=null?cr.calId:null);
           var $row=$('<tr>').css({background:(parity++%2)?'#f9fafb':'#ffffff'});
           $row.append($('<td>').css({padding:'3px 6px',color:r.noHoursNote?'#9aa0a6':'#212529',fontWeight:'500',fontStyle:r.noHoursNote?'italic':'normal',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(r.noHoursNote?'No hours':r.label));
-          $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.start,r.ovS,r.origStart)));
-          $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(r.end,r.ovE,r.origEnd)));
+          $row.append(_valCell(r,'start'));
+          $row.append(_valCell(r,'end'));
           var $ch=$('<td>').css({padding:'3px 18px 3px 6px',textAlign:'center',color:'#212529',fontWeight:'600',position:'relative'});
-          $ch.append($('<span>').text(r.noHoursNote?'0':r.hours));
+          var $chv=$('<span>').text(r.noHoursNote?'0':r.hours);
+          $ch.append($chv);
           if(!r.noHoursNote && r.brkMins>0) $ch.append(_mealBreakChip(r.brkMins));   // Non-Billable meal-break chip, in the Hours cell
           $row.append($ch);
-          $row.append($('<td>').css({padding:'3px 6px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'}).append(_tipOvVal(String(r.cnt),r.ovC,String(r.origCnt!=null?r.origCnt:r.cnt))));
+          $row.append(_valCell(r,'cnt'));
           var $ct=$('<td>').css({padding:'3px 6px',textAlign:'center',color:STATUS_COLORS.billable,fontWeight:'700'});
-          $ct.append($('<span>').text(r.noHoursNote?'0':r.total));
+          var $ctv=$('<span>').text(r.noHoursNote?'0':r.total);
+          $ct.append($ctv);
           $row.append($ct);
           $tb.append($row);
+          if(!r.noHoursNote) _cLive.rows.push({r:r,cr:cr,$h:$ch,$hv:$chv,$tv:$ctv});   // registered for live (pre-Save) recalculation
           sub+=(r.total||0);
           return (r.total||0);
         }
@@ -8177,13 +8276,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // same styling, emitted only when the section has hours > 0 — and never repeats the school or
         // calendar name (already shown in the header above). This replaces the former single per-calendar
         // "<name> Subtotal" row, so a multi-school calendar now shows one subtotal per school.
-        function _combSubtotalRow(sectionSub){
+        function _combSubtotalRow(sectionSub, schoolCount){
+          var _from=_cLive.mark; _cLive.mark=_cLive.rows.length;   // this subtotal covers the rows registered since the previous one
           sectionSub=Math.round(sectionSub*100)/100;
           if(!(sectionSub>0)) return;
           var $s=$('<tr>').css({background:'#eef2f7'});
-          $s.append($('<td>').attr('colspan',_ncol-1).css({padding:'4px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text('Subtotal'));
-          $s.append($('<td>').css({padding:'4px 6px',textAlign:'center',fontWeight:'700',color:STATUS_COLORS.billable}).text(sectionSub));
+          $s.append($('<td>').attr('colspan',_ncol-1).css({padding:'4px 6px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text(_tipSubtotalLabel(schoolCount)));
+          var $sv=$('<td>').css({padding:'4px 6px',textAlign:'center',fontWeight:'700',color:STATUS_COLORS.billable}).text(sectionSub);
+          $s.append($sv);
           $tb.append($s);
+          _cLive.subs.push({$v:$sv,from:_from,to:_cLive.rows.length});
         }
         if(_collapse){
           // One shared breakdown for all schools that share the Special Day (summed by role/time — no double
@@ -8195,7 +8297,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $enr.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day'));
             $tb.append($enr);
           }
-          _combSubtotalRow(_collSub);
+          _combSubtotalRow(_collSub, _schoolGroups.length);
         } else if(gp.bySchool){
           // Schools differ overall, but schools that share the SAME Special Day AND identical hours are merged
           // into ONE shared breakdown (e.g. 2 of 3 schools have no Special Day and the same schedule → one
@@ -8205,7 +8307,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var g2=sg.groups[0], _secSub=0;
               $tb.append(_tipSectionHeaderRow([_tipSchoolNameFor(_grpSites,g2.schoolIdx)], g2.sd, g2.sd?_tipSdLabel(gObj.id,g2.sd):'', _ncol, 22));
               g2.rows.forEach(function(r){ _secSub+=_combRoleRow(r); });
-              _combSubtotalRow(_secSub);
+              _combSubtotalRow(_secSub, 1);
             } else {
               // Multiple schools share identical hours + Special Day state: one merged section, and one clear
               // "Subtotal" for the group (not repeated per school, and no school names in the subtotal line).
@@ -8213,7 +8315,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _cmb=_tipCombineSchoolRows(sg.groups), _secSub=0;
               if(_cmb.anyReal){ _cmb.rows.forEach(function(r){ _secSub+=_combRoleRow(r); }); }
               else { var $enr3=$('<tr>').css({background:'#ffffff'}); $enr3.append($('<td>').attr('colspan',_ncol).css({padding:'3px 6px 3px 22px',color:'#9aa0a6',fontStyle:'italic',fontSize:'9.5px'}).text('No staffing hours this day')); $tb.append($enr3); }
-              _combSubtotalRow(_secSub);
+              _combSubtotalRow(_secSub, sg.schoolIdxs.length);
             }
           });
         } else {
@@ -8221,7 +8323,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var _aggSd2=rows.length?rows[0].sd:null, _aggSub=0;
           if(_aggSd2) $tb.append(_tipSectionHeaderRow([], _aggSd2, _tipSdLabel(gObj.id,_aggSd2), _ncol, 22));
           rows.forEach(function(r){ _aggSub+=_combRoleRow(r); });
-          _combSubtotalRow(_aggSub);
+          _combSubtotalRow(_aggSub, _grpSites.length);
         }
         // Extra Shifts render once in the area at the TOP of the popup (built from every active calendar),
         // so they are no longer repeated inline per calendar here; their totals are added to the Combined
@@ -8237,8 +8339,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       grand=Math.round(grand*100)/100;
       var $tfoot=$('<tfoot>'), $trow=$('<tr>');
       $trow.append($('<td>').attr('colspan',_ncol-1).css({padding:'6px 6px',fontWeight:'800',fontSize:'11px',color:'#1f3a5f',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0'}).text('Combined Total'));
-      $trow.append($('<td>').css({padding:'6px 6px',textAlign:'center',fontWeight:'800',color:'#0d3b66',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0'}).text(grand));
+      var $grandTd=$('<td>').css({padding:'6px 6px',textAlign:'center',fontWeight:'800',color:'#0d3b66',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0'}).text(grand);
+      $trow.append($grandTd);
       $tfoot.append($trow); $tbl.append($tfoot);
+
+      // ── Live (pre-Save) recalculation ── A recorded Start/End (or count, though count is read-only here)
+      // edit immediately recomputes the VISIBLE Combined totals from the pending edits: each row's Hrs +
+      // Total (using that row's OWN calendar for the Non-Billable meal-break adjustment), each section
+      // Subtotal, and the Combined Total. Display-only; saved data changes only on Save. Discard/rebuild
+      // re-renders from saved values, reverting these.
+      _cLive.total=$grandTd; _cLive.xsConst=_xsG;
+      _tipLiveRecalc=function(){
+        var totals=[];
+        _cLive.rows.forEach(function(en){
+          var r=en.r, cr2=en.cr;
+          function pend(f){ var x=_tipEdits[_tipEditKey(r,f)]; return (x&&x.valid&&x.changed)?x:null; }
+          var ps=pend('start'), pe=pend('end'), pc=pend('cnt');
+          var s=ps?ps.norm:r.effStart, e2=pe?pe.norm:r.effEnd;
+          var cnt=pc?pc.norm:(parseInt(r.cnt)||0);
+          var raw=_cCalcH(s,e2);
+          var h=adjForBillable(raw, cr2); h=(h&&h>0)?h:0;
+          var t=Math.round(h*cnt*100)/100;
+          en.$hv.text(h); en.$tv.text(t);
+          en.$h.children('.cal-tip-brk').remove();   // recompute the Non-Billable meal-break chip for the edited hours
+          var bm=(!calRowBillable(cr2) && raw!==null && raw>0)?mealBreakMinsForCal(cr2,raw):0;
+          if(bm>0) en.$h.append(_mealBreakChip(bm));
+          totals.push(t);
+        });
+        _cLive.subs.forEach(function(sb){ var s2=0; for(var i=sb.from;i<sb.to;i++) s2+=totals[i]; sb.$v.text(Math.round(s2*100)/100); });
+        if(_cLive.total){ var g=_cLive.xsConst||0; totals.forEach(function(t){ g+=t; }); _cLive.total.text(Math.round(g*100)/100); }
+      };
+      if(_tipHasEdits()) _tipLiveRecalc();   // a same-cell rebuild with surviving pending edits shows live totals immediately
 
       $scroll.append($tbl); $pad.append($scroll); $calTip.append($pad);
       _addPinnedCloseBtn();
@@ -8537,11 +8668,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // "Subtotal" — the school name is already shown in the section header directly above, so repeating it
       // here (e.g. "Alliance Collins Family College-Ready High Subtotal") is redundant. schoolName is kept
       // in the signature for call-site clarity but no longer printed.
-      function appendSubtotal(schoolName, subtotal){
+      function appendSubtotal(schoolName, subtotal, schoolCount){
         var _from=_live.mark; _live.mark=_live.rows.length;   // this subtotal covers the rows registered since the previous one
         if(!(subtotal>0)) return;
         var $sub=$('<tr>').css({background:'#eef2f7'});
-        $sub.append($('<td>').attr('colspan',_totalColspan).css({padding:'4px 5px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text('Subtotal'));
+        $sub.append($('<td>').attr('colspan',_totalColspan).css({padding:'4px 5px',textAlign:'right',fontWeight:'700',fontSize:'10px',color:'#495057'}).text(_tipSubtotalLabel(schoolCount)));
         var $subVal=$('<td>').css({padding:'4px 5px',textAlign:'center',fontWeight:'700',color:STATUS_COLORS.billable}).text(Math.round(subtotal*100)/100);
         $sub.append($subVal);
         $tb.append($sub);
@@ -8553,88 +8684,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // One value cell for Start / End / Count. Renders override formatting ("val (orig)"), a pending
       // unsaved edit if one exists, and — in the PINNED popup only — click-to-edit with a subtle hover
       // affordance. Hover breakdowns render the same values read-only.
-      function _valCell(r,field){
-        var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'});
-        var editable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length;
-        function paint(){
-          $td.empty();
-          var ed=_tipEdits[_tipEditKey(r,field)];
-          if(ed){
-            // Pending (unsaved) edit: show its display value; highlight when it differs from the BASE
-            // Staffing Hours value; invalid values get a subtle red state instead.
-            var origDisp=field==='cnt'?String(r.origCnt):(field==='start'?r.origStart:r.origEnd);
-            if(!ed.valid){
-              $td.append($('<span>').css({background:'#fdecea',borderRadius:'3px',padding:'0 3px',color:'#b02a37',fontWeight:'600'}).attr('title','Invalid value').text(ed.disp));
-            } else {
-              $td.append(_tipOvVal(ed.disp, String(ed.disp)!==String(origDisp), origDisp));
-            }
-          } else {
-            var isOv=field==='cnt'?r.ovC:(field==='start'?r.ovS:r.ovE);   // each field highlights ONLY against its own source value
-            var val=field==='cnt'?String(r.cnt):(field==='start'?r.start:r.end);
-            var orig=field==='cnt'?String(r.origCnt!=null?r.origCnt:r.cnt):(field==='start'?r.origStart:r.origEnd);
-            $td.append(_tipOvVal(val,isOv,orig));
-          }
-        }
-        paint();
-        if(editable){
-          $td.css({cursor:'pointer'}).attr('title','Click to edit');
-          $td.on('mouseenter.tipedit',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
-          $td.on('mouseleave.tipedit',function(){ $td.css({background:'',boxShadow:''}); });
-          $td.on('click.tipedit',function(e){
-            e.stopPropagation();
-            if($td.find('input').length) return;   // already editing
-            var ed=_tipEdits[_tipEditKey(r,field)];
-            // Recorded an edit (or cancelled): repaint the cell, refresh the Save/Discard bar, and live-update
-            // every visible total in the popup (row Hrs/Total, Subtotals, footer Total) — display-only until Save.
-            function recordDone(){ paint(); _updEditBar(); if(_tipLiveRecalc)_tipLiveRecalc(); }
-            if(field==='cnt'){
-              var cur=ed?ed.disp:String(r.cnt);
-              var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center',color:'#212529',background:'#fff'}).val(cur==='—'?'':cur);
-              $td.empty().append($inp);
-              $inp.on('click',function(e2){ e2.stopPropagation(); });
-              $inp.on('keydown',function(e2){
-                if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
-                else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); recordDone(); }  // cancel this field only
-              });
-              $inp.on('blur',function(){
-                var raw=String($inp.val()||'').trim();
-                var key=_tipEditKey(r,field);
-                var okNum=/^\d+$/.test(raw);
-                var effCur=String(r.cnt);
-                if(raw===effCur){ delete _tipEdits[key]; }
-                else { _tipEdits[key]={row:r,field:field,disp:raw,norm:okNum?parseInt(raw,10):null,valid:okNum,changed:true}; }
-                recordDone();
-              });
-              $inp.trigger('focus'); if($inp[0].select) $inp[0].select();
-            } else {
-              // Start / End use the SAME time dropdown as the Staffing Hours table (mkTimePicker): identical
-              // 15-minute increments, 12h formatting, type-to-filter, validation (unparseable input is
-              // rejected with the picker's red state and never recorded), and keyboard behaviour. The picker
-              // wrapper is widened to 70px here so 12h times like "12:00pm" render in full. Selecting or committing a time
-              // records the pending edit and immediately live-updates the popup totals.
-              var eff=(field==='start'?r.effStart:r.effEnd);
-              var cur24=ed?ed.norm:eff;
-              var $tp=mkTimePicker(cur24||'',function(v24){
-                _tipPickGrace=Date.now();   // the gesture that committed this may still deliver a click "outside"
-                var key=_tipEditKey(r,field);
-                if(!v24 || v24===eff){ delete _tipEdits[key]; }         // cleared / back to source value → no pending edit
-                else { _tipEdits[key]={row:r,field:field,disp:fmt12(v24),norm:v24,valid:true,changed:true}; }
-                recordDone();
-              });
-              $td.empty().append($tp);
-              $tp.on('click',function(e2){ e2.stopPropagation(); });
-              var $pin=$tp.find('input');
-              $tp.css({width:'70px'}); $pin.css({width:'70px'});   // wide enough that 12h times like "12:00pm" are never clipped, squeezed, or hidden
-              $pin.on('keydown.tipesc',function(e2){ if(e2.key==='Escape'){ e2.stopPropagation(); recordDone(); } });  // cancel this field only; keep the popup open
-              // If the field blurs WITHOUT a change, the picker never calls onChange — exit edit mode ourselves
-              // once its own commit window (200ms) has passed and the input is still in the DOM.
-              $pin.on('blur.tipdone',function(){ setTimeout(function(){ if($pin[0]&&$.contains(document.documentElement,$pin[0])) recordDone(); },240); });
-              $pin.trigger('focus');
-            }
-          });
-        }
-        return $td;
-      }
       function _roleCells(r){
         // Hours cell holds its value in a dedicated span so the Non-Billable meal-break chip can sit in the
         // upper-right without overlapping the number (matching the Staffing Hours table's break label).
@@ -8666,14 +8715,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(sg.groups.length===1){
             var gp=sg.groups[0];
             $tb.append(_tipSectionHeaderRow([_tipSchoolNameFor(_siteRows,gp.schoolIdx)], gp.sd, gp.sd?_tipSdLabel(gObj.id,gp.sd):'', 6, 6));
-            appendSubtotal(_tipSchoolNameFor(_siteRows,gp.schoolIdx), _indivRoleRows(gp.rows));
+            appendSubtotal(_tipSchoolNameFor(_siteRows,gp.schoolIdx), _indivRoleRows(gp.rows), 1);
           } else {
             var _iNames=sg.schoolIdxs.map(function(si){ return _tipSchoolNameFor(_siteRows, si); });
             $tb.append(_tipSectionHeaderRow(_iNames, sg.sd, sg.sd?_tipSdLabel(gObj.id,sg.sd):'', 6, 6));
             var _cmb=_tipCombineSchoolRows(sg.groups), _sub=0;
             if(_cmb.anyReal){ _sub=_indivRoleRows(_cmb.rows); }
             else { var $nr=$('<tr>'); $nr.append($('<td>').attr('colspan',6).css({padding:'3px 5px 3px 6px',color:'#9aa0a6',fontStyle:'italic',fontSize:'10px'}).text('No hours')); $tb.append($nr); }
-            appendSubtotal(_iNames.join(', '), _sub);
+            appendSubtotal(_iNames.join(', '), _sub, sg.schoolIdxs.length);
           }
         });
       } else {
