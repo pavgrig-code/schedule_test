@@ -7798,7 +7798,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function _tipConfirmDeleteRow($anchor,r){
       $('.cal-tip-delmenu').remove();
       var $m=$('<div class="cal-tip-delmenu xs-ui">').css({position:'fixed',zIndex:'1000001',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 14px rgba(0,0,0,.16)',padding:'4px',minWidth:'132px',fontFamily:'inherit'});
-      var $del=$('<button type="button">').css({display:'block',width:'100%',textAlign:'left',background:'none',border:'none',borderRadius:'4px',padding:'6px 10px',cursor:'pointer',fontSize:'11px',fontWeight:'600',color:'#dc3545'}).text('Delete hours');
+      var _rl=(r&&r.label)?String(r.label).trim():'';
+      var $del=$('<button type="button">').css({display:'block',width:'100%',textAlign:'left',background:'none',border:'none',borderRadius:'4px',padding:'6px 10px',cursor:'pointer',fontSize:'11px',fontWeight:'600',color:'#dc3545'}).text(_rl?('Delete '+_rl+' Hours'):'Delete hours');
       var $cancel=$('<button type="button">').css({display:'block',width:'100%',textAlign:'left',background:'none',border:'none',borderRadius:'4px',padding:'6px 10px',cursor:'pointer',fontSize:'11px',color:'#495057'}).text('Cancel');
       $del.on('mouseenter',function(){ $(this).css('background','#fdecea'); }).on('mouseleave',function(){ $(this).css('background','none'); });
       $cancel.on('mouseenter',function(){ $(this).css('background','#f1f3f5'); }).on('mouseleave',function(){ $(this).css('background','none'); });
