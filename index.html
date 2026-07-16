@@ -7303,7 +7303,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $calTip=$('<div class="cal-hours-breakdown">').css({
       position:'fixed',zIndex:'999998',background:'#fff',border:'1px solid #dee2e6',
       borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,.15)',padding:'0',
-      fontSize:'11px',display:'none',minWidth:'300px',maxWidth:'480px',
+      fontSize:'11px',display:'none',minWidth:'300px',maxWidth:'560px',
       // interactive so user can scroll, select text, and move mouse into it
       pointerEvents:'auto'
     });
@@ -7693,7 +7693,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!create) return $();
       var $tr=$calTip.find('.cal-tip-titlerow').first();
       if(!$tr.length) return $();
-      $ar=$('<div class="cal-tip-actions">').css({display:'flex',justifyContent:'flex-end',alignItems:'center',gap:'6px',marginLeft:'auto',paddingLeft:'8px'});
+      $ar=$('<div class="cal-tip-actions">').css({display:'flex',flexWrap:'nowrap',justifyContent:'flex-end',alignItems:'center',gap:'6px',marginLeft:'auto',paddingLeft:'8px',flexShrink:'0'});
       $tr.append($ar);   // right side of the header title row (date/title + "+ Add Extra Shift" stay on the left)
       return $ar;
     }
@@ -7708,8 +7708,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $ar=_tipActionRow(true); if(!$ar.length) return;
         $ar.children('.cal-tip-reset').remove();
         if(!$ar.children('.cal-tip-save').length){
-          var $disc=$('<button type="button" class="cal-tip-discard">').text('Discard').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'4px',cursor:'pointer'});
-          var $save=$('<button type="button" class="cal-tip-save">').text('Save').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'#0d6efd',color:'#fff',border:'1px solid #0d6efd',borderRadius:'4px',cursor:'pointer'});
+          var $disc=$('<button type="button" class="cal-tip-discard">').text('Discard').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'4px',cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'});
+          var $save=$('<button type="button" class="cal-tip-save">').text('Save').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'#0d6efd',color:'#fff',border:'1px solid #0d6efd',borderRadius:'4px',cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'});
           $disc.on('click',function(e){ e.stopPropagation(); _discardTipEdits(); });
           $save.on('click',function(e){ e.stopPropagation(); _saveTipEdits(); });
           $ar.append($disc,$save);
@@ -7728,7 +7728,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!resettable){ $calTip.find('.cal-tip-actions').remove(); return; }
       var $ar2=_tipActionRow(true); if(!$ar2.length) return;
       if(!$ar2.children('.cal-tip-reset').length){
-        var $b=$('<button type="button" class="cal-tip-reset">').text('Reset to Original Hours').css({fontSize:'10px',fontWeight:'600',padding:'3px 9px',background:'#fff',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'4px',cursor:'pointer'});
+        var $b=$('<button type="button" class="cal-tip-reset">').text('Reset to Original Hours').css({fontSize:'10px',fontWeight:'600',padding:'3px 9px',background:'#fff',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'4px',cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'});
         $b.on('mouseenter',function(){ $(this).css({background:'#f1f3f5',color:'#495057'}); })
           .on('mouseleave',function(){ $(this).css({background:'#fff',color:'#6c757d'}); })
           .on('click',function(e){ e.stopPropagation(); _tipResetStaged=true; _repinRebuild(); });
@@ -7750,6 +7750,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         roleKey:r.roleKey, roleLabel:r.label||'', siList:r.siList.slice(),
         schools:r.siList.map(function(si){ return _tipSchoolNameFor(_sr,si); }),
         start:r.start, end:r.end, hours:r.hours, cnt:r.cnt, total:r.total, sd:r.sd||null,
+        origStart:r.origStart, origEnd:r.origEnd, origCnt:(r.origCnt!=null?r.origCnt:r.cnt), ovS:!!r.ovS, ovE:!!r.ovE, ovC:!!r.ovC,
         calId:calId, dateKey:dateKey, deletedAt:Date.now() };
       addRowTrash(gid,calId,dateKey,entry);
       r.siList.forEach(function(si){ setCellOv(gid,calId,dateKey,si,r.roleKey,{del:true}); });
@@ -7779,10 +7780,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Delete link style). Pinned popup only, real rows only. Clicking opens a compact Delete/Cancel menu.
     function _tipRowDelLink(r){
       var $d=$('<button type="button" class="cal-tip-del" title="Delete this hours row">').css({
-        position:'absolute',right:'2px',top:'50%',transform:'translateY(-50%)',width:'16px',height:'16px',
+        position:'absolute',right:'2px',top:'0',bottom:'0',margin:'auto 0',width:'16px',height:'16px',
+        display:'flex',alignItems:'center',justifyContent:'center',
         lineHeight:'1',padding:'0',border:'none',background:'transparent',color:'#dc3545',fontWeight:'700',
-        fontSize:'12px',cursor:'pointer',borderRadius:'50%',zIndex:'2'
-      }).html('&#215;');   // compact red x, same style as the Extra Shift row delete button
+        fontSize:'12px',cursor:'pointer',borderRadius:'50%',zIndex:'1'
+      }).html('&#215;');   // centered AND clamped to the cell's own height (top/bottom:0 + margin:auto), z below the
+                            // sticky Combined Total footer, so it can never bleed into or paint over the total row
       $d.on('mouseenter',function(){ $(this).css('background','#f8d7da'); })
         .on('mouseleave',function(){ $(this).css('background','transparent'); })
         .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _tipConfirmDeleteRow($(this),r); });
@@ -7829,6 +7832,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $w.on('mouseenter',function(){ $(this).css({background:'#f1f3f5',color:'#495057'}); }).on('mouseleave',function(){ $(this).css({background:'#fff',color:'#6c757d'}); });
       $w.on('click',function(e){ e.stopPropagation(); _openRowTrashPopup(); });
       $calTip.append($w);
+      // Combined view pins a sticky "Combined Total" footer at the bottom (z-index 5). Keep the trash icon
+      // clear of it: stack it above the total row so it is never hidden behind it, and float it just ABOVE
+      // that row so it stays fully visible and clickable instead of crowding the total value.
+      var $sfCell=$calTip.find('tfoot td').filter(function(){ return this.style && this.style.position==='sticky'; }).first();
+      if($sfCell.length){
+        var _ftr=$sfCell.closest('tr')[0];
+        var _fh=(_ftr && _ftr.getBoundingClientRect) ? _ftr.getBoundingClientRect().height : 0;
+        $w.css({ zIndex:'6', bottom:((_fh>0?_fh:30)+8)+'px' });
+      }
     }
     function _trashCalMeta(gid,calId){
       var cr=_xsCalRow(gid,calId); return { name:(cr&&cr.name)||('Calendar '+calId), color:(cr&&cr.color)||'#cfd6df' };
@@ -7892,10 +7904,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $r=$('<tr class="rowtrash-row">').css({color:'#9aa0a6'});   // muted by default
             function cell(v,align){ return $('<td>').css({padding:'3px 5px',textAlign:align||'center',whiteSpace:'nowrap'}).text(v); }
             $r.append(cell(e.roleLabel||'—','left'));
-            $r.append(cell(e.start||'—'));
-            $r.append(cell(e.end||'—'));
+            // Start / End / Count use the SAME override-comparison style as the main breakdown (_tipOvVal):
+            // a changed value is highlighted with the original Staffing Hours value in parentheses; unchanged
+            // fields render plain (inheriting the muted row colour). Only differing fields are highlighted.
+            function ovCell(v,isOv,orig){ return $('<td>').css({padding:'3px 5px',textAlign:'center',whiteSpace:'nowrap'}).append(_tipOvVal(v,isOv,orig)); }
+            $r.append(ovCell(e.start||'—', !!e.ovS, e.origStart));
+            $r.append(ovCell(e.end||'—', !!e.ovE, e.origEnd));
             $r.append(cell((e.hours!=null?e.hours:'—')));
-            $r.append(cell((e.cnt!=null?e.cnt:'—')));
+            $r.append(ovCell(String(e.cnt!=null?e.cnt:'—'), !!e.ovC, e.origCnt));
             $r.append(cell((e.total!=null?e.total:'—')));
             var $rl=$('<a href="#" class="rowtrash-restore-lbl">').css({fontSize:'10px',fontWeight:'600',textDecoration:'none',cursor:'pointer',color:'#c9ced4'}).text('Restore');   // pale/inactive by default
             var $rc=$('<td>').css({padding:'3px 5px',textAlign:'center'}).append($rl);
@@ -8691,7 +8707,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Combined Total (display-only until Save). _cCalcH gives raw hours from two 24h "HH:MM" strings.
       var _cLive={rows:[],subs:[],total:null,mark:0,xsConst:0};
       function _cCalcH(s,e2){ if(!s||!e2)return null; var sp=s.split(':'),ep=e2.split(':'); var sm2=parseInt(sp[0])*60+(parseInt(sp[1])||0),em2=parseInt(ep[0])*60+(parseInt(ep[1])||0); return em2>sm2?(Math.round((em2-sm2)/60*100)/100):null; }
-      $calTip.css({minWidth:'300px', maxWidth:'480px'});   // combined table is auto-layout; only reserve extra room when overrides render (max reset clears any width widened by the individual Extra Shift sub-card)
+      $calTip.css({minWidth:'300px', maxWidth:'560px'});   // combined table is auto-layout; only reserve extra room when overrides render (max reset clears any width widened by the individual Extra Shift sub-card)
 
       if(_tipAnchor && _tipAnchor[0]!==($td&&$td[0])){ _tipAnchor.removeClass('cal-hovered cal-hovered-wknd cal-tip-active'); _tipCellBg=null; }
       _tipAnchor=$td;
@@ -8726,8 +8742,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
 
       var $pad=$('<div>').css({padding:'10px 12px 10px 12px'});
-      var $titleRow=$('<div class="cal-tip-titlerow">').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px',paddingRight:(_tipPinned?'28px':'0')});
-      $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043'}).text(dateLabel));
+      var $titleRow=$('<div class="cal-tip-titlerow">').css({display:'flex',flexWrap:'nowrap',alignItems:'center',gap:'8px',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px',paddingRight:(_tipPinned?'28px':'0')});
+      $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',whiteSpace:'nowrap',flexShrink:'0'}).text(dateLabel));
       // '+ Add Extra Shift' — pinned popup only, next to the date, styled exactly like the regular view's link
       // (the Combined title row supplies the 8px spacing via its flex gap, so no extra margin here).
       if(_tipPinned && gObj && gObj.id){
@@ -8736,6 +8752,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $xsAddC.on('mouseleave',function(){ $(this).css({background:'transparent',textDecoration:'none'}); });
         $xsAddC.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _openXsEditor(null); });
         $titleRow.append($xsAddC);
+      }
+      // 'Schedule' link — same implementation, style, and click behavior as the regular view. Shown on
+      // hover and when pinned. The Combined title row supplies the 8px spacing via its flex gap, so this
+      // omits the regular view's marginLeft (matching how '+ Add Extra Shift' is adapted just above).
+      if(gObj && gObj.id){
+        var _spC=new URLSearchParams();
+        _spC.set('section','site_schedule'); _spC.set('planning_guide', gObj.id); _spC.set('view','day'); _spC.set('day', isoDate(cellDate));
+        var _schedHrefC=window.location.pathname+'?'+_spC.toString();
+        var $schedLinkC=$('<a>').attr({href:_schedHrefC,title:'Open this day in Schedule mode'}).css({
+          display:'inline-flex',alignItems:'center',gap:'3px',flexShrink:'0',
+          fontSize:'10px',fontWeight:'600',color:'#0d6efd',textDecoration:'none',cursor:'pointer',padding:'1px 6px',borderRadius:'4px',lineHeight:'1.4'});
+        $schedLinkC.append($('<span>').css({display:'inline-flex',alignItems:'center'}).html('<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="display:block;"><path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/></svg>'));
+        $schedLinkC.append($('<span>').text('Schedule'));
+        $schedLinkC.on('mouseenter',function(){ $(this).css({background:'#eaf2ff',textDecoration:'underline'}); });
+        $schedLinkC.on('mouseleave',function(){ $(this).css({background:'transparent',textDecoration:'none'}); });
+        $schedLinkC.on('click',function(e){
+          e.preventDefault();
+          hideCalTooltip();
+          selectedGuideId = gObj.id;
+          schedFilterSchool=''; schedFilterCalendar='';
+          viewMode='day';
+          viewYear=cellDate.getFullYear(); viewMonth=cellDate.getMonth(); viewDay=cellDate.getDate();
+          _schedDateInit=true;
+          try{ history.pushState({}, '', _schedHrefC); }catch(_e){}
+          setPageMode('schedule');
+        });
+        $titleRow.append($schedLinkC);
       }
       $pad.append($titleRow);
       // Extra Shifts area directly under the header — BEFORE the calendar-name rows, school lists, and
@@ -8748,7 +8791,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var cols=[{label:'Role',align:'left'},{label:'Start',align:'center'},{label:'End',align:'center'},{label:'Hrs',align:'center'},{label:'Count',align:'center'},{label:'Total',align:'center'}];
       var _ncol=cols.length; // School & Special Day are now per-section subheaders, not columns
       var $thead=$('<thead>'), $hrow=$('<tr>');
-      cols.forEach(function(c){ $hrow.append($('<th>').css({padding:'3px 6px',fontWeight:'600',color:'#6c757d',textAlign:c.align,whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',background:'#ffffff',position:'sticky',top:'0'}).text(c.label)); });
+      cols.forEach(function(c){ $hrow.append($('<th>').css({padding:'3px 6px',fontWeight:'600',color:'#6c757d',textAlign:c.align,whiteSpace:'nowrap',borderBottom:'1px solid #e9ecef',background:'#ffffff',position:'sticky',top:'0',zIndex:'3'}).text(c.label)); });
       $thead.append($hrow); $tbl.append($thead);
 
       var $tb=$('<tbody>'), grand=0;
@@ -8897,8 +8940,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _xsG=0; _xsItems.forEach(function(it){ _xsG+=xsShiftTotal(it.sh, it.calRow); }); grand+=_xsG;
       grand=Math.round(grand*100)/100;
       var $tfoot=$('<tfoot>'), $trow=$('<tr>');
-      $trow.append($('<td>').attr('colspan',_ncol-1).css({padding:'6px 6px',fontWeight:'800',fontSize:'11px',color:'#1f3a5f',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0'}).text('Combined Total'));
-      var $grandTd=$('<td>').css({padding:'6px 6px',textAlign:'center',fontWeight:'800',color:'#0d3b66',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0'}).text(grand);
+      $trow.append($('<td>').attr('colspan',_ncol-1).css({padding:'6px 6px',fontWeight:'800',fontSize:'11px',color:'#1f3a5f',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0',zIndex:'5'}).text('Combined Total'));
+      var $grandTd=$('<td>').css({padding:'6px 6px',textAlign:'center',fontWeight:'800',color:'#0d3b66',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0',zIndex:'5'}).text(grand);
       $trow.append($grandTd);
       $tfoot.append($trow); $tbl.append($tfoot);
 
@@ -9124,8 +9167,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var dateLabel=cellDate?(FULL_DAYS[cellDate.getDay()]+', '+FULL_MONTHS[cellDate.getMonth()]+' '+cellDate.getDate()):'';
       var headerText=dateLabel;
       if(abWeek) headerText+=' (Week '+(abWeek==='a'?'A':'B')+')';
-      var $titleRow=$('<div class="cal-tip-titlerow">').css({display:'flex',alignItems:'center',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px',paddingRight:(_tipPinned?'28px':'0')});
-      $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043'}).text(headerText));
+      var $titleRow=$('<div class="cal-tip-titlerow">').css({display:'flex',flexWrap:'nowrap',alignItems:'center',marginBottom:'6px',borderBottom:'1px solid #e9ecef',paddingBottom:'4px',paddingRight:(_tipPinned?'28px':'0')});
+      $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',whiteSpace:'nowrap',flexShrink:'0'}).text(headerText));
       // '+ Add Extra Shift' — pinned popup only, placed between the date and the Schedule link, styled to
       // match the Schedule link (same size/weight/hover) so the header reads: {Date}  + Add Extra Shift  Schedule.
       if(_tipPinned && gObj && gObj.id && _tipCalId!=null){
