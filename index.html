@@ -8946,8 +8946,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Extra Shifts (shown at the top) contribute to the Combined Total just as they do to the calendar cells.
       var _xsG=0; _xsItems.forEach(function(it){ _xsG+=xsShiftTotal(it.sh, it.calRow); }); grand+=_xsG;
       grand=Math.round(grand*100)/100;
+      // Total label reflects how many Program Calendars are represented in this combined popup: more than
+      // one → "Combined Total (N programs)"; a single calendar → "Total (1 program)".
+      var _nProg=groups.length, _combTotLabel=(_nProg>1)?('Combined Total ('+_nProg+' programs)'):'Total (1 program)';
       var $tfoot=$('<tfoot>'), $trow=$('<tr>');
-      $trow.append($('<td>').attr('colspan',_ncol-1).css({padding:'6px 6px',fontWeight:'800',fontSize:'11px',color:'#1f3a5f',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0',zIndex:'5'}).text('Combined Total'));
+      $trow.append($('<td>').attr('colspan',_ncol-1).css({padding:'6px 6px',fontWeight:'800',fontSize:'11px',color:'#1f3a5f',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0',zIndex:'5'}).text(_combTotLabel));
       var $grandTd=$('<td>').css({padding:'6px 6px',textAlign:'center',fontWeight:'800',color:'#0d3b66',background:'#dce7f5',borderTop:'2px solid #b6c9e2',position:'sticky',bottom:'0',zIndex:'5'}).text(grand);
       $trow.append($grandTd);
       $tfoot.append($trow); $tbl.append($tfoot);
@@ -10233,7 +10236,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           grow.getCell(3).numFmt=FMT_H; grow.getCell(4).numFmt=FMT_AMT;
           grow.getCell(3).alignment={horizontal:'right'}; grow.getCell(4).alignment={horizontal:'right'};
         });
-        var gtot=dataRow(ws5,[null,'Planning Guide',_pgH,_pgA]);
+        var _pgXLabel='Planning Guide ('+guideRows.length+' program'+(guideRows.length===1?'':'s')+')';
+        var gtot=dataRow(ws5,[null,_pgXLabel,_pgH,_pgA]);
         gtot.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9E6F6'}}; c.font={name:'Calibri',size:10,bold:true}; });
         gtot.getCell(3).numFmt=FMT_H; gtot.getCell(4).numFmt=FMT_AMT;
         gtot.getCell(3).alignment={horizontal:'right'}; gtot.getCell(4).alignment={horizontal:'right'};
@@ -10510,7 +10514,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       // Grand Total row: "Total | Planning Guide" — emphasized, consistent with the calendar total rows.
       var $gTot=$('<tr>').css({background:'#d9e6f6',borderTop:'2px solid #b0c8e6'});
-      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Planning Guide'));
+      var _pgProgLabel='Planning Guide ('+guideRollup.length+' program'+(guideRollup.length===1?'':'s')+')';
+      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text(_pgProgLabel));
       $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_gHours)));
       $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(_gAmt)));
       $gTb.append($gTot);
