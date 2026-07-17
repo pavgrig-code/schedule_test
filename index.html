@@ -7833,13 +7833,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $w.on('click',function(e){ e.stopPropagation(); _openRowTrashPopup(); });
       $calTip.append($w);
       // Combined view pins a sticky "Combined Total" footer at the bottom (z-index 5). Keep the trash icon
-      // clear of it: stack it above the total row so it is never hidden behind it, and float it just ABOVE
-      // that row so it stays fully visible and clickable instead of crowding the total value.
+      // fully clear of it: stack it well above the total row so it can never be hidden behind it, and float
+      // it above the row (measured from the footer's actual top edge when layout is available) so it is not
+      // crowding the total. Falls back to a generous fixed clearance when layout isn't measurable yet.
       var $sfCell=$calTip.find('tfoot td').filter(function(){ return this.style && this.style.position==='sticky'; }).first();
       if($sfCell.length){
+        $w.css('zIndex','7');   // above the sticky Combined Total footer (z5) and the sticky header
         var _ftr=$sfCell.closest('tr')[0];
-        var _fh=(_ftr && _ftr.getBoundingClientRect) ? _ftr.getBoundingClientRect().height : 0;
-        $w.css({ zIndex:'6', bottom:((_fh>0?_fh:30)+8)+'px' });
+        var _lift=38;   // fallback: comfortably clears a single-line total row
+        if(_ftr && _ftr.getBoundingClientRect && $calTip[0].getBoundingClientRect){
+          var _fr=_ftr.getBoundingClientRect(), _tr=$calTip[0].getBoundingClientRect();
+          var _exact=(_tr.bottom - _fr.top) + 10;   // sit 10px above the footer's top edge
+          if(isFinite(_exact) && _exact>_lift) _lift=_exact;
+        }
+        $w.css('bottom', Math.round(_lift)+'px');
       }
     }
     function _trashCalMeta(gid,calId){
