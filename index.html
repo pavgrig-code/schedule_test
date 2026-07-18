@@ -270,13 +270,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .dow-pill.current{background:#e8f1ff;border-color:var(--blue);color:var(--blue);font-weight:700;box-shadow:0 0 0 2px rgba(13,110,253,0.3);}
 .dow-pill.on.current{background:var(--blue);border-color:var(--blue2);color:#fff;box-shadow:0 0 0 2px rgba(13,110,253,0.5),inset 0 0 0 2px rgba(255,255,255,0.5);}
 #edit-error{font-size:11px;color:var(--red);min-height:15px;margin-top:-6px;}
-.wysiwyg-wrap{border:1px solid var(--bd);border-radius:7px;overflow:hidden;background:#fff;}
+.wysiwyg-wrap{border:1px solid var(--bd);border-radius:7px;overflow:hidden;background:#fff;display:flex;flex-direction:column;}
 .wysiwyg-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,110,253,.13);}
-.wysiwyg-toolbar{display:flex;gap:2px;padding:4px 6px;border-bottom:1px solid var(--bd);background:var(--bg3);flex-wrap:wrap;}
+.wysiwyg-toolbar{display:flex;gap:2px;padding:4px 6px;border-top:1px solid var(--bd);background:var(--bg3);flex-wrap:wrap;order:2;}
 .wysiwyg-btn{padding:3px 7px;border:1px solid transparent;border-radius:4px;background:none;font-size:12px;cursor:pointer;color:var(--tx);line-height:1;transition:background .1s;}
 .wysiwyg-btn:hover{background:var(--bg);border-color:var(--bd);}
 .wysiwyg-btn.active{background:#dbeafe;border-color:#93c5fd;color:var(--blue);}
-.wysiwyg-body{min-height:72px;max-height:140px;overflow-y:auto;padding:8px 10px;font-size:13px;color:var(--tx);outline:none;line-height:1.5;}
+.wysiwyg-body{min-height:72px;max-height:140px;overflow-y:auto;padding:8px 10px;font-size:13px;color:var(--tx);outline:none;line-height:1.5;order:1;}
 .wysiwyg-body:empty:before{content:attr(data-placeholder);color:var(--tx2);pointer-events:none;}
 /* Staff column */
 .staff-col{width:162px;flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);display:flex;flex-direction:column;}
@@ -1778,23 +1778,103 @@ $(function(){
   var _wsSeq = 0;             // monotonic panel number → default names never collide, even after deletes
   var _wsMaxZ = 0;            // highest z assigned (front-most)
   var _wsCtxPos = null;       // canvas-relative point of the last right-click (Add Panel placement)
-  var _WS_MINW = 180, _WS_MINH = 96, _WS_DEFW = 248, _WS_DEFH = 168, _WS_KEY = 'pg_workspace_v1';
+  var _WS_MINW = 180, _WS_MINH = 96, _WS_DEFW = 248, _WS_DEFH = 168;
+  var _WS_KEY_BASE = 'pg_workspace_v1';
+  var _wsSeeded = false;   // whether this user's Workspace has been seeded with its default panel
+  // Header colour palette — same options used by Program Calendar circles in the Planning Guide.
+  var _WS_COLORS = ['#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688',
+                    '#4caf50','#ffeb3b','#ffc107','#ff9800','#ff5722','#795548','#9e9e9e','#607d8b'];
+
+  // No auth system yet — derive a stable per-browser id so each user/browser gets an isolated Workspace.
+  function _wsUserId(){
+    try{
+      var k = 'pg_ws_uid', v = window.localStorage.getItem(k);
+      if(!v){ v = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); window.localStorage.setItem(k, v); }
+      return v;
+    }catch(e){ return 'local'; }
+  }
+  function _wsStorageKey(){ return _WS_KEY_BASE + ':' + _wsUserId(); }
 
   function _wsLoad(){
     try{
-      var raw = window.localStorage.getItem(_WS_KEY);
+      var raw = window.localStorage.getItem(_wsStorageKey());
       if(!raw) return;
       var o = JSON.parse(raw);
       if(o && Array.isArray(o.panels)){
         workspacePanels = o.panels;
-        _wsSeq = o.seq || workspacePanels.length;
+        _wsSeq = o.seq || 0;
+        _wsSeeded = !!o.seeded;
         workspacePanels.forEach(function(p){ if((p.z||0) > _wsMaxZ) _wsMaxZ = p.z; if((p.seq||0) > _wsSeq) _wsSeq = p.seq; });
       }
     }catch(e){}
   }
   function _wsSave(){
-    try{ window.localStorage.setItem(_WS_KEY, JSON.stringify({ panels: workspacePanels, seq: _wsSeq })); }catch(e){}
+    try{ window.localStorage.setItem(_wsStorageKey(), JSON.stringify({ panels: workspacePanels, seq: _wsSeq, seeded: _wsSeeded })); }catch(e){}
   }
+
+  // ── Sanitizer for Note content: keep safe formatting only, drop scripts/handlers/dangerous HTML. ──
+  var _WS_OK_TAGS = { A:1,B:1,STRONG:1,I:1,EM:1,U:1,S:1,STRIKE:1,SUB:1,SUP:1,P:1,BR:1,DIV:1,SPAN:1,UL:1,OL:1,LI:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,BLOCKQUOTE:1,PRE:1,CODE:1 };
+  var _WS_DROP_TAGS = { SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,LINK:1,META:1,FORM:1,INPUT:1,BUTTON:1,TEXTAREA:1,SELECT:1,SVG:1,MATH:1,BASE:1,TITLE:1,NOSCRIPT:1 };
+  var _WS_OK_STYLE = { 'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1,'color':1,'background-color':1,'text-align':1 };
+  function _wsSanitizeStyle(style){
+    if(!style) return '';
+    var out = [];
+    String(style).split(';').forEach(function(decl){
+      var idx = decl.indexOf(':'); if(idx < 0) return;
+      var prop = decl.slice(0, idx).trim().toLowerCase(), val = decl.slice(idx + 1).trim();
+      if(_WS_OK_STYLE[prop] && !/url\s*\(|expression|javascript:/i.test(val)) out.push(prop + ':' + val);
+    });
+    return out.join(';');
+  }
+  function _wsSanitizeHtml(html){
+    if(html == null) return '';
+    var root = document.createElement('div');
+    try{ root.innerHTML = String(html); }catch(e){ return ''; }
+    (function walk(node){
+      var child = node.firstChild;
+      while(child){
+        var next = child.nextSibling;
+        if(child.nodeType === 1){
+          var tag = child.tagName;
+          if(_WS_DROP_TAGS[tag]){
+            node.removeChild(child);
+          } else if(!_WS_OK_TAGS[tag]){
+            while(child.firstChild) node.insertBefore(child.firstChild, child);   // unwrap unknown tags, keep text
+            node.removeChild(child);
+          } else {
+            for(var i = child.attributes.length - 1; i >= 0; i--){
+              var an = child.attributes[i].name, av = child.attributes[i].value, ln = an.toLowerCase();
+              if(ln === 'href' && tag === 'A'){
+                if(!(/^\s*(https?:|mailto:|\/|#)/i.test(av)) || /^\s*javascript:/i.test(av)) child.removeAttribute(an);
+              } else if(ln === 'style'){
+                var s = _wsSanitizeStyle(av); if(s) child.setAttribute('style', s); else child.removeAttribute(an);
+              } else {
+                child.removeAttribute(an);   // drops on*-handlers, src, class, id, etc.
+              }
+            }
+            walk(child);
+          }
+        } else if(child.nodeType === 8){
+          node.removeChild(child);   // strip comments
+        }
+        child = next;
+      }
+    })(root);
+    return root.innerHTML;
+  }
+
+  // Seed this user's Workspace once with the default top-left Planning Guides panel (500x300). Never duplicated;
+  // if the user later moves, resizes, renames or deletes it, that choice is preserved (we don't re-seed).
+  function _wsEnsureDefaults(){
+    if(_wsSeeded) return;
+    _wsSeeded = true;
+    if(!workspacePanels.some(function(p){ return p.type === 'guides'; })){
+      _wsMaxZ++;
+      workspacePanels.push({ id: 'wsp_guides_' + Date.now(), name: 'Planning Guides', type: 'guides', x: 0, y: 0, w: 500, h: 300, z: _wsMaxZ });
+    }
+    _wsSave();
+  }
+
   function _wsClamp(v,min,max){ if(max<min) max=min; return v<min?min:(v>max?max:v); }
   function _wsBounds(canvas){
     var r = (canvas && canvas.getBoundingClientRect) ? canvas.getBoundingClientRect() : {width:0,height:0};
@@ -1811,15 +1891,21 @@ $(function(){
         'display:flex;flex-direction:column;overflow:hidden;min-width:'+_WS_MINW+'px;min-height:'+_WS_MINH+'px;}'+
       '.ws-panel-header{display:flex;align-items:center;gap:8px;padding:7px 8px 7px 11px;background:#f5f7fa;'+
         'border-bottom:1px solid #e9ecef;cursor:move;user-select:none;flex:0 0 auto;}'+
-      '.ws-panel-name{font-size:12px;font-weight:600;color:#212529;flex:1;white-space:nowrap;overflow:hidden;'+
-        'text-overflow:ellipsis;cursor:text;padding:1px 4px;border-radius:4px;min-width:0;}'+
+      '.ws-panel-name{font-size:12px;font-weight:600;color:#212529;max-width:58%;white-space:nowrap;overflow:hidden;'+
+        'text-overflow:ellipsis;cursor:text;padding:1px 4px;border-radius:4px;min-width:0;flex:0 0 auto;}'+
       '.ws-panel-name:hover{background:#e8eef6;}'+
-      '.ws-panel-name-input{flex:1;font-size:12px;font-weight:600;color:#212529;border:1px solid #86b7fe;'+
-        'border-radius:4px;padding:1px 4px;outline:none;min-width:0;font-family:inherit;}'+
+      '.ws-panel-name-input{font-size:12px;font-weight:600;color:#212529;border:1px solid #86b7fe;'+
+        'border-radius:4px;padding:1px 4px;outline:none;min-width:36px;max-width:58%;flex:0 0 auto;font-family:inherit;box-sizing:content-box;}'+
       '.ws-panel-menu-btn{flex:0 0 auto;border:none;background:transparent;color:#6c757d;cursor:pointer;'+
         'font-size:15px;line-height:1;padding:2px 7px;border-radius:4px;}'+
       '.ws-panel-menu-btn:hover{background:#e2e8f0;color:#212529;}'+
-      '.ws-panel-body{flex:1;overflow:auto;background:#fff;}'+
+      '.ws-panel-body{flex:1;overflow:auto;background:#fff;min-height:0;}'+
+      '.ws-note-display{padding:8px 11px;font-size:11.5px;line-height:1.55;color:#3c4043;min-height:100%;box-sizing:border-box;cursor:text;word-break:break-word;overflow-wrap:anywhere;}'+
+      '.ws-note-display.empty{color:#adb5bd;font-style:italic;}'+
+      '.ws-note-edit{display:flex;flex-direction:column;height:100%;min-height:0;}'+
+      '.ws-note-edit .wysiwyg-wrap{border:none;border-radius:0;display:flex;flex-direction:column;flex:1;min-height:0;}'+
+      '.ws-note-edit .wysiwyg-body{flex:1;min-height:0;max-height:none;overflow-y:auto;font-size:11.5px;line-height:1.55;}'+
+      '.ws-note-edit .wysiwyg-btn{font-size:11px;padding:2px 6px;}'+
       '.ws-rz{position:absolute;z-index:3;}'+
       '.ws-rz-n{top:-2px;left:9px;right:9px;height:6px;cursor:ns-resize;}'+
       '.ws-rz-s{bottom:-2px;left:9px;right:9px;height:6px;cursor:ns-resize;}'+
@@ -1836,6 +1922,19 @@ $(function(){
       '.ws-menu-item:hover{background:#eef2f7;}'+
       '.ws-menu-item.danger{color:#dc3545;}'+
       '.ws-menu-item.danger:hover{background:#f8d7da;}'+
+      '.ws-menu-divider{height:1px;background:#e9ecef;margin:4px 6px;}'+
+      '.ws-panel-color{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.28);cursor:pointer;flex:0 0 auto;margin-left:auto;box-sizing:border-box;display:inline-block;}'+
+      '.ws-color-menu{padding:8px;}'+
+      '.ws-color-grid{display:grid;grid-template-columns:repeat(8,20px);gap:5px;}'+
+      '.ws-color-opt{width:20px;height:20px;border-radius:50%;border:1px solid rgb(210,210,210);cursor:pointer;box-sizing:border-box;}'+
+      '.ws-color-opt:hover{border:1.5px solid #999;box-shadow:inset 0 0 0 1px rgba(0,0,0,.10);}'+
+      '.ws-color-opt.sel{border:1.5px solid #bbb;box-shadow:inset 0 0 0 2px rgba(0,0,0,.18);}'+
+      '.ws-panel-header.ws-dark-header .ws-panel-name{color:#fff;}'+
+      '.ws-panel-header.ws-dark-header .ws-panel-name:hover{background:rgba(255,255,255,.18);}'+
+      '.ws-panel-header.ws-dark-header .ws-panel-menu-btn{color:rgba(255,255,255,.9);}'+
+      '.ws-panel-header.ws-dark-header .ws-panel-menu-btn:hover{background:rgba(255,255,255,.2);color:#fff;}'+
+      '.ws-panel-header.ws-dark-header .ws-panel-color{border-color:rgba(255,255,255,.65);}'+
+      '.ws-panel-header.ws-dark-header{border-bottom-color:rgba(255,255,255,.18);}'+
       '.ws-confirm-overlay{position:fixed;inset:0;background:rgba(16,24,40,.35);display:flex;align-items:center;justify-content:center;z-index:1000001;}'+
       '.ws-confirm-box{background:#fff;border-radius:10px;box-shadow:0 12px 40px rgba(16,24,40,.24);padding:20px 22px;max-width:360px;width:calc(100% - 40px);}'+
       '.ws-confirm-msg{font-size:13.5px;color:#212529;line-height:1.5;margin-bottom:16px;}'+
@@ -1857,6 +1956,76 @@ $(function(){
     _wsSave();
   }
 
+  function _wsSendToBack(panel, el){
+    if(workspacePanels.length < 2){ return; }
+    var minZ = Infinity;
+    workspacePanels.forEach(function(p){ if(p !== panel && (p.z || 1) < minZ) minZ = p.z || 1; });
+    if(minZ === Infinity) return;
+    panel.z = minZ - 1;
+    if(panel.z < 1){                                   // keep all z positive by re-basing the whole stack
+      var shift = 1 - panel.z;
+      workspacePanels.forEach(function(p){ p.z = (p.z || 1) + shift; });
+      _wsMaxZ += shift;
+      workspacePanels.forEach(function(p){ var pe = document.querySelector('.ws-panel[data-ws-id="' + p.id + '"]'); if(pe) pe.style.zIndex = String(p.z); });
+    } else if(el){ el.style.zIndex = String(panel.z); }
+    _wsSave();
+  }
+
+  // Perceived-brightness test (YIQ) → true means the colour is dark and wants light text on top.
+  function _wsIsDark(hex){
+    if(!hex) return false;
+    var c = String(hex).replace('#', '');
+    if(c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+    if(c.length < 6) return false;
+    var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+    if(isNaN(r) || isNaN(g) || isNaN(b)) return false;
+    return ((r * 299 + g * 587 + b * 114) / 1000) < 140;
+  }
+  function _wsIsDefaultColor(col){ return !col || String(col).toLowerCase() === '#ffffff' || col === 'transparent'; }
+
+  // Apply a panel's saved header colour: header background + light/dark text + circle swatch.
+  function _wsApplyPanelColor(panel, $el){
+    var $header = $el.find('.ws-panel-header');
+    var $circle = $header.find('.ws-panel-color');
+    if(_wsIsDefaultColor(panel.color)){
+      $header.css('background', '').removeClass('ws-dark-header');   // default header style
+      $circle.css('background', '#ffffff');
+    } else {
+      $header.css('background', panel.color);
+      $header.toggleClass('ws-dark-header', _wsIsDark(panel.color));
+      $circle.css('background', panel.color);
+    }
+  }
+  function _wsSetPanelColor(panel, $el, col){
+    panel.color = col;
+    _wsSave();
+    _wsApplyPanelColor(panel, $el);
+  }
+
+  function _wsColorPicker(panel, $el, $circle){
+    _wsCloseMenus();
+    var $m = $('<div class="ws-menu ws-color-menu">');
+    var $grid = $('<div class="ws-color-grid">');
+    _WS_COLORS.forEach(function(col){
+      var $opt = $('<div class="ws-color-opt">').css('background', col);
+      if((panel.color || '#ffffff') === col) $opt.addClass('sel');
+      $opt.on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSetPanelColor(panel, $el, col); });
+      $grid.append($opt);
+    });
+    $m.append($grid);
+    $('body').append($m);
+    // Measure the menu while it is fixed + off-screen so it sizes to its content (a static block would be
+    // full-width and push the placement logic to the far-left corner).
+    $m.css({ position:'fixed', left:'-9999px', top:'0px', visibility:'hidden', zIndex:1000000 });
+    var r = ($circle[0].getBoundingClientRect) ? $circle[0].getBoundingClientRect() : { bottom:0, left:100, right:112, top:0 };
+    var mw = $m[0].offsetWidth || 196, mh = $m[0].offsetHeight || 70;
+    var vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+    var left = r.left; if(left + mw > vw - 4) left = Math.max(4, r.right - mw); if(left < 4) left = 4;
+    var top = r.bottom + 5; if(top + mh > vh - 4) top = Math.max(4, r.top - mh - 5);
+    $m.css({ left: left + 'px', top: top + 'px', visibility:'visible' });
+    setTimeout(function(){ $(document).on('mousedown.wsmenu', function(ev){ if(!$m[0].contains(ev.target)) _wsCloseMenus(); }); }, 0);
+  }
+
   function _wsWireName(panel, $header){
     $header.find('.ws-panel-name').off('click.wsname').on('click.wsname', function(e){ e.stopPropagation(); _wsEditName(panel, $header); });
   }
@@ -1865,6 +2034,8 @@ $(function(){
     if(!$name.length) return;
     var prev = panel.name;
     var $inp = $('<input type="text" class="ws-panel-name-input">').val(prev);
+    function _wsSizeInput(){ $inp.attr('size', Math.max(6, ($inp.val() || '').length + 1)); }   // only slightly wider than the text
+    _wsSizeInput();
     $name.replaceWith($inp);
     try{ $inp.trigger('focus'); $inp[0].select(); }catch(e){}
     var done = false;
@@ -1884,6 +2055,7 @@ $(function(){
       else if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
     });
     $inp.on('blur', function(){ finish(true); });
+    $inp.on('input', _wsSizeInput);
     $inp.on('mousedown click', function(e){ e.stopPropagation(); });   // never start a drag from the editor
   }
 
@@ -1947,17 +2119,31 @@ $(function(){
   function _wsPanelMenu(panel, $el, $btn){
     _wsCloseMenus();
     var $m = $('<div class="ws-menu ws-panel-menu">');
+    $m.append($('<div class="ws-menu-item">').text('Bring to Front').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-item">').text('Send to Back').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-divider">'));
     $m.append($('<div class="ws-menu-item danger">').text('Delete').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsConfirmDelete(panel, $el); }));
     $('body').append($m);
-    var r = ($btn[0].getBoundingClientRect) ? $btn[0].getBoundingClientRect() : {bottom:0,right:120};
-    $m.css({ position:'fixed', top:(r.bottom + 3) + 'px', left: Math.max(4, r.right - 132) + 'px', zIndex:1000000 });
+    // Measure while fixed + off-screen so the menu is content-width, not a full-width block.
+    $m.css({ position:'fixed', left:'-9999px', top:'0px', visibility:'hidden', zIndex:1000000 });
+    // Prefer opening to the right of the button; fall back to the left if it would overflow. Keep it on-screen.
+    var r = ($btn[0].getBoundingClientRect) ? $btn[0].getBoundingClientRect() : { bottom:0, right:120, left:100, top:0 };
+    var mw = $m[0].offsetWidth || 150, mh = $m[0].offsetHeight || 118;
+    var vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+    var left = r.left;                                   // rightward from the button's left edge
+    if(left + mw > vw - 4) left = r.right - mw;           // not enough room right → open leftward
+    if(left < 4) left = 4;
+    if(left + mw > vw - 4) left = Math.max(4, vw - mw - 4);
+    var top = r.bottom + 3;
+    if(top + mh > vh - 4) top = Math.max(4, r.top - mh - 3);
+    $m.css({ left: left + 'px', top: top + 'px', visibility:'visible' });
     setTimeout(function(){ $(document).on('mousedown.wsmenu', function(ev){ if(!$m[0].contains(ev.target)) _wsCloseMenus(); }); }, 0);
   }
 
   function _wsConfirmDelete(panel, $el){
     var $ov = $('<div class="ws-confirm-overlay">');
     var $box = $('<div class="ws-confirm-box">');
-    $box.append($('<div class="ws-confirm-msg">').text('Delete “' + panel.name + '”? This removes the panel from your Workspace.'));
+    $box.append($('<div class="ws-confirm-msg">').text('Delete “' + panel.name + '”?'));
     var $btns = $('<div class="ws-confirm-btns">');
     var $cancel = $('<button type="button" class="ws-btn ws-btn-secondary">').text('Cancel');
     var $ok = $('<button type="button" class="ws-btn ws-btn-danger">').text('Delete');
@@ -1979,18 +2165,23 @@ $(function(){
     var $el = $('<div class="ws-panel" data-ws-id="' + panel.id + '">').css({ left: panel.x + 'px', top: panel.y + 'px', width: panel.w + 'px', height: panel.h + 'px', zIndex: String(panel.z || 1) });
     var $header = $('<div class="ws-panel-header">');
     $header.append($('<span class="ws-panel-name">').text(panel.name));
+    var $color = $('<span class="ws-panel-color" title="Header color" aria-label="Header color">');
     var $menuBtn = $('<button type="button" class="ws-panel-menu-btn" title="Panel options" aria-label="Panel options">').html('&#8943;');
-    $header.append($menuBtn);
-    $el.append($header, $('<div class="ws-panel-body">'));
+    $header.append($color, $menuBtn);
+    var $body = $('<div class="ws-panel-body">');
+    $el.append($header, $body);
     ['n','s','e','w','ne','nw','se','sw'].forEach(function(d){ $el.append($('<div class="ws-rz ws-rz-' + d + '">').attr('data-dir', d)); });
     _wsWireName(panel, $header);
     $header.on('mousedown', function(e){
-      if($(e.target).closest('.ws-panel-menu-btn, .ws-panel-name, .ws-panel-name-input').length) return;   // controls / name edit never drag
+      if($(e.target).closest('.ws-panel-menu-btn, .ws-panel-name, .ws-panel-name-input, .ws-panel-color').length) return;   // controls / name edit never drag
       _wsStartDrag(panel, $el, e);
     });
     $el.on('mousedown', function(){ _wsBringToFront(panel, $el[0]); });
+    $color.on('click', function(e){ e.preventDefault(); e.stopPropagation(); _wsColorPicker(panel, $el, $color); });
     $menuBtn.on('click', function(e){ e.preventDefault(); e.stopPropagation(); _wsPanelMenu(panel, $el, $menuBtn); });
     $el.find('.ws-rz').on('mousedown', function(e){ _wsStartResize(panel, $el, $(this).attr('data-dir'), e); });
+    if(panel.type === 'note'){ _wsNoteDisplay(panel, $body); }
+    _wsApplyPanelColor(panel, $el);   // restore any saved header colour + text contrast
     return $el;
   }
 
@@ -2001,6 +2192,7 @@ $(function(){
     _wsCtxPos = { x: (ev.clientX - r.left) + (canvas.scrollLeft || 0), y: (ev.clientY - r.top) + (canvas.scrollTop || 0) };
     var $m = $('<div class="ws-menu ws-context-menu">');
     $m.append($('<div class="ws-menu-item">').text('Add Panel').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsAddPanel(); }));
+    $m.append($('<div class="ws-menu-item">').text('Add Note').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsAddNote(); }));
     $('body').append($m);
     var mw = 140, mh = 40, left = ev.clientX, top = ev.clientY;
     if(r.width){                                        // keep the menu inside the canvas when we can measure
@@ -2013,13 +2205,11 @@ $(function(){
     setTimeout(function(){ $(document).on('mousedown.wsmenu', function(ev2){ if(!$m[0].contains(ev2.target)) _wsCloseMenus(); }); }, 0);
   }
 
-  function _wsAddPanel(){
-    _wsSeq++;
-    var x, y;
-    if(_wsCtxPos){ x = Math.max(0, _wsCtxPos.x - 12); y = Math.max(0, _wsCtxPos.y - 12); }
-    else { var n = workspacePanels.length; x = 20 + (n * 26) % 220; y = 20 + (n * 26) % 200; }   // cascade when no right-click point
-    _wsMaxZ++;
-    var panel = { id: 'wsp_' + Date.now() + '_' + Math.floor(Math.random() * 100000), name: 'Panel ' + _wsSeq, seq: _wsSeq, x: x, y: y, w: _WS_DEFW, h: _WS_DEFH, z: _wsMaxZ };
+  function _wsPlacePos(){
+    if(_wsCtxPos) return { x: Math.max(0, _wsCtxPos.x - 12), y: Math.max(0, _wsCtxPos.y - 12) };
+    var n = workspacePanels.length; return { x: 20 + (n * 26) % 220, y: 20 + (n * 26) % 200 };   // cascade when no right-click point
+  }
+  function _wsInsertPanel(panel){
     workspacePanels.push(panel);
     var $canvas = $('#workspace-panel .ws-canvas');
     if($canvas.length) $canvas.append(_wsBuildPanel(panel));
@@ -2027,6 +2217,60 @@ $(function(){
     _wsSave();
     _wsUpdateEmptyHint();
     return panel;
+  }
+  function _wsAddPanel(){
+    _wsSeq++;
+    var p = _wsPlacePos(); _wsMaxZ++;
+    return _wsInsertPanel({ id: 'wsp_' + Date.now() + '_' + Math.floor(Math.random() * 100000), name: 'Panel ' + _wsSeq, seq: _wsSeq, x: p.x, y: p.y, w: _WS_DEFW, h: _WS_DEFH, z: _wsMaxZ });
+  }
+  function _wsNextNoteNumber(){
+    var used = {};
+    workspacePanels.forEach(function(p){ if(p.type === 'note'){ var m = /^Note (\d+)$/.exec(p.name || ''); if(m) used[parseInt(m[1], 10)] = true; } });
+    var n = 1; while(used[n]) n++; return n;   // smallest free number → fills gaps after deletes, avoids duplicates
+  }
+  function _wsAddNote(){
+    var num = _wsNextNoteNumber();
+    var p = _wsPlacePos(); _wsMaxZ++;
+    return _wsInsertPanel({ id: 'wsp_note_' + Date.now() + '_' + Math.floor(Math.random() * 100000), name: 'Note ' + num, type: 'note', html: '', x: p.x, y: p.y, w: _WS_DEFW, h: _WS_DEFH, z: _wsMaxZ });
+  }
+
+  // Note body: read-only display by default; clicking it opens a WYSIWYG editor; clicking outside the panel
+  // sanitizes + saves the content and reverts to the display. Long content scrolls inside the body.
+  function _wsNoteDisplay(panel, $body){
+    $body.empty();
+    var $disp = $('<div class="ws-note-display">');
+    var html = _wsSanitizeHtml(panel.html || '');
+    if(_calNoteEmpty(html)){ $disp.addClass('empty').text('Click to add a note\u2026'); }
+    else { $disp.html(html); }
+    $body.append($disp);
+    $disp.on('click', function(e){ e.stopPropagation(); _wsNoteEdit(panel, $body); });
+  }
+  function _wsNoteEdit(panel, $body){
+    $body.empty();
+    var $wrap = $('<div class="ws-note-edit wysiwyg-wrap">');
+    $wrap.append($('<div class="wysiwyg-toolbar">')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>'));
+    var $nb = $('<div class="wysiwyg-body" contenteditable="true" data-placeholder="Write a note\u2026">');
+    $nb.html(_wsSanitizeHtml(panel.html || ''));
+    $wrap.append($nb);
+    $body.append($wrap);
+    try{ $nb.trigger('focus'); }catch(e){}
+    var panelEl = $body.closest('.ws-panel')[0];
+    var done = false;
+    function finish(){
+      if(done) return; done = true;
+      $(document).off('mousedown.wsnote', outside);
+      var clean = _wsSanitizeHtml($nb.html());
+      panel.html = _calNoteEmpty(clean) ? '' : clean;
+      _wsSave();
+      _wsNoteDisplay(panel, $body);
+    }
+    function outside(ev){ if(!panelEl || !panelEl.contains(ev.target)) finish(); }
+    setTimeout(function(){ $(document).on('mousedown.wsnote', outside); }, 0);
   }
 
   function _wsUpdateEmptyHint(){
@@ -2059,6 +2303,7 @@ $(function(){
       $canvas = $('<div class="ws-canvas">');
       $p.append($canvas);
       $canvas.on('contextmenu', function(e){ e.preventDefault(); _wsShowContextMenu(e); });
+      _wsEnsureDefaults();   // seed the default Planning Guides panel on first open (once per user)
       workspacePanels.forEach(function(panel){ $canvas.append(_wsBuildPanel(panel)); });
       _wsUpdateEmptyHint();
     }
