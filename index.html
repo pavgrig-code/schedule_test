@@ -1781,6 +1781,8 @@ $(function(){
   var _WS_MINW = 180, _WS_MINH = 96, _WS_DEFW = 248, _WS_DEFH = 168;
   var _WS_KEY_BASE = 'pg_workspace_v1';
   var _wsSeeded = false;   // whether this user's Workspace has been seeded with its default panel
+  var workspaceShortcuts = [];   // [{id, guideId, container:'desktop'|panelId, gx, gy}] — Planning Guide desktop icons
+  var _WS_CELL_W = 88, _WS_CELL_H = 96, _WS_GRID_PAD = 12, _WS_SC_W = 74;   // invisible grid for shortcut layout
   // Header colour palette — same options used by Program Calendar circles in the Planning Guide.
   var _WS_COLORS = ['#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688',
                     '#4caf50','#ffeb3b','#ffc107','#ff9800','#ff5722','#795548','#9e9e9e','#607d8b'];
@@ -1804,12 +1806,13 @@ $(function(){
         workspacePanels = o.panels;
         _wsSeq = o.seq || 0;
         _wsSeeded = !!o.seeded;
+        workspaceShortcuts = Array.isArray(o.shortcuts) ? o.shortcuts : [];
         workspacePanels.forEach(function(p){ if((p.z||0) > _wsMaxZ) _wsMaxZ = p.z; if((p.seq||0) > _wsSeq) _wsSeq = p.seq; });
       }
     }catch(e){}
   }
   function _wsSave(){
-    try{ window.localStorage.setItem(_wsStorageKey(), JSON.stringify({ panels: workspacePanels, seq: _wsSeq, seeded: _wsSeeded })); }catch(e){}
+    try{ window.localStorage.setItem(_wsStorageKey(), JSON.stringify({ panels: workspacePanels, seq: _wsSeq, seeded: _wsSeeded, shortcuts: workspaceShortcuts })); }catch(e){}
   }
 
   // ── Sanitizer for Note content: keep safe formatting only, drop scripts/handlers/dangerous HTML. ──
@@ -1899,7 +1902,15 @@ $(function(){
       '.ws-panel-menu-btn{flex:0 0 auto;border:none;background:transparent;color:#6c757d;cursor:pointer;'+
         'font-size:15px;line-height:1;padding:2px 7px;border-radius:4px;}'+
       '.ws-panel-menu-btn:hover{background:#e2e8f0;color:#212529;}'+
-      '.ws-panel-body{flex:1;overflow:auto;background:#fff;min-height:0;}'+
+      '.ws-panel-body{flex:1;overflow:auto;background:#fff;min-height:0;position:relative;}'+
+      '.ws-shortcut{position:absolute;width:74px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:8px;cursor:pointer;user-select:none;text-align:center;box-sizing:border-box;}'+
+      '.ws-shortcut:hover{background:rgba(13,110,253,.08);}'+
+      '.ws-shortcut-avatar{width:42px;height:42px;border-radius:10px;background:#e8f1ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 2px rgba(16,24,40,.12);}'+
+      '.ws-shortcut-name{font-size:10.5px;font-weight:600;color:#212529;line-height:1.25;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}'+
+      '.ws-shortcut-id{font-size:8.5px;color:#9aa0a6;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
+      '.ws-panel.ws-drop-target{border-color:#0d6efd;box-shadow:0 0 0 2px rgba(13,110,253,.35),0 2px 8px rgba(16,24,40,.09);}'+
+      '.ws-toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:#212529;color:#fff;font-size:13px;font-weight:500;padding:9px 16px;border-radius:8px;box-shadow:0 6px 22px rgba(16,24,40,.30);z-index:1000003;opacity:1;transition:opacity .35s ease;pointer-events:none;}'+
+      '.ws-toast.ws-toast-hide{opacity:0;}'+
       '.ws-note-display{padding:8px 11px;font-size:11.5px;line-height:1.55;color:#3c4043;min-height:100%;box-sizing:border-box;cursor:text;word-break:break-word;overflow-wrap:anywhere;}'+
       '.ws-note-display.empty{color:#adb5bd;font-style:italic;}'+
       '.ws-note-edit{display:flex;flex-direction:column;height:100%;min-height:0;}'+
@@ -1923,6 +1934,23 @@ $(function(){
       '.ws-menu-item.danger{color:#dc3545;}'+
       '.ws-menu-item.danger:hover{background:#f8d7da;}'+
       '.ws-menu-divider{height:1px;background:#e9ecef;margin:4px 6px;}'+
+      '.ws-menu-item.ws-view-active{background:#eef5ff;color:#0d6efd;font-weight:600;}'+
+      '.ws-view-check{float:right;margin-left:16px;font-size:11px;line-height:1.4;}'+
+      '.ws-list-table{width:100%;border-collapse:collapse;font-size:11px;color:#212529;table-layout:fixed;}'+
+      '.ws-list-table th{position:sticky;top:0;z-index:1;background:#f8f9fa;text-align:left;font-weight:600;color:#495057;padding:3px 6px;border-bottom:1px solid #dee2e6;white-space:nowrap;user-select:none;overflow:hidden;text-overflow:ellipsis;}'+
+      '.ws-list-table th.ws-col-sortable{cursor:pointer;}'+
+      '.ws-list-table th.ws-col-sortable:hover{background:#eef2f7;}'+
+      '.ws-list-table th.sorted{color:#0d6efd;}'+
+      '.ws-sort-ind{font-size:9px;margin-left:2px;}'+
+      '.ws-list-table td{padding:2px 6px;border-bottom:1px solid #f1f3f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.55;}'+
+      '.ws-list-table td.ws-list-icon{padding:2px 4px;text-align:center;}'+
+      '.ws-list-icon svg{width:15px;height:15px;vertical-align:middle;display:inline-block;}'+
+      '.ws-list-row{cursor:pointer;}'+
+      '.ws-list-row:hover{background:#eef5ff;}'+
+      '.ws-list-empty td{color:#adb5bd;text-align:center;padding:8px 6px;cursor:default;}'+
+      '.ws-col-resize{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none;z-index:2;}'+
+      '.ws-col-resize:hover{background:rgba(13,110,253,.22);}'+
+      '.ws-shortcut.ws-dragging{opacity:.92;box-shadow:0 8px 22px rgba(0,0,0,.30);z-index:1000050;}'+
       '.ws-panel-color{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.28);cursor:pointer;flex:0 0 auto;margin-left:auto;box-sizing:border-box;display:inline-block;}'+
       '.ws-color-menu{padding:8px;}'+
       '.ws-color-grid{display:grid;grid-template-columns:repeat(8,20px);gap:5px;}'+
@@ -1948,6 +1976,32 @@ $(function(){
   }
 
   function _wsCloseMenus(){ $('.ws-menu').remove(); $(document).off('mousedown.wsmenu'); }
+
+  // Inline menu styling (mirrors the .ws-menu CSS) so menus spawned from the Planning Guide screen — before the
+  // Workspace stylesheet is guaranteed to apply — always look right instead of rendering transparent/oversized.
+  function _wsStyleMenuEl($m){
+    $m.css({ background:'#fff', border:'1px solid #dee2e6', borderRadius:'7px', boxShadow:'0 6px 20px rgba(16,24,40,.16)', padding:'4px', minWidth:'140px', fontSize:'12.5px', color:'#212529', fontFamily:'inherit' });
+    return $m;
+  }
+  function _wsMenuItemEl(label, danger){
+    var $it = $('<div class="ws-menu-item">').text(label).css({ fontSize:'12.5px', color:(danger?'#dc3545':'#212529'), padding:'6px 12px', borderRadius:'5px', cursor:'pointer', whiteSpace:'nowrap', fontWeight:'400', lineHeight:'1.4' });
+    $it.on('mouseenter', function(){ $(this).css('background', danger?'#f8d7da':'#eef2f7'); }).on('mouseleave', function(){ $(this).css('background','transparent'); });
+    if(danger) $it.addClass('danger');
+    return $it;
+  }
+  function _wsMenuDividerEl(){ return $('<div class="ws-menu-divider">').css({ height:'1px', background:'#e9ecef', margin:'4px 6px' }); }
+
+  // Brief, self-dismissing confirmation toast (e.g. "Added to Workspace").
+  function _wsToast(msg){
+    try{
+      _wsInjectStyles();   // the toast can appear on the Planning Guide screen before the Workspace has rendered
+      $('.ws-toast').remove();
+      var $t = $('<div class="ws-toast">').text(msg);
+      $('body').append($t);
+      setTimeout(function(){ $t.addClass('ws-toast-hide'); }, 1600);
+      setTimeout(function(){ $t.remove(); }, 2050);
+    }catch(e){}
+  }
 
   function _wsBringToFront(panel, el){
     if(panel.z === _wsMaxZ && _wsMaxZ > 0) return;   // already front-most
@@ -2119,6 +2173,18 @@ $(function(){
   function _wsPanelMenu(panel, $el, $btn){
     _wsCloseMenus();
     var $m = $('<div class="ws-menu ws-panel-menu">');
+    // View options — only for panels that can hold shortcuts (never Note panels). Tiles is the default; the
+    // active view is subtly highlighted with a tint + check. Choosing one switches the panel body in place.
+    if(panel.type !== 'note'){
+      var curView = (panel.view === 'list') ? 'list' : 'tiles';
+      function viewItem(label, view){
+        var $it = $('<div class="ws-menu-item ws-view-item">').text(label);
+        if(curView === view){ $it.addClass('ws-view-active').append($('<span class="ws-view-check">').text('\u2713')); }
+        $it.on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSetPanelView(panel, $el, view); });
+        return $it;
+      }
+      $m.append(viewItem('Tiles', 'tiles'), viewItem('List', 'list'), $('<div class="ws-menu-divider">'));
+    }
     $m.append($('<div class="ws-menu-item">').text('Bring to Front').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
     $m.append($('<div class="ws-menu-item">').text('Send to Back').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
     $m.append($('<div class="ws-menu-divider">'));
@@ -2181,6 +2247,7 @@ $(function(){
     $menuBtn.on('click', function(e){ e.preventDefault(); e.stopPropagation(); _wsPanelMenu(panel, $el, $menuBtn); });
     $el.find('.ws-rz').on('mousedown', function(e){ _wsStartResize(panel, $el, $(this).attr('data-dir'), e); });
     if(panel.type === 'note'){ _wsNoteDisplay(panel, $body); }
+    else { _wsRenderPanelBody(panel, $body); }
     _wsApplyPanelColor(panel, $el);   // restore any saved header colour + text contrast
     return $el;
   }
@@ -2287,6 +2354,403 @@ $(function(){
     } else { $hint.remove(); }
   }
 
+  // ── Workspace shortcuts ─────────────────────────────────────────────────────────────────────────
+  // Desktop-style Planning Guide icons that live on the Workspace canvas or inside a non-note panel. Each
+  // shortcut references a guide by id, snaps to an invisible grid, is draggable, and opens the guide on click.
+  function _wsGuideById(id){ try{ return PLANNING_GUIDES.filter(function(g){ return String(g.id) === String(id); })[0] || null; }catch(e){ return null; } }
+  function _wsCanvasEl(){ return document.querySelector('#workspace-panel .ws-canvas'); }
+  function _wsPanelById(id){ return workspacePanels.filter(function(p){ return p.id === id; })[0] || null; }
+  function _wsPanelBodyEl(pid){ var pe = document.querySelector('.ws-panel[data-ws-id="' + pid + '"]'); return pe ? pe.querySelector('.ws-panel-body') : null; }
+  function _wsGridToPx(gx, gy){ return { left: gx * _WS_CELL_W + _WS_GRID_PAD, top: gy * _WS_CELL_H + _WS_GRID_PAD }; }
+  function _wsPxToGrid(x, y){ return { gx: Math.max(0, Math.round((x - _WS_GRID_PAD) / _WS_CELL_W)), gy: Math.max(0, Math.round((y - _WS_GRID_PAD) / _WS_CELL_H)) }; }
+
+  function _wsContainerCols(container){
+    if(container === 'desktop'){
+      var cv = _wsCanvasEl();
+      var w = (cv && cv.getBoundingClientRect) ? cv.getBoundingClientRect().width : 0; w = w || (cv ? cv.clientWidth : 0) || 0;
+      return w > 0 ? Math.max(1, Math.floor((w - _WS_GRID_PAD) / _WS_CELL_W)) : 6;   // fallback grid when unmeasurable
+    }
+    var p = _wsPanelById(container); var pw = p ? p.w : _WS_DEFW;
+    return Math.max(1, Math.floor((pw - _WS_GRID_PAD) / _WS_CELL_W));
+  }
+  function _wsCellFree(container, gx, gy, exceptSc){
+    for(var i = 0; i < workspaceShortcuts.length; i++){ var s = workspaceShortcuts[i]; if(s !== exceptSc && s.container === container && s.gx === gx && s.gy === gy) return false; }
+    if(container === 'desktop'){   // avoid overlapping panels where possible (model rects)
+      var left = gx * _WS_CELL_W + _WS_GRID_PAD, top = gy * _WS_CELL_H + _WS_GRID_PAD, right = left + _WS_SC_W, bot = top + _WS_CELL_H - 8;
+      for(var j = 0; j < workspacePanels.length; j++){ var p = workspacePanels[j]; if(left < p.x + p.w && right > p.x && top < p.y + p.h && bot > p.y) return false; }
+    }
+    return true;
+  }
+  function _wsFirstFreeCell(container, exceptSc){
+    var cols = _wsContainerCols(container);
+    for(var gy = 0; gy < 400; gy++){ for(var gx = 0; gx < cols; gx++){ if(_wsCellFree(container, gx, gy, exceptSc)) return { gx: gx, gy: gy }; } }
+    return { gx: 0, gy: 0 };
+  }
+
+  function _wsShortcutAvatarHtml(){
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#0d6efd" viewBox="0 0 16 16">' +
+      '<path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/>' +
+      '<path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2m0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>';
+  }
+  function _wsBuildShortcut(sc){
+    var g = _wsGuideById(sc.guideId);
+    var nm = g ? g.name : '(deleted guide)';
+    var $sc = $('<div class="ws-shortcut" data-sc-id="' + sc.id + '">').attr('title', nm);
+    $sc.append($('<div class="ws-shortcut-avatar">').html(_wsShortcutAvatarHtml()));
+    $sc.append($('<div class="ws-shortcut-name">').text(nm));
+    $sc.append($('<div class="ws-shortcut-id">').text(sc.guideId));
+    var px = _wsGridToPx(sc.gx, sc.gy);
+    $sc.css({ left: px.left + 'px', top: px.top + 'px' });
+    _wsWireShortcut(sc, $sc);
+    return $sc;
+  }
+  function _wsRenderShortcut(sc){
+    var host = sc.container === 'desktop' ? _wsCanvasEl() : _wsPanelBodyEl(sc.container);
+    if(!host) return;
+    var ex = host.querySelector('.ws-shortcut[data-sc-id="' + sc.id + '"]'); if(ex) ex.parentNode.removeChild(ex);
+    $(host).append(_wsBuildShortcut(sc));
+  }
+  function _wsRenderPanelShortcuts(panel, $body){
+    workspaceShortcuts.filter(function(s){ return s.container === panel.id; }).forEach(function(sc){ $body.append(_wsBuildShortcut(sc)); });
+  }
+
+  // Panel body dispatch: a non-note panel shows its shortcuts either as draggable tiles (default) or as a
+  // compact sortable table. panel.view ('tiles'|'list') is stored on the model, so _wsSave persists it per user.
+  function _wsRenderPanelBody(panel, $body){
+    $body.empty();
+    if(panel.view === 'list') _wsRenderPanelList(panel, $body);
+    else _wsRenderPanelShortcuts(panel, $body);
+  }
+  function _wsRefreshPanelBody(pid){
+    var p = _wsPanelById(pid); if(!p) return;
+    var body = _wsPanelBodyEl(pid); if(!body) return;
+    _wsRenderPanelBody(p, $(body));
+  }
+  function _wsSetPanelView(panel, $el, view){
+    view = (view === 'list') ? 'list' : 'tiles';
+    panel.view = view;
+    _wsSave();
+    var $body = $el.find('.ws-panel-body').first();
+    if($body.length) _wsRenderPanelBody(panel, $body);
+  }
+
+  // Column model. The first column is an icon-sized avatar (the same glyph the tile uses) standing in for the
+  // old "Type" text; it is never sortable. Name/Details/Status are text columns that sort. Details is the guide's
+  // School District name and Status its workflow status, both blank (never null/undefined) when the guide has none.
+  var _WS_LIST_COLS = [
+    { key: 'Icon',    label: '',        sortable: false, w: 30 },
+    { key: 'Name',    label: 'Name',    sortable: true,  w: 132 },
+    { key: 'Details', label: 'Details', sortable: true,  w: 128 },
+    { key: 'Status',  label: 'Status',  sortable: true,  w: 78 }
+  ];
+  function _wsListColByKey(key){ for(var i=0;i<_WS_LIST_COLS.length;i++){ if(_WS_LIST_COLS[i].key===key) return _WS_LIST_COLS[i]; } return null; }
+  function _wsListSortable(key){ var c = _wsListColByKey(key); return !!(c && c.sortable); }
+  function _wsColWidth(panel, key){
+    var cw = panel.colWidths && panel.colWidths[key];
+    if(typeof cw === 'number' && cw > 0) return cw;
+    var c = _wsListColByKey(key); return c ? c.w : 100;
+  }
+  function _wsSetColWidth(panel, key, w){
+    if(!panel.colWidths) panel.colWidths = {};
+    panel.colWidths[key] = Math.max(24, Math.round(w));   // don't let a column collapse to nothing
+    _wsSave();
+  }
+  function _wsShortcutRow(sc){
+    var g = _wsGuideById(sc.guideId);
+    var det = getGuideDetail(sc.guideId) || {};
+    return {
+      sc: sc,
+      Name: g ? g.name : '(deleted guide)',
+      Details: (det.district && det.district.name) ? det.district.name : '',
+      Status: det.status ? det.status : ''
+    };
+  }
+  function _wsListSort(panel, $body, key){
+    if(!_wsListSortable(key)) return;
+    if(panel.sortCol === key) panel.sortDir = (panel.sortDir === 'desc') ? 'asc' : 'desc';   // same header → flip
+    else { panel.sortCol = key; panel.sortDir = 'asc'; }
+    _wsSave();
+    _wsRenderPanelList(panel, $body);
+  }
+  // Column resize: drag the handle on a header's right edge to widen/narrow that column. The width is stored on
+  // the panel model (panel.colWidths) so it persists per user and survives a re-render. The handle swallows its
+  // own mousedown/click so resizing never triggers a sort.
+  function _wsWireColResize($rz, panel, key, $table){
+    $rz.on('click', function(e){ e.stopPropagation(); });
+    $rz.on('mousedown', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      var col = $table[0].querySelector('col[data-col="' + key + '"]');
+      var startX = ev.clientX;
+      var startW = col ? (parseInt(col.style.width) || (col.getBoundingClientRect ? col.getBoundingClientRect().width : 0)) : 0;
+      if(!startW) startW = _wsColWidth(panel, key);
+      function mm(e){ var w = Math.max(24, startW + (e.clientX - startX)); if(col) col.style.width = w + 'px'; }
+      function mu(e){ $(document).off('.wscol'); var w = Math.max(24, startW + (e.clientX - startX)); if(col) col.style.width = w + 'px'; _wsSetColWidth(panel, key, w); }
+      $(document).on('mousemove.wscol', mm).on('mouseup.wscol', mu);
+    });
+  }
+  function _wsRenderPanelList(panel, $body){
+    var rows = workspaceShortcuts.filter(function(s){ return s.container === panel.id; }).map(_wsShortcutRow);
+    var sortCol = _wsListSortable(panel.sortCol) ? panel.sortCol : null;
+    var dir = (panel.sortDir === 'desc') ? -1 : 1;
+    if(sortCol){
+      rows.sort(function(a, b){
+        var av = String(a[sortCol] || '').toLowerCase(), bv = String(b[sortCol] || '').toLowerCase();
+        if(av === '' && bv === '') return 0;
+        if(av === '') return 1;                                   // blanks always sort last, either direction
+        if(bv === '') return -1;
+        return av < bv ? -1 * dir : (av > bv ? 1 * dir : 0);      // alphabetical, flipped by direction
+      });
+    }
+    var $table = $('<table class="ws-list-table">');
+    var $cg = $('<colgroup>');
+    _WS_LIST_COLS.forEach(function(c){ $cg.append($('<col>').attr('data-col', c.key).css('width', _wsColWidth(panel, c.key) + 'px')); });
+    $table.append($cg);
+    var $htr = $('<tr>');
+    _WS_LIST_COLS.forEach(function(c, idx){
+      var $th = $('<th>').attr('data-col', c.key);
+      if(c.label) $th.text(c.label);
+      if(c.sortable){
+        $th.addClass('ws-col-sortable');
+        if(sortCol === c.key){ $th.addClass('sorted').append($('<span class="ws-sort-ind">').text(dir === 1 ? '\u25B4' : '\u25BE')); }
+        $th.on('click', function(e){ e.stopPropagation(); _wsListSort(panel, $body, c.key); });
+      }
+      if(idx < _WS_LIST_COLS.length - 1){ var $rz = $('<div class="ws-col-resize">'); _wsWireColResize($rz, panel, c.key, $table); $th.append($rz); }   // last column flexes; no handle
+      $htr.append($th);
+    });
+    $table.append($('<thead>').append($htr));
+    var $tb = $('<tbody>');
+    if(rows.length === 0){
+      $tb.append($('<tr class="ws-list-empty">').append($('<td colspan="' + _WS_LIST_COLS.length + '">').text('No shortcuts yet')));
+    } else {
+      rows.forEach(function(rd){
+        var $tr = $('<tr class="ws-list-row">').attr('data-sc-id', rd.sc.id);
+        _WS_LIST_COLS.forEach(function(c){
+          if(c.key === 'Icon'){ $tr.append($('<td class="ws-list-icon">').html(_wsShortcutAvatarHtml())); }   // same avatar as the tile
+          else { $tr.append($('<td>').attr('title', rd[c.key]).text(rd[c.key])); }
+        });
+        $tr.on('click', function(e){ e.stopPropagation(); _wsOpenGuideShortcut(rd.sc.guideId); });               // open the guide
+        $tr.on('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); _wsShortcutContextMenu(rd.sc, $tr, ev); });   // same Delete menu as tiles
+        $tb.append($tr);
+      });
+    }
+    $table.append($tb);
+    $body.empty().append($table);
+  }
+  function _wsSyncDesktopShortcuts(){
+    var cv = _wsCanvasEl(); if(!cv) return;
+    workspaceShortcuts.filter(function(s){ return s.container === 'desktop'; }).forEach(function(sc){
+      if(!cv.querySelector('.ws-shortcut[data-sc-id="' + sc.id + '"]')) $(cv).append(_wsBuildShortcut(sc));
+    });
+  }
+  // Keep every rendered shortcut's label in step with its guide (handles a guide renamed elsewhere).
+  function _wsRefreshShortcutLabels(){
+    $('.ws-shortcut').each(function(){
+      var scId = this.getAttribute('data-sc-id');
+      var sc = workspaceShortcuts.filter(function(s){ return s.id === scId; })[0];
+      if(!sc) return;
+      var g = _wsGuideById(sc.guideId);
+      var nm = g ? g.name : '(deleted guide)';
+      var $n = $(this).find('.ws-shortcut-name'); if($n.text() !== nm) $n.text(nm);
+      this.setAttribute('title', nm);
+    });
+  }
+  // Reflect current guide data everywhere the Workspace shows it: tile names via the label pass above, and each
+  // list-view panel's rows (Name / Details / Status) by rebuilding its table from live guide detail. Called on
+  // Workspace entry, so a guide renamed or re-districted on the Planning screen shows through here.
+  function _wsRefreshShortcutViews(){
+    _wsRefreshShortcutLabels();
+    workspacePanels.forEach(function(p){ if(p.type !== 'note' && p.view === 'list') _wsRefreshPanelBody(p.id); });
+  }
+
+  function _wsCreateShortcut(guideId, container){
+    var cell = _wsFirstFreeCell(container);
+    var sc = { id: 'wsc_' + Date.now() + '_' + Math.floor(Math.random() * 100000), guideId: String(guideId), container: container, gx: cell.gx, gy: cell.gy };
+    workspaceShortcuts.push(sc);
+    _wsSave();
+    var p = _wsPanelById(container);
+    if(p && p.view === 'list') _wsRefreshPanelBody(container);   // list view shows a new row, not a tile
+    else _wsRenderShortcut(sc);
+    return sc;
+  }
+
+  function _wsOpenGuideShortcut(guideId){
+    if(typeof selectedGuideId !== 'undefined') selectedGuideId = String(guideId);
+    if(typeof setPageMode === 'function') setPageMode('planning');
+    var g = _wsGuideById(guideId);
+    if(g && typeof showGuideDetail === 'function') showGuideDetail(g);
+    try{ var p = new URLSearchParams(window.location.search); p.set('section', 'planning_guides'); p.set('planning_guide', String(guideId)); history.pushState({}, '', window.location.pathname + '?' + p.toString()); }catch(e){}
+  }
+
+  function _wsPanelUnderPoint(x, y){
+    var best = null, bestZ = -Infinity;
+    $('.ws-panel').each(function(){
+      var r = this.getBoundingClientRect ? this.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 };
+      if(r.width && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom){
+        var z = parseInt(this.style.zIndex) || 0; if(z >= bestZ){ bestZ = z; best = this; }
+      }
+    });
+    return best;
+  }
+  function _wsPlaceSnap(sc, cell){
+    var cols = _wsContainerCols(sc.container);
+    var gx = Math.max(0, Math.min(cols - 1, cell.gx)), gy = Math.max(0, cell.gy);
+    if(!_wsCellFree(sc.container, gx, gy, sc)){ var free = _wsFirstFreeCell(sc.container, sc); gx = free.gx; gy = free.gy; }
+    sc.gx = gx; sc.gy = gy;
+  }
+  function _wsDropShortcut(sc, $sc, panelEl, cx, cy){
+    var el = $sc[0];
+    if(panelEl && panelEl.getAttribute('data-ws-id') !== undefined && _wsPanelById(panelEl.getAttribute('data-ws-id')) && _wsPanelById(panelEl.getAttribute('data-ws-id')).type !== 'note'){
+      var pid = panelEl.getAttribute('data-ws-id');
+      var body = panelEl.querySelector('.ws-panel-body');
+      var br = body.getBoundingClientRect ? body.getBoundingClientRect() : { left: 0, top: 0 };
+      sc.container = pid;
+      _wsPlaceSnap(sc, _wsPxToGrid((cx - br.left) + (body.scrollLeft || 0) - _WS_SC_W / 2, (cy - br.top) + (body.scrollTop || 0) - 20));
+      if(el.parentNode !== body) body.appendChild(el);
+    } else {
+      sc.container = 'desktop';
+      var cv = _wsCanvasEl();
+      var cvr = (cv && cv.getBoundingClientRect) ? cv.getBoundingClientRect() : { left: 0, top: 0 };
+      _wsPlaceSnap(sc, _wsPxToGrid((cx - cvr.left) + ((cv && cv.scrollLeft) || 0) - _WS_SC_W / 2, (cy - cvr.top) + ((cv && cv.scrollTop) || 0) - 20));
+      if(cv && el.parentNode !== cv) cv.appendChild(el);
+    }
+    var px = _wsGridToPx(sc.gx, sc.gy);
+    el.style.left = px.left + 'px'; el.style.top = px.top + 'px';
+    _wsSave();
+    var destPanel = _wsPanelById(sc.container);
+    if(destPanel && destPanel.view === 'list'){ if(el.parentNode) el.parentNode.removeChild(el); _wsRefreshPanelBody(sc.container); }   // a tile dropped into a list panel becomes a row
+  }
+  function _wsDeleteShortcut(sc, $sc){
+    var container = sc.container;
+    var i = workspaceShortcuts.indexOf(sc);
+    if(i >= 0) workspaceShortcuts.splice(i, 1);
+    _wsSave();
+    var p = _wsPanelById(container);
+    if(p && p.view === 'list'){ _wsRefreshPanelBody(container); }   // rebuild the table (drops the row, restores empty state)
+    else if($sc && $sc.length && $sc.hasClass('ws-shortcut')){ $sc.remove(); }
+    else { $('.ws-shortcut[data-sc-id="' + sc.id + '"]').remove(); }
+  }
+  // Right-clicking a shortcut opens a compact menu near the cursor with a single Delete action. This removes
+  // only the Workspace shortcut, never the underlying Planning Guide.
+  function _wsShortcutContextMenu(sc, $sc, ev){
+    _wsInjectStyles();
+    _wsCloseMenus();
+    var $m = _wsStyleMenuEl($('<div class="ws-menu ws-shortcut-menu">'));
+    $m.append(_wsMenuItemEl('Delete', true).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsDeleteShortcut(sc, $sc); }));
+    $('body').append($m);
+    $m.css({ position: 'fixed', left: '-9999px', top: '0px', visibility: 'hidden', zIndex: 1000002 });
+    var mw = $m[0].offsetWidth || 120, mh = $m[0].offsetHeight || 40;
+    var vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+    var left = ev.clientX, top = ev.clientY;
+    if(left + mw > vw - 4) left = Math.max(4, vw - mw - 4);
+    if(top + mh > vh - 4) top = Math.max(4, vh - mh - 4);
+    $m.css({ left: left + 'px', top: top + 'px', visibility: 'visible' });
+    setTimeout(function(){ $(document).on('mousedown.wsmenu', function(e2){ if(!$m[0].contains(e2.target)) _wsCloseMenus(); }); }, 0);
+  }
+  function _wsWireShortcut(sc, $sc){
+    $sc.on('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); _wsShortcutContextMenu(sc, $sc, ev); });
+    $sc.on('mousedown', function(ev){
+      if(ev.button !== 0) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var el = $sc[0];
+      var startX = ev.clientX, startY = ev.clientY, moved = false, curPanel = null;
+      // Grab offset within the tile so it stays under the cursor once it is lifted.
+      var r0 = el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 0, top: 0, width: _WS_SC_W, height: 84 };
+      var grabX = r0.width ? (startX - r0.left) : (_WS_SC_W / 2), grabY = r0.height ? (startY - r0.top) : 20;
+      var w0 = r0.width || _WS_SC_W, h0 = r0.height || 84;
+      // Lift the tile out of its (clipping) panel body onto <body> at fixed coordinates, on top of everything,
+      // so it can never be clipped by a panel's overflow or hidden behind another panel while being dragged.
+      function lift(){
+        el.classList.add('ws-dragging');
+        el.style.position = 'fixed';
+        el.style.width = w0 + 'px';
+        el.style.height = h0 + 'px';
+        el.style.margin = '0';
+        el.style.pointerEvents = 'none';   // so _wsPanelUnderPoint sees the panel under the cursor, not the tile
+        document.body.appendChild(el);
+      }
+      function moveTo(cx, cy){ el.style.left = (cx - grabX) + 'px'; el.style.top = (cy - grabY) + 'px'; }
+      function drop(){
+        el.classList.remove('ws-dragging');
+        el.style.position = ''; el.style.width = ''; el.style.height = ''; el.style.margin = ''; el.style.pointerEvents = '';
+      }
+      function mm(e){
+        var dx = e.clientX - startX, dy = e.clientY - startY;
+        if(!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)){ moved = true; lift(); }
+        if(!moved) return;
+        moveTo(e.clientX, e.clientY);
+        var over = _wsPanelUnderPoint(e.clientX, e.clientY);
+        if(over !== curPanel){ $('.ws-panel').removeClass('ws-drop-target'); if(over) $(over).addClass('ws-drop-target'); curPanel = over; }
+      }
+      function mu(e){
+        $(document).off('.wssc'); $('.ws-panel').removeClass('ws-drop-target');
+        if(!moved){ _wsOpenGuideShortcut(sc.guideId); return; }   // a click (not a drag) opens the guide
+        drop();                                                   // restore normal positioning before placing back
+        _wsDropShortcut(sc, $sc, _wsPanelUnderPoint(e.clientX, e.clientY), e.clientX, e.clientY);
+      }
+      $(document).on('mousemove.wssc', mm).on('mouseup.wssc', mu);
+    });
+  }
+
+  // Entry point from the guide menus. With no non-note panels, drop straight onto the desktop; otherwise offer
+  // a submenu (Desktop + each non-note panel) to choose the destination.
+  function _wsAddShortcutFrom(gObj, anchorRect){
+    if(!gObj) return;
+    var nonNote = workspacePanels.filter(function(p){ return p.type !== 'note'; });
+    if(nonNote.length === 0){
+      _wsEnsureDefaults();   // if the Workspace was never opened, seed its default panel so the shortcut avoids it
+      _wsCreateShortcut(gObj.id, 'desktop');
+      _wsToast('Added to Workspace');
+      return;
+    }
+    _wsShortcutDestMenu(gObj, anchorRect, nonNote);
+  }
+
+  // Builds the "Add to Workspace" menu item as a hover submenu: when the guide has destination choices
+  // (non-note panels), hovering the item opens the Desktop/panels submenu beside it while the parent menu stays
+  // open, and a short grace delay lets the mouse travel into the submenu without it closing. Clicking still
+  // works as a fallback; with no destination choices the item adds straight to the desktop. makeItem(fn) returns
+  // the styled item (so both the left-list and Actions menus can share this); closeParent() closes the host menu.
+  function _wsBuildAddToWorkspaceItem(makeItem, gObj, closeParent){
+    var $item, timer = null;
+    function nonNote(){ return workspacePanels.filter(function(p){ return p.type !== 'note'; }); }
+    function cancelClose(){ if(timer){ clearTimeout(timer); timer = null; } }
+    function scheduleClose(){ cancelClose(); timer = setTimeout(function(){ $('.ws-submenu').remove(); $(document).off('mousedown.wsmenu'); }, 320); }
+    function openSub(){
+      cancelClose();
+      var list = nonNote();
+      if(list.length === 0) return false;                          // no destination choices → no submenu
+      if(document.querySelector('.ws-submenu')) return true;       // already open
+      var rect = ($item && $item[0] && $item[0].getBoundingClientRect) ? $item[0].getBoundingClientRect() : null;
+      _wsShortcutDestMenu(gObj, rect, list, function(){ if(closeParent) closeParent(); });
+      $('.ws-submenu').on('mouseenter', cancelClose).on('mouseleave', scheduleClose);
+      return true;
+    }
+    function onClick(_r){
+      if(!openSub()){ if(closeParent) closeParent(); _wsAddShortcutFrom(gObj, _r); }   // no choices → desktop + toast
+    }
+    $item = makeItem(onClick);
+    $item.on('mouseenter', openSub).on('mouseleave', scheduleClose);
+    return $item;
+  }
+  function _wsShortcutDestMenu(gObj, anchorRect, nonNote, onChosen){
+    _wsInjectStyles();   // this submenu can open on the Planning Guide screen before the Workspace has rendered
+    _wsCloseMenus();
+    var $m = _wsStyleMenuEl($('<div class="ws-menu ws-submenu">'));
+    $m.append(_wsMenuItemEl('Desktop').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsCreateShortcut(gObj.id, 'desktop'); _wsToast('Added to Workspace'); if(onChosen) onChosen(); }));
+    $m.append(_wsMenuDividerEl());
+    nonNote.forEach(function(p){ $m.append(_wsMenuItemEl(p.name).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsCreateShortcut(gObj.id, p.id); _wsToast('Added to Workspace'); if(onChosen) onChosen(); })); });
+    $('body').append($m);
+    // Open the submenu next to the clicked "Add to Workspace" item (measured off-screen so it is content-width).
+    $m.css({ position: 'fixed', left: '-9999px', top: '0px', visibility: 'hidden', zIndex: 1000002 });
+    var r = (anchorRect && anchorRect.right) ? anchorRect : { left: 120, right: 260, top: 120, bottom: 140 };
+    var mw = $m[0].offsetWidth || 160, mh = $m[0].offsetHeight || 120;
+    var vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+    var left = r.right + 4; if(left + mw > vw - 4) left = Math.max(4, r.left - mw - 4); if(left < 4) left = 4;
+    var top = r.top; if(top + mh > vh - 4) top = Math.max(4, vh - mh - 4); if(top < 4) top = 4;
+    $m.css({ left: left + 'px', top: top + 'px', visibility: 'visible' });
+    setTimeout(function(){ $(document).on('mousedown.wsmenu', function(ev){ if(!$m[0].contains(ev.target)) _wsCloseMenus(); }); }, 0);
+  }
+
   // Workspace mode: a standalone, per-user area shown full width (no staff column, no timeline). Renders the
   // panel canvas once and keeps it across mode switches; panels are restored from the model on first build.
   function rWorkspace(){
@@ -2305,8 +2769,12 @@ $(function(){
       $canvas.on('contextmenu', function(e){ e.preventDefault(); _wsShowContextMenu(e); });
       _wsEnsureDefaults();   // seed the default Planning Guides panel on first open (once per user)
       workspacePanels.forEach(function(panel){ $canvas.append(_wsBuildPanel(panel)); });
+      workspaceShortcuts.filter(function(s){ return s.container === 'desktop'; }).forEach(function(sc){ $canvas.append(_wsBuildShortcut(sc)); });
       _wsUpdateEmptyHint();
+    } else {
+      _wsSyncDesktopShortcuts();   // pick up any shortcuts added while the canvas already existed
     }
+    _wsRefreshShortcutViews();     // keep tile names and list rows current with their guides
     $p.css({'display':'flex','flex-direction':'column'});
   }
 
@@ -3070,9 +3538,10 @@ $(function(){
     $it.append($('<span>').text(label));
     var _hov=opt.danger?'#fdecec':'#f5f5f5';
     $it.on('mouseenter',function(){ $(this).css('background',_hov); }).on('mouseleave',function(){ $(this).css('background','none'); });
-    $it.on('click',function(e){ e.stopPropagation(); if(opt.fn) opt.fn(); });
+    $it.on('click',function(e){ e.stopPropagation(); var _r=(this.getBoundingClientRect?this.getBoundingClientRect():null); if(opt.fn) opt.fn(_r); });
     return $it;
   }
+  function _guideMenuDivider(){ return $('<div>').css({height:'1px',background:'#eceff2',margin:'4px 6px'}); }
   function rPlanningGuides(){
     // Hide schedule UI
     $('#timeline-header,#grid-body,#week-container').hide();
@@ -3272,7 +3741,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
         $dots.on('click',function(e){
           e.stopPropagation(); closePgMenu(); $pgMenu.empty();
+          $pgMenu.append(_wsBuildAddToWorkspaceItem(function(fn){ return pgMenuItem('\u2795','Add to Workspace',{fn:fn}); }, gObj, closePgMenu));
           $pgMenu.append(pgMenuItem('\u29c9','Duplicate',{fn:function(){ closePgMenu(); _guideOps.duplicate(gObj); }}));
+          $pgMenu.append(_guideMenuDivider());
           $pgMenu.append(pgMenuItem('\ud83d\uddd1','Delete',{danger:true,fn:function(){ closePgMenu(); _guideOps.delete(gObj); }}));
           var r=$dots[0].getBoundingClientRect();
           var lft=Math.min(r.left, window.innerWidth-145);
@@ -11277,7 +11748,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       function mkItem(icon,label,opt){
         opt=opt||{};
-        return _buildGuideMenuItem(icon,label,{danger:opt.danger,fn:function(){ $menu.hide(); if(opt.fn) opt.fn(); }});
+        return _buildGuideMenuItem(icon,label,{danger:opt.danger,fn:function(_r){ $menu.hide(); if(opt.fn) opt.fn(_r); }});
       }
       function mkDivider(){ return $('<div>').css({height:'1px',background:'#eceff2',margin:'4px 6px'}); }
       $menu.append(
@@ -11285,6 +11756,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         mkItem('\u2193','Export as JSON',{fn:function(){ exportGuideToJson(g); }}),
         mkItem('\u2191','Import\u2026',{fn:function(){ if(_guideOps.import) _guideOps.import(g); }}),
         mkDivider(),
+        _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem('\u2795','Add to Workspace',{fn:fn}); }, g, function(){ $menu.hide(); }),
         mkItem('\u29c9','Duplicate',{fn:function(){ if(_guideOps.duplicate) _guideOps.duplicate(g); }}),
         mkDivider(),
         mkItem('\ud83d\uddd1','Delete',{danger:true,fn:function(){ if(_guideOps.delete) _guideOps.delete(g); }})
