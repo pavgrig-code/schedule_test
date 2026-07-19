@@ -2438,7 +2438,7 @@ $(function(){
   // old "Type" text; it is never sortable. Name/Details/Status are text columns that sort. Details is the guide's
   // School District name and Status its workflow status, both blank (never null/undefined) when the guide has none.
   var _WS_LIST_COLS = [
-    { key: 'Icon',    label: '',        sortable: false, w: 30 },
+    { key: 'Icon',    label: '',        sortable: true,  w: 34 },
     { key: 'Name',    label: 'Name',    sortable: true,  w: 132 },
     { key: 'Details', label: 'Details', sortable: true,  w: 128 },
     { key: 'Status',  label: 'Status',  sortable: true,  w: 78 }
@@ -2455,11 +2455,25 @@ $(function(){
     panel.colWidths[key] = Math.max(24, Math.round(w));   // don't let a column collapse to nothing
     _wsSave();
   }
+  // The shortcut's underlying type. Displayed as an avatar in the Icon column, but stored as a plain string so
+  // the Icon column can sort by it. Planning Guide today; Staff and other types will set their own value.
+  function _wsShortcutType(sc){ return (sc && sc.type) ? sc.type : 'Planning Guide'; }
+  // A status chip carrying the exact colors Planning Guide mode uses (PG_STATUSES), so a status reads the same in
+  // the list as it does on the guide. Returns null for a blank/unknown status so the cell stays empty.
+  function _wsStatusPillEl(status){
+    var s = status && PG_STATUSES[status];
+    if(!s) return null;
+    return $('<span class="ws-status-pill">').text(status).css({
+      display: 'inline-block', background: s.bg, color: s.color, border: '1px solid ' + s.border,
+      borderRadius: '20px', padding: '1px 8px', fontSize: '10px', fontWeight: '700', lineHeight: '1.5', whiteSpace: 'nowrap'
+    });
+  }
   function _wsShortcutRow(sc){
     var g = _wsGuideById(sc.guideId);
     var det = getGuideDetail(sc.guideId) || {};
     return {
       sc: sc,
+      Icon: _wsShortcutType(sc),                                    // sort key for the avatar column (the type value)
       Name: g ? g.name : '(deleted guide)',
       Details: (det.district && det.district.name) ? det.district.name : '',
       Status: det.status ? det.status : ''
@@ -2526,6 +2540,7 @@ $(function(){
         var $tr = $('<tr class="ws-list-row">').attr('data-sc-id', rd.sc.id);
         _WS_LIST_COLS.forEach(function(c){
           if(c.key === 'Icon'){ $tr.append($('<td class="ws-list-icon">').html(_wsShortcutAvatarHtml())); }   // same avatar as the tile
+          else if(c.key === 'Status'){ var $sc = $('<td>').attr('title', rd.Status); var $pill = _wsStatusPillEl(rd.Status); if($pill) $sc.append($pill); $tr.append($sc); }   // colored chip, same as Planning Guide mode
           else { $tr.append($('<td>').attr('title', rd[c.key]).text(rd[c.key])); }
         });
         $tr.on('click', function(e){ e.stopPropagation(); _wsOpenGuideShortcut(rd.sc.guideId); });               // open the guide
@@ -2564,7 +2579,7 @@ $(function(){
 
   function _wsCreateShortcut(guideId, container){
     var cell = _wsFirstFreeCell(container);
-    var sc = { id: 'wsc_' + Date.now() + '_' + Math.floor(Math.random() * 100000), guideId: String(guideId), container: container, gx: cell.gx, gy: cell.gy };
+    var sc = { id: 'wsc_' + Date.now() + '_' + Math.floor(Math.random() * 100000), guideId: String(guideId), container: container, gx: cell.gx, gy: cell.gy, type: 'Planning Guide' };
     workspaceShortcuts.push(sc);
     _wsSave();
     var p = _wsPanelById(container);
@@ -2579,6 +2594,21 @@ $(function(){
     var g = _wsGuideById(guideId);
     if(g && typeof showGuideDetail === 'function') showGuideDetail(g);
     try{ var p = new URLSearchParams(window.location.search); p.set('section', 'planning_guides'); p.set('planning_guide', String(guideId)); history.pushState({}, '', window.location.pathname + '?' + p.toString()); }catch(e){}
+  }
+  // The destination URL for a shortcut, chosen by its type. Planning Guide points at the guide's planning URL;
+  // future shortcut types add their own branch here so Open in New Window keeps working for them.
+  function _wsShortcutUrl(sc){
+    var type = _wsShortcutType(sc);
+    try{
+      var p = new URLSearchParams(window.location.search);
+      if(type === 'Planning Guide'){ p.set('section', 'planning_guides'); p.set('planning_guide', String(sc.guideId)); }
+      var base = (window.location.href || '').split('#')[0].split('?')[0];
+      return base + '?' + p.toString();
+    }catch(e){ return window.location.href; }
+  }
+  function _wsOpenShortcutNewWindow(sc){
+    var url = _wsShortcutUrl(sc);
+    try{ window.open(url, '_blank'); }catch(e){}
   }
 
   function _wsPanelUnderPoint(x, y){
@@ -2635,6 +2665,8 @@ $(function(){
     _wsInjectStyles();
     _wsCloseMenus();
     var $m = _wsStyleMenuEl($('<div class="ws-menu ws-shortcut-menu">'));
+    $m.append(_wsMenuItemEl('Open in New Window', false).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsOpenShortcutNewWindow(sc); }));
+    $m.append(_wsMenuDividerEl());
     $m.append(_wsMenuItemEl('Delete', true).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsDeleteShortcut(sc, $sc); }));
     $('body').append($m);
     $m.css({ position: 'fixed', left: '-9999px', top: '0px', visibility: 'hidden', zIndex: 1000002 });
@@ -11783,7 +11815,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           cursor:'text',borderRadius:'4px',
           outline:'2px solid transparent',outlineOffset:'2px',
           transition:'outline-color .15s',
-          wordBreak:'break-word',whiteSpace:'normal',minWidth:'40px'
+          wordBreak:'break-word',whiteSpace:'normal',minWidth:'40px',
+          display:'inline-block',maxWidth:'100%',padding:'0 4px',marginLeft:'-4px'
         }).attr({contenteditable:'false',spellcheck:'false'}).text(g.name);
         var $idLabel=$('<div class="text-muted" style="font-size:11px;margin-top:2px;">').text('Guide ID: '+g.id);
 
