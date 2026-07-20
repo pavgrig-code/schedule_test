@@ -1908,7 +1908,6 @@ $(function(){
       '.ws-shortcut:hover{background:rgba(13,110,253,.08);}'+
       '.ws-shortcut-avatar{width:42px;height:42px;border-radius:10px;background:#e8f1ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 2px rgba(16,24,40,.12);}'+
       '.ws-shortcut-name{font-size:10.5px;font-weight:600;color:#212529;line-height:1.25;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}'+
-      '.ws-shortcut-id{font-size:8.5px;color:#9aa0a6;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
       '.ws-shortcut-status{max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;}'+
       '.ws-shortcut.ws-shortcut-muted{opacity:.5;cursor:default;}'+
       '.ws-shortcut.ws-shortcut-muted .ws-shortcut-avatar{filter:grayscale(1);background:#eceff1;box-shadow:none;}'+
@@ -1993,8 +1992,10 @@ $(function(){
     $m.css({ background:'#fff', border:'1px solid #dee2e6', borderRadius:'7px', boxShadow:'0 6px 20px rgba(16,24,40,.16)', padding:'4px', minWidth:'140px', fontSize:'12.5px', color:'#212529', fontFamily:'inherit' });
     return $m;
   }
-  function _wsMenuItemEl(label, danger){
-    var $it = $('<div class="ws-menu-item">').text(label).css({ fontSize:'12.5px', color:(danger?'#dc3545':'#212529'), padding:'6px 12px', borderRadius:'5px', cursor:'pointer', whiteSpace:'nowrap', fontWeight:'400', lineHeight:'1.4' });
+  function _wsMenuItemEl(label, danger, icon){
+    var $it = $('<div class="ws-menu-item">').css({ fontSize:'12.5px', color:(danger?'#dc3545':'#212529'), padding:'6px 12px', borderRadius:'5px', cursor:'pointer', whiteSpace:'nowrap', fontWeight:'400', lineHeight:'1.4' });
+    if(icon) $it.append($('<span class="ws-menu-icon">').text(icon));
+    $it.append(document.createTextNode(label));
     $it.on('mouseenter', function(){ $(this).css('background', danger?'#f8d7da':'#eef2f7'); }).on('mouseleave', function(){ $(this).css('background','transparent'); });
     if(danger) $it.addClass('danger');
     return $it;
@@ -2233,6 +2234,9 @@ $(function(){
   function _wsDeletePanel(panel, $el){
     var i = workspacePanels.indexOf(panel);
     if(i >= 0) workspacePanels.splice(i, 1);
+    // Deleting a panel deletes its contents: purge its shortcuts from the model too, otherwise they linger as
+    // invisible orphans (never rendered, but still counted and eventually synced once persistence moves to the DB).
+    workspaceShortcuts = workspaceShortcuts.filter(function(s){ return s.container !== panel.id; });
     if($el && $el.length) $el.remove(); else $('.ws-panel[data-ws-id="' + panel.id + '"]').remove();
     _wsSave();
     _wsUpdateEmptyHint();
@@ -2406,13 +2410,12 @@ $(function(){
   function _wsBuildShortcut(sc){
     var g = _wsGuideById(sc.guideId);
     var nm = _wsShortcutName(sc);
-    var $sc = $('<div class="ws-shortcut" data-sc-id="' + sc.id + '">').attr('title', nm);
+    var $sc = $('<div class="ws-shortcut" data-sc-id="' + sc.id + '">').attr({ title: nm, 'data-guide-id': sc.guideId });
     if(!g) $sc.addClass('ws-shortcut-muted');   // guide/template deleted → mute so it doesn't look fully active
     $sc.append($('<div class="ws-shortcut-avatar">').html(_wsShortcutAvatarHtml()));
     $sc.append($('<div class="ws-shortcut-name">').text(nm));
     var $st = _wsStatusPillEl((getGuideDetail(sc.guideId) || {}).status);   // status under the name, same colors as Planning Guide mode
     if($st){ $st.addClass('ws-shortcut-status'); $sc.append($st); }
-    $sc.append($('<div class="ws-shortcut-id">').text(sc.guideId));
     var px = _wsGridToPx(sc.gx, sc.gy);
     $sc.css({ left: px.left + 'px', top: px.top + 'px' });
     _wsWireShortcut(sc, $sc);
@@ -2654,9 +2657,27 @@ $(function(){
     });
     return best;
   }
+  // The lowest row a drop may snap to: the container's visible rows, or one row past the lowest occupied cell,
+  // whichever is larger. Keeps natural downward growth (drop onto the next empty row of a full container) while
+  // preventing a stray drop — e.g. the cursor leaving the window mid-drag — from teleporting a tile thousands of
+  // pixels below everything else, where it is effectively lost.
+  function _wsMaxDropRow(container){
+    var vis;
+    if(container === 'desktop'){
+      var cv = _wsCanvasEl();
+      var h = (cv && cv.getBoundingClientRect) ? cv.getBoundingClientRect().height : 0; h = h || (cv ? cv.clientHeight : 0) || 0;
+      vis = h > 0 ? Math.max(1, Math.floor((h - _WS_GRID_PAD) / _WS_CELL_H)) : 6;
+    } else {
+      var p = _wsPanelById(container); var ph = p ? p.h : _WS_DEFH;
+      vis = Math.max(1, Math.floor((ph - 40 - _WS_GRID_PAD) / _WS_CELL_H));   // 40 ≈ the panel header
+    }
+    var occ = 0;
+    workspaceShortcuts.forEach(function(s){ if(s.container === container && s.gy + 1 > occ) occ = s.gy + 1; });
+    return Math.max(vis - 1, occ);
+  }
   function _wsPlaceSnap(sc, cell){
     var cols = _wsContainerCols(sc.container);
-    var gx = Math.max(0, Math.min(cols - 1, cell.gx)), gy = Math.max(0, cell.gy);
+    var gx = Math.max(0, Math.min(cols - 1, cell.gx)), gy = Math.max(0, Math.min(_wsMaxDropRow(sc.container), cell.gy));
     if(!_wsCellFree(sc.container, gx, gy, sc)){ var free = _wsFirstFreeCell(sc.container, sc); gx = free.gx; gy = free.gy; }
     sc.gx = gx; sc.gy = gy;
   }
@@ -2699,10 +2720,10 @@ $(function(){
     _wsCloseMenus();
     var $m = _wsStyleMenuEl($('<div class="ws-menu ws-shortcut-menu">'));
     if(!_wsShortcutDeleted(sc)){   // a deleted/muted shortcut is passive, so it has no Open in New Window action
-      $m.append(_wsMenuItemEl('Open in New Window', false).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsOpenShortcutNewWindow(sc); }));
+      $m.append(_wsMenuItemEl('Open in New Window', false, '\u2197').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsOpenShortcutNewWindow(sc); }));
       $m.append(_wsMenuDividerEl());
     }
-    $m.append(_wsMenuItemEl('Delete', true).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsDeleteShortcut(sc, $sc); }));
+    $m.append(_wsMenuItemEl('Delete', true, '\ud83d\uddd1').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsDeleteShortcut(sc, $sc); }));
     $('body').append($m);
     $m.css({ position: 'fixed', left: '-9999px', top: '0px', visibility: 'hidden', zIndex: 1000002 });
     var mw = $m[0].offsetWidth || 120, mh = $m[0].offsetHeight || 40;
