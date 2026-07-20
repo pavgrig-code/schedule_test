@@ -1798,21 +1798,15 @@ $(function(){
   function _wsStorageKey(){ return _WS_KEY_BASE + ':' + _wsUserId(); }
 
   function _wsLoad(){
-    try{
-      var raw = window.localStorage.getItem(_wsStorageKey());
-      if(!raw) return;
-      var o = JSON.parse(raw);
-      if(o && Array.isArray(o.panels)){
-        workspacePanels = o.panels;
-        _wsSeq = o.seq || 0;
-        _wsSeeded = !!o.seeded;
-        workspaceShortcuts = Array.isArray(o.shortcuts) ? o.shortcuts : [];
-        workspacePanels.forEach(function(p){ if((p.z||0) > _wsMaxZ) _wsMaxZ = p.z; if((p.seq||0) > _wsSeq) _wsSeq = p.seq; });
-      }
-    }catch(e){}
+    // Workspace data (panel names, positions, sizes, colors, note content and shortcuts) is NOT read from the
+    // browser cache. Nothing is restored here, so the layout starts from the per-session defaults on every load.
+    // A future backend/DB will own Workspace persistence; we intentionally keep it out of localStorage.
   }
   function _wsSave(){
-    try{ window.localStorage.setItem(_wsStorageKey(), JSON.stringify({ panels: workspacePanels, seq: _wsSeq, seeded: _wsSeeded, shortcuts: workspaceShortcuts })); }catch(e){}
+    // Workspace data is intentionally NOT stored in the browser cache: panel names, panel content, sizes,
+    // positions, colors and shortcuts all live in memory for the session only. Persistence will move to the
+    // backend/DB once it exists; until then a reload starts fresh from the default panels. This function is kept
+    // (all mutations still call it) so wiring the future DB save is a one-line change here.
   }
 
   // ── Sanitizer for Note content: keep safe formatting only, drop scripts/handlers/dangerous HTML. ──
@@ -1866,14 +1860,21 @@ $(function(){
     return root.innerHTML;
   }
 
-  // Seed this user's Workspace once with the default top-left Planning Guides panel (500x300). Never duplicated;
-  // if the user later moves, resizes, renames or deletes it, that choice is preserved (we don't re-seed).
+  // Seed this user's Workspace once, only when they have no saved layout yet, with two empty default panels: a
+  // Planning Guides panel at the top-left (orange header, rgb(255,87,34)) and a Note 1 note panel directly beneath
+  // it (red header, rgb(239,83,80)). Neither is pre-populated with shortcuts or note content. Never duplicated;
+  // if the user later moves, resizes, renames, recolors or deletes them, that choice is preserved (no re-seed).
   function _wsEnsureDefaults(){
     if(_wsSeeded) return;
     _wsSeeded = true;
+    var now = Date.now();
     if(!workspacePanels.some(function(p){ return p.type === 'guides'; })){
       _wsMaxZ++;
-      workspacePanels.push({ id: 'wsp_guides_' + Date.now(), name: 'Planning Guides', type: 'guides', x: 0, y: 0, w: 500, h: 300, z: _wsMaxZ });
+      workspacePanels.push({ id: 'wsp_guides_' + now, name: 'Planning Guides', type: 'guides', x: 0, y: 0, w: 500, h: 300, z: _wsMaxZ, color: '#ff5722' });
+    }
+    if(!workspacePanels.some(function(p){ return p.type === 'note' && p.name === 'Note 1'; })){
+      _wsMaxZ++;
+      workspacePanels.push({ id: 'wsp_note1_' + now, name: 'Note 1', type: 'note', html: '', x: 0, y: 320, w: 250, h: 130, z: _wsMaxZ });   // default (uncolored) header, compact size
     }
     _wsSave();
   }
@@ -1908,6 +1909,13 @@ $(function(){
       '.ws-shortcut-avatar{width:42px;height:42px;border-radius:10px;background:#e8f1ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 2px rgba(16,24,40,.12);}'+
       '.ws-shortcut-name{font-size:10.5px;font-weight:600;color:#212529;line-height:1.25;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}'+
       '.ws-shortcut-id{font-size:8.5px;color:#9aa0a6;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
+      '.ws-shortcut-status{max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;}'+
+      '.ws-shortcut.ws-shortcut-muted{opacity:.5;cursor:default;}'+
+      '.ws-shortcut.ws-shortcut-muted .ws-shortcut-avatar{filter:grayscale(1);background:#eceff1;box-shadow:none;}'+
+      '.ws-shortcut.ws-shortcut-muted .ws-shortcut-name{color:#9aa0a6;font-style:italic;}'+
+      '.ws-list-row.ws-list-row-muted{opacity:.55;cursor:default;}'+
+      '.ws-list-row.ws-list-row-muted td{color:#9aa0a6;font-style:italic;}'+
+      '.ws-list-row.ws-list-row-muted .ws-list-icon svg{filter:grayscale(1);}'+
       '.ws-panel.ws-drop-target{border-color:#0d6efd;box-shadow:0 0 0 2px rgba(13,110,253,.35),0 2px 8px rgba(16,24,40,.09);}'+
       '.ws-toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:#212529;color:#fff;font-size:13px;font-weight:500;padding:9px 16px;border-radius:8px;box-shadow:0 6px 22px rgba(16,24,40,.30);z-index:1000003;opacity:1;transition:opacity .35s ease;pointer-events:none;}'+
       '.ws-toast.ws-toast-hide{opacity:0;}'+
@@ -1933,6 +1941,8 @@ $(function(){
       '.ws-menu-item:hover{background:#eef2f7;}'+
       '.ws-menu-item.danger{color:#dc3545;}'+
       '.ws-menu-item.danger:hover{background:#f8d7da;}'+
+      '.ws-menu-icon{display:inline-block;width:16px;text-align:center;font-size:12px;opacity:.7;margin-right:8px;}'+
+      '.ws-menu-item.danger .ws-menu-icon{opacity:1;}'+
       '.ws-menu-divider{height:1px;background:#e9ecef;margin:4px 6px;}'+
       '.ws-menu-item.ws-view-active{background:#eef5ff;color:#0d6efd;font-weight:600;}'+
       '.ws-view-check{float:right;margin-left:16px;font-size:11px;line-height:1.4;}'+
@@ -2175,20 +2185,21 @@ $(function(){
     var $m = $('<div class="ws-menu ws-panel-menu">');
     // View options — only for panels that can hold shortcuts (never Note panels). Tiles is the default; the
     // active view is subtly highlighted with a tint + check. Choosing one switches the panel body in place.
+    function mkIcon(icon){ return $('<span class="ws-menu-icon">').text(icon); }
     if(panel.type !== 'note'){
       var curView = (panel.view === 'list') ? 'list' : 'tiles';
-      function viewItem(label, view){
-        var $it = $('<div class="ws-menu-item ws-view-item">').text(label);
+      function viewItem(label, view, icon){
+        var $it = $('<div class="ws-menu-item ws-view-item">').append(mkIcon(icon)).append(document.createTextNode(label));
         if(curView === view){ $it.addClass('ws-view-active').append($('<span class="ws-view-check">').text('\u2713')); }
         $it.on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSetPanelView(panel, $el, view); });
         return $it;
       }
-      $m.append(viewItem('Tiles', 'tiles'), viewItem('List', 'list'), $('<div class="ws-menu-divider">'));
+      $m.append(viewItem('Tiles', 'tiles', '\u25a6'), viewItem('List', 'list', '\u2630'), $('<div class="ws-menu-divider">'));
     }
-    $m.append($('<div class="ws-menu-item">').text('Bring to Front').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
-    $m.append($('<div class="ws-menu-item">').text('Send to Back').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-item">').append(mkIcon('\u2b06')).append(document.createTextNode('Bring to Front')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-item">').append(mkIcon('\u2b07')).append(document.createTextNode('Send to Back')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
     $m.append($('<div class="ws-menu-divider">'));
-    $m.append($('<div class="ws-menu-item danger">').text('Delete').on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsConfirmDelete(panel, $el); }));
+    $m.append($('<div class="ws-menu-item danger">').append(mkIcon('\ud83d\uddd1')).append(document.createTextNode('Delete')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsConfirmDelete(panel, $el); }));
     $('body').append($m);
     // Measure while fixed + off-screen so the menu is content-width, not a full-width block.
     $m.css({ position:'fixed', left:'-9999px', top:'0px', visibility:'hidden', zIndex:1000000 });
@@ -2394,10 +2405,13 @@ $(function(){
   }
   function _wsBuildShortcut(sc){
     var g = _wsGuideById(sc.guideId);
-    var nm = g ? g.name : '(deleted guide)';
+    var nm = _wsShortcutName(sc);
     var $sc = $('<div class="ws-shortcut" data-sc-id="' + sc.id + '">').attr('title', nm);
+    if(!g) $sc.addClass('ws-shortcut-muted');   // guide/template deleted → mute so it doesn't look fully active
     $sc.append($('<div class="ws-shortcut-avatar">').html(_wsShortcutAvatarHtml()));
     $sc.append($('<div class="ws-shortcut-name">').text(nm));
+    var $st = _wsStatusPillEl((getGuideDetail(sc.guideId) || {}).status);   // status under the name, same colors as Planning Guide mode
+    if($st){ $st.addClass('ws-shortcut-status'); $sc.append($st); }
     $sc.append($('<div class="ws-shortcut-id">').text(sc.guideId));
     var px = _wsGridToPx(sc.gx, sc.gy);
     $sc.css({ left: px.left + 'px', top: px.top + 'px' });
@@ -2458,6 +2472,17 @@ $(function(){
   // The shortcut's underlying type. Displayed as an avatar in the Icon column, but stored as a plain string so
   // the Icon column can sort by it. Planning Guide today; Staff and other types will set their own value.
   function _wsShortcutType(sc){ return (sc && sc.type) ? sc.type : 'Planning Guide'; }
+  // A Planning Guide shortcut is "deleted" (passive) when its guide/template no longer exists. Such a shortcut is
+  // muted and must not navigate anywhere when clicked or opened.
+  function _wsShortcutDeleted(sc){ return !_wsGuideById(sc.guideId); }
+  // The name to display on a shortcut: the live guide name while the guide exists (captured on the shortcut so it
+  // can outlive deletion), or that last-known original name once the guide/template is gone. A deleted shortcut
+  // therefore keeps showing its original Planning Guide name rather than a bare placeholder.
+  function _wsShortcutName(sc){
+    var g = _wsGuideById(sc.guideId);
+    if(g){ sc.name = g.name; return g.name; }
+    return sc.name || '(deleted guide)';
+  }
   // A status chip carrying the exact colors Planning Guide mode uses (PG_STATUSES), so a status reads the same in
   // the list as it does on the guide. Returns null for a blank/unknown status so the cell stays empty.
   function _wsStatusPillEl(status){
@@ -2473,8 +2498,9 @@ $(function(){
     var det = getGuideDetail(sc.guideId) || {};
     return {
       sc: sc,
+      deleted: !g,                                                 // guide/template no longer exists → mute this row
       Icon: _wsShortcutType(sc),                                    // sort key for the avatar column (the type value)
-      Name: g ? g.name : '(deleted guide)',
+      Name: _wsShortcutName(sc),                                    // keeps the original guide name even once deleted
       Details: (det.district && det.district.name) ? det.district.name : '',
       Status: det.status ? det.status : ''
     };
@@ -2538,12 +2564,13 @@ $(function(){
     } else {
       rows.forEach(function(rd){
         var $tr = $('<tr class="ws-list-row">').attr('data-sc-id', rd.sc.id);
+        if(rd.deleted) $tr.addClass('ws-list-row-muted');   // guide/template deleted → mute the row
         _WS_LIST_COLS.forEach(function(c){
           if(c.key === 'Icon'){ $tr.append($('<td class="ws-list-icon">').html(_wsShortcutAvatarHtml())); }   // same avatar as the tile
           else if(c.key === 'Status'){ var $sc = $('<td>').attr('title', rd.Status); var $pill = _wsStatusPillEl(rd.Status); if($pill) $sc.append($pill); $tr.append($sc); }   // colored chip, same as Planning Guide mode
           else { $tr.append($('<td>').attr('title', rd[c.key]).text(rd[c.key])); }
         });
-        $tr.on('click', function(e){ e.stopPropagation(); _wsOpenGuideShortcut(rd.sc.guideId); });               // open the guide
+        $tr.on('click', function(e){ e.stopPropagation(); if(!rd.deleted) _wsOpenGuideShortcut(rd.sc.guideId); });   // open the guide; a deleted row is passive
         $tr.on('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); _wsShortcutContextMenu(rd.sc, $tr, ev); });   // same Delete menu as tiles
         $tb.append($tr);
       });
@@ -2564,9 +2591,13 @@ $(function(){
       var sc = workspaceShortcuts.filter(function(s){ return s.id === scId; })[0];
       if(!sc) return;
       var g = _wsGuideById(sc.guideId);
-      var nm = g ? g.name : '(deleted guide)';
+      var nm = _wsShortcutName(sc);
       var $n = $(this).find('.ws-shortcut-name'); if($n.text() !== nm) $n.text(nm);
       this.setAttribute('title', nm);
+      $(this).toggleClass('ws-shortcut-muted', !g);   // mute on the next Workspace entry if its guide was deleted
+      $(this).find('.ws-shortcut-status').remove();    // refresh the status pill from the live guide detail
+      var $st2 = _wsStatusPillEl((getGuideDetail(sc.guideId) || {}).status);
+      if($st2){ $st2.addClass('ws-shortcut-status'); $n.after($st2); }
     });
   }
   // Reflect current guide data everywhere the Workspace shows it: tile names via the label pass above, and each
@@ -2579,7 +2610,8 @@ $(function(){
 
   function _wsCreateShortcut(guideId, container){
     var cell = _wsFirstFreeCell(container);
-    var sc = { id: 'wsc_' + Date.now() + '_' + Math.floor(Math.random() * 100000), guideId: String(guideId), container: container, gx: cell.gx, gy: cell.gy, type: 'Planning Guide' };
+    var _g = _wsGuideById(guideId);
+    var sc = { id: 'wsc_' + Date.now() + '_' + Math.floor(Math.random() * 100000), guideId: String(guideId), container: container, gx: cell.gx, gy: cell.gy, type: 'Planning Guide', name: (_g ? _g.name : '') };
     workspaceShortcuts.push(sc);
     _wsSave();
     var p = _wsPanelById(container);
@@ -2607,6 +2639,7 @@ $(function(){
     }catch(e){ return window.location.href; }
   }
   function _wsOpenShortcutNewWindow(sc){
+    if(_wsShortcutDeleted(sc)) return;   // a deleted shortcut is passive and must not navigate anywhere
     var url = _wsShortcutUrl(sc);
     try{ window.open(url, '_blank'); }catch(e){}
   }
@@ -2665,8 +2698,10 @@ $(function(){
     _wsInjectStyles();
     _wsCloseMenus();
     var $m = _wsStyleMenuEl($('<div class="ws-menu ws-shortcut-menu">'));
-    $m.append(_wsMenuItemEl('Open in New Window', false).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsOpenShortcutNewWindow(sc); }));
-    $m.append(_wsMenuDividerEl());
+    if(!_wsShortcutDeleted(sc)){   // a deleted/muted shortcut is passive, so it has no Open in New Window action
+      $m.append(_wsMenuItemEl('Open in New Window', false).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsOpenShortcutNewWindow(sc); }));
+      $m.append(_wsMenuDividerEl());
+    }
     $m.append(_wsMenuItemEl('Delete', true).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsDeleteShortcut(sc, $sc); }));
     $('body').append($m);
     $m.css({ position: 'fixed', left: '-9999px', top: '0px', visibility: 'hidden', zIndex: 1000002 });
@@ -2715,7 +2750,7 @@ $(function(){
       }
       function mu(e){
         $(document).off('.wssc'); $('.ws-panel').removeClass('ws-drop-target');
-        if(!moved){ _wsOpenGuideShortcut(sc.guideId); return; }   // a click (not a drag) opens the guide
+        if(!moved){ if(!_wsShortcutDeleted(sc)) _wsOpenGuideShortcut(sc.guideId); return; }   // a click opens the guide; a deleted shortcut is passive
         drop();                                                   // restore normal positioning before placing back
         _wsDropShortcut(sc, $sc, _wsPanelUnderPoint(e.clientX, e.clientY), e.clientX, e.clientY);
       }
