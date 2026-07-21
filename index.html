@@ -3592,7 +3592,7 @@ $(function(){
 
   // Module-level popup utility
   function showConfirmPopup(title,confirmLabel,danger,onConfirm,extra){
-    var $ov=$('<div>').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
+    var $ov=$('<div class="pg-confirm-ov">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
     var $box=$('<div>').css({background:'#fff',borderRadius:'10px',padding:'24px 28px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'280px',maxWidth:'380px',fontFamily:'inherit'});
     $box.append($('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529',marginBottom:'12px'}).text(title));
     if(extra) $box.append(extra);
@@ -3714,6 +3714,8 @@ $(function(){
           r.calId=_genEntityId('cal_');
           var _sbc=guideDetails[nid].siteRowsByCal;
           if(_sbc && _oldCal!=null && _sbc[String(_oldCal)]!==undefined){ _sbc[String(r.calId)]=_sbc[String(_oldCal)]; delete _sbc[String(_oldCal)]; }
+          var _pbc=guideDetails[nid].podsByCal;
+          if(_pbc && _oldCal!=null && _pbc[String(_oldCal)]!==undefined){ _pbc[String(r.calId)]=_pbc[String(_oldCal)]; delete _pbc[String(_oldCal)]; }   // pods follow their Site Breakdown
           var _ubc=guideDetails[nid].unschedByCal;
           if(_ubc && _oldCal!=null && _ubc[String(_oldCal)]!==undefined){ _ubc[String(r.calId)]=_ubc[String(_oldCal)]; delete _ubc[String(_oldCal)]; }
         });
@@ -3918,6 +3920,109 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(!det.siteRowsByCal[k]) det.siteRowsByCal[k]=[{school:''}];
     return det.siteRowsByCal[k];
   }
+
+  // ── School Pods ── Per-guide, per-Site-Breakdown grouping of school rows. Pods are stored under
+  // det.podsByCal keyed exactly like siteRowsByCal (String(calId)), so every Site Breakdown table owns its
+  // own pod names, colors, and assignments. Membership is tracked by the row's stable schoolId (CDS when
+  // available, generated otherwise), which persists across renames/repicks, so assignments survive edits.
+  // Seven default pods A–G exist for every Site Breakdown before anything is assigned.
+  var POD_DEFAULT_COLORS=['#ef5350','#2196f3','#4caf50','#ff9800','#9c27b0','#00bcd4','#795548'];
+  function podsFor(g, calId){
+    var det=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
+    if(!det.podsByCal) det.podsByCal={};
+    var k=String(calId);
+    if(!det.podsByCal[k]){
+      det.podsByCal[k]=['A','B','C','D','E','F','G'].map(function(n,i){
+        return { id:_genEntityId('pod_'), name:n, color:POD_DEFAULT_COLORS[i%POD_DEFAULT_COLORS.length], schoolIds:[] };
+      });
+    }
+    return det.podsByCal[k];
+  }
+  function podOfSchool(pods, schoolId){
+    var sid=String(schoolId);
+    for(var i=0;i<(pods||[]).length;i++){ if((pods[i].schoolIds||[]).some(function(x){return String(x)===sid;})) return pods[i]; }
+    return null;
+  }
+  // Assign the given schoolIds to one pod (a school belongs to at most one pod per Site Breakdown):
+  // remove them from every pod first, then add to the target. Pass pod=null to only remove.
+  function podAssignSchools(pods, schoolIds, pod){
+    var ids=(schoolIds||[]).map(String);
+    (pods||[]).forEach(function(p){ p.schoolIds=(p.schoolIds||[]).filter(function(x){ return ids.indexOf(String(x))<0; }); });
+    if(pod){ ids.forEach(function(id){ if(pod.schoolIds.indexOf(id)<0) pod.schoolIds.push(id); }); }
+  }
+  // Drop a schoolId from every pod of a Site Breakdown, but only when no remaining row still carries it
+  // (duplicate schools share a schoolId; deleting one row must not strip the surviving row's pod).
+  function podPurgeSchool(g, calId, schoolId, rows){
+    var sid=String(schoolId);
+    if((rows||[]).some(function(r){ return String(r.schoolId)===sid; })) return;
+    podAssignSchools(podsFor(g, calId), [sid], null);
+  }
+  // Cmd/Ctrl-click row selection for pod assignment. Only ONE Site Breakdown holds a selection at a time:
+  // key = guideId|calKey. ids are stable schoolIds. repaint is set by the owning card so a selection change
+  // in another card can clear this one's highlights.
+  var _sbPodSel={ key:null, ids:[], repaint:null };
+  // Selection visuals are painted INLINE at the CELL level because most Site Breakdown cells carry their own
+  // inline backgrounds - a row-level tint alone stays hidden behind them. The selection indicator is a diagonal
+  // blue/white HATCH band on the left edge of the # cell (never a solid vertical bar), so it reads as selection
+  // UI and can never be mistaken for a pod's solid color or the pod bracket. Selected rows also get a light
+  // readable fill on the rest of their cells; the Cmd-held hover affordance previews the same hatch faintly. The
+  // Pod bracket column (.sb-pod-cell) is skipped entirely so brackets keep their pod color. Each cell's original
+  // background is stashed and restored exactly on deselect. The stylesheet only sets the pointer cursor on the
+  // two clickable cells while the Cmd-hover affordance is showing.
+  if(!document.getElementById('sb-pod-style')){
+    $('<style id="sb-pod-style">').text(
+      'tr.sb-pod-cmd-hover .sb-num-cell,tr.sb-pod-cmd-hover .sb-name-cell{cursor:pointer;}'
+    ).appendTo(document.head);
+  }
+  // Diagonal hatch bands (45deg, ~5.66px period) confined to a 6px strip on the left of the # cell.
+  var _SB_SEL_BAND='repeating-linear-gradient(45deg,#144ecc 0 2.83px,#ffffff 2.83px 5.66px) left/6px 100% no-repeat, #e3ebfb';
+  var _SB_HOVER_BAND='repeating-linear-gradient(45deg,#c7d6f5 0 2.83px,#ffffff 2.83px 5.66px) left/6px 100% no-repeat, #eef4ff';
+  // Bracket/label ink for a pod color: the pod's own color, darkened when too light to read as a line or label.
+  // Module-level so both the Site Breakdown Pod column and the Calendar Summary Pod column share it.
+  function _podBracketColor(hex){
+    var m=/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(String(hex||'').trim());
+    if(!m) return '#8a8a8a';
+    var h2=m[1], r3,g3,b3;
+    if(h2.length===3){ r3=parseInt(h2[0]+h2[0],16); g3=parseInt(h2[1]+h2[1],16); b3=parseInt(h2[2]+h2[2],16); }
+    else { r3=parseInt(h2.slice(0,2),16); g3=parseInt(h2.slice(2,4),16); b3=parseInt(h2.slice(4,6),16); }
+    var lum=0.299*r3+0.587*g3+0.114*b3;
+    if(lum>215){ var sc=130/lum; r3=Math.round(r3*sc); g3=Math.round(g3*sc); b3=Math.round(b3*sc); }
+    return 'rgb('+r3+','+g3+','+b3+')';
+  }
+  // mode: 'sel' (committed selection), 'hover' (Cmd-held affordance), or null (restore originals).
+  function _sbPodPaintRow(tr, mode){
+    if(!tr || !tr.cells) return;
+    [].forEach.call(tr.cells, function(td){
+      if(td.classList && td.classList.contains('sb-pod-cell')) return;   // never paint over the Pod bracket column
+      var isNum=td.classList && td.classList.contains('sb-num-cell');
+      if(mode){
+        if(td.getAttribute('data-sbpod-bg')==null) td.setAttribute('data-sbpod-bg', td.style.background||'');
+        if(isNum) td.style.background = (mode==='sel') ? _SB_SEL_BAND : _SB_HOVER_BAND;   // hatch band on the # cell
+        else td.style.background = (mode==='sel') ? '#e3ebfb' : '#eef4ff';                 // light fill elsewhere
+        [].forEach.call(td.querySelectorAll('input'), function(inp){
+          if(mode==='sel'){ if(inp.getAttribute('data-sbpod-bg')==null) inp.setAttribute('data-sbpod-bg', inp.style.background||''); inp.style.background='#eef3fd'; }
+          else if(inp.getAttribute('data-sbpod-bg')!=null){ inp.style.background=inp.getAttribute('data-sbpod-bg'); inp.removeAttribute('data-sbpod-bg'); }
+        });
+      } else {
+        if(td.getAttribute('data-sbpod-bg')!=null){ td.style.background=td.getAttribute('data-sbpod-bg'); td.removeAttribute('data-sbpod-bg'); }
+        [].forEach.call(td.querySelectorAll('input'), function(inp){
+          if(inp.getAttribute('data-sbpod-bg')!=null){ inp.style.background=inp.getAttribute('data-sbpod-bg'); inp.removeAttribute('data-sbpod-bg'); }
+        });
+      }
+    });
+  }
+  function _sbPodSelClear(){ _sbPodSel.key=null; _sbPodSel.ids=[]; if(_sbPodSel.repaint){ var f=_sbPodSel.repaint; _sbPodSel.repaint=null; f(); } }
+  function _sbPodMenuClose(){ $('body > .sb-pod-menu, body > .sb-pod-colors').remove(); $(document).off('mousedown.sbpodmenu'); }
+  // A plain click (no Cmd/Ctrl) outside the highlighted rows clears the selection in whichever Site
+  // Breakdown holds it. Clicks inside the Add to Pod menu / color popup, or on a highlighted row itself,
+  // do not clear.
+  $(document).on('mousedown.sbpodclear', function(e){
+    if(e.metaKey||e.ctrlKey) return;
+    if(!_sbPodSel.key) return;
+    if($(e.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov').length) return;
+    if($(e.target).closest('tr.sb-pod-selected').length) return;
+    _sbPodSelClear();
+  });
 
   // Per-calendar Staffing Hours options, keyed by stable Calendar ID. bySchool and alternateWeeks
   // are now independent per calendar (byCalendar separation is automatic, not an option). On first
@@ -11053,7 +11158,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var coachRoles=getRoles(g.id).filter(function(r){return r.isCoach;});
       var staffRoles=getRoles(g.id).filter(function(r){return !r.isCoach;});
       var wsSB=wb.addWorksheet('Site Breakdown');
+      // Pod column appears only when at least one school in any calendar's Site Breakdown is assigned to a pod,
+      // so exports without pods keep their existing layout untouched.
+      var _sbPodOn=validCals.some(function(vc){ var _prs=siteRowsFor(g,vc.cr.calId)||[]; var _pp=podsFor(g,vc.cr.calId); return _prs.some(function(sr){ return sr && sr.schoolId!=null && !!podOfSchool(_pp,sr.schoolId); }); });
       var _sbCols=[{width:4},{width:6},{width:26}];
+      if(_sbPodOn) _sbCols.push({width:10});
       var _sbNumCols=coachRoles.length*2+staffRoles.length+3; // Students+Coaches per coach role, Staff per staff role, +3 totals
       for(var _sbi=0;_sbi<_sbNumCols;_sbi++) _sbCols.push({width:13});
       wsSB.columns=_sbCols;
@@ -11061,6 +11170,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var cr=vc.cr;
         secTitle(wsSB,'Site Breakdown \u2014 '+((cr.name&&cr.name.trim())||('Calendar '+(vc.origIdx+1))));
         var hdr=[null,'#','School Name'];
+        if(_sbPodOn) hdr.push('Pod');
         coachRoles.forEach(function(r){ hdr.push('Students '+r.name); });
         hdr.push('Total Students');
         coachRoles.forEach(function(r){ hdr.push('Coaches '+r.name); });
@@ -11071,6 +11181,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var totals=new Array(hdr.length).fill(0);
         siteRowsFor(g,cr.calId).forEach(function(sr,si){
           var cells=[null,si+1,(sr.school||'').trim()||('School '+(si+1))];
+          if(_sbPodOn){ var _rp=(sr.schoolId!=null)?podOfSchool(podsFor(g,cr.calId),sr.schoolId):null; cells.push(_rp?_rp.name:''); }   // blank when unassigned
           var totStu=0,totCoach=0,totStaff=0;
           coachRoles.forEach(function(r){ var v=parseInt(sr[r.key])||0; totStu+=v; cells.push(v||''); });
           cells.push(totStu||'');
@@ -11079,15 +11190,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           staffRoles.forEach(function(r){ var v=parseInt(sr[r.key])||0; totStaff+=v; cells.push(v||''); });
           cells.push((totCoach+totStaff)||'');
           var row=dataRow(wsSB,cells);
-          for(var ci=4;ci<=cells.length;ci++){ row.getCell(ci).alignment={horizontal:'center'}; }
+          for(var ci=(_sbPodOn?5:4);ci<=cells.length;ci++){ row.getCell(ci).alignment={horizontal:'center'}; }
           cells.forEach(function(v,idx){ if(typeof v==='number'&&idx>=3) totals[idx]+=v; });
         });
         var unRec=(det.unschedByCal||{})[String(cr.calId)];
         var unNum=unRec?parseFloat(unRec.unalloc):NaN;
         if(isFinite(unNum)&&unNum>0){
-          var ur=dataRow(wsSB,[null,'','Unallocated Hours',unNum]);
+          var ur=dataRow(wsSB, _sbPodOn ? [null,'','Unallocated Hours','',unNum] : [null,'','Unallocated Hours',unNum]);
           ur.getCell(3).font={name:'Calibri',size:10,bold:true};
-          ur.getCell(4).numFmt=FMT_H; ur.getCell(4).alignment={horizontal:'center'};
+          var _uc=_sbPodOn?5:4;
+          ur.getCell(_uc).numFmt=FMT_H; ur.getCell(_uc).alignment={horizontal:'center'};
           ur.eachCell({includeEmpty:false},function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3CD'}}; });
         }
         blank(wsSB);
@@ -11621,7 +11733,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
         }
         tot+=xsSchoolRangeTotal(g.id,_calId2,_siteName(sr,si),cr.firstDay,cr.lastDay);   // Extra Shifts for this school within the calendar range
-        return { num:si+1, name:(sr.school||sr.schoolAbbr||'').trim()||('School '+(si+1)), hours:(isFinite(tot)?tot:0) };
+        return { num:si+1, name:(sr.school||sr.schoolAbbr||'').trim()||('School '+(si+1)), hours:(isFinite(tot)?tot:0), schoolId:(sr.schoolId!=null?String(sr.schoolId):null) };
       });
       var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;   // per-calendar Price/Hr — each Summary table uses its own calendar's price
       var calTotal=schoolTotals.reduce(function(a,s){return a+s.hours;},0);
@@ -11639,9 +11751,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $card.append($hd);
 
       // Table: School Name | Staffing Hours
+      // ── Pod column ── When this calendar's Site Breakdown uses pods, the Summary mirrors it with the same
+      // leading Pod column: rowspan bracket cells (pod color + rotated name) spanning the grouped schools that
+      // are visible here (zero-hour schools are hidden, so stretches are recomputed over the visible rows), an
+      // empty Pod cell for unpodded rows, and a leading filler on the total rows so the column runs the full height.
+      var _sumPods=podsFor(g,calId);
+      var _sumPodOn=siteRowsFor(g,calId).some(function(sr){ return sr && sr.schoolId!=null && !!podOfSchool(_sumPods,sr.schoolId); });
+      var _visTotals=schoolTotals.filter(function(st){ return st.hours>0; });
+      var _sumStretches=[], _sCur=null;
+      _visTotals.forEach(function(st,i){
+        var p=(st.schoolId!=null)?podOfSchool(_sumPods,st.schoolId):null;
+        if(p && _sCur && _sCur.pod===p && _sCur.end===i-1){ _sCur.end=i; }
+        else if(p){ _sCur={pod:p,start:i,end:i}; _sumStretches.push(_sCur); }
+        else _sCur=null;
+      });
+      var _sumStart={}, _sumCovered={};
+      _sumStretches.forEach(function(st){ _sumStart[st.start]=st; for(var i=st.start+1;i<=st.end;i++) _sumCovered[i]=true; });
+      function _sumPodBracketTd(st){
+        var col=_podBracketColor(st.pod.color);
+        var $td=$('<td class="sum-pod-cell sum-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1)})
+          .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle'});
+        $td.append($('<div class="sum-pod-bracket-line">').css({position:'absolute',top:'3px',bottom:'3px',left:'9px',width:'3px',borderRadius:'2px',background:col}));
+        var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'14px',right:'2px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
+        $lbl.append($('<span class="sum-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)',maxHeight:'100%'}).text(st.pod.name));
+        $td.append($lbl);
+        return $td;
+      }
+      function _sumPodEmptyTd(bg){ return $('<td class="sum-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'34px',minWidth:'34px'}); }
       var $scroll=$('<div style="overflow-x:auto;">');
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $hr=$('<tr>');
+      if(_sumPodOn) $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 2px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'34px',minWidth:'34px'}).text('Pod'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('#'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('School Name'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
@@ -11650,9 +11790,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $tb=$('<tbody>');
 
       // School rows first (latest Site Breakdown name; hide schools with no hours for this calendar).
-      schoolTotals.forEach(function(st){
-        if(!(st.hours>0)) return;
+      _visTotals.forEach(function(st,vi){
         var $sTr=$('<tr>');
+        if(_sumPodOn){
+          if(_sumStart[vi]) $sTr.append(_sumPodBracketTd(_sumStart[vi]));
+          else if(!_sumCovered[vi]) $sTr.append(_sumPodEmptyTd('#ffffff'));
+        }
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(st.num));
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).text(st.name));
         $sTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(st.hours)));
@@ -11664,6 +11807,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // border). N counts the schools shown for this calendar (those with hours > 0).
       var _svcN=schoolTotals.filter(function(s){return s.hours>0;}).length;
       var $totTr=$('<tr>').css({background:'#eaf0f6',borderTop:'2px solid #d4dde7'});
+      if(_sumPodOn) $totTr.append(_sumPodEmptyTd('#eaf0f6'));
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#eaf0f6',whiteSpace:'nowrap'}));
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Total, Site Schedule ('+_svcN+(_svcN===1?' school':' schools')+')'));
       $totTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(calTotal)));
@@ -11676,6 +11820,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(isFinite(_unNum) && _unNum>0){
         // Unallocated Hours row — distinct amber tint, discernible from both school rows and total rows.
         var $unTr=$('<tr>').css({background:'#fff7ea',borderTop:'1px solid #efe0c6'});
+        if(_sumPodOn) $unTr.append(_sumPodEmptyTd('#fff7ea'));
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#fff7ea',whiteSpace:'nowrap'}));
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'600',color:'#212529',whiteSpace:'nowrap'}).text('Unallocated Hours'));
         $unTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'600',color:'#8a6d1a',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_unNum)));
@@ -11684,6 +11829,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         // Combined Total row (Staffing Hrs + Unallocated Hours) — strongest total styling.
         var $grandTr=$('<tr>').css({background:'#dfeaf6',borderTop:'2px solid #bcd0e8'});
+        if(_sumPodOn) $grandTr.append(_sumPodEmptyTd('#dfeaf6'));
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 6px',background:'#dfeaf6',whiteSpace:'nowrap'}));
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text('Total'));
         $grandTr.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(calTotal+_unNum)));
@@ -12947,6 +13093,218 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(isPrimary) setGuideDetail(g.id,'siteRows',siteRows);
     }
 
+    // ── Pod plumbing for this Site Breakdown card ──
+    var _podSelKey=String(g.id)+'|'+String(calId);
+    var _podTbody=null;   // the card's current tbody; set by buildTable, used to repaint selection highlights
+    function savePods(){ setGuideDetail(g.id,'podsByCal',(guideDetails[String(g.id)]||{}).podsByCal); }
+    function _podRepaintSel(){
+      if(!_podTbody) return;
+      var sel=(_sbPodSel.key===_podSelKey)?_sbPodSel.ids:[];
+      $(_podTbody).children('tr').each(function(i){
+        var r=siteRows[i]; if(!r) return;   // totals row
+        var on=sel.indexOf(String(r.schoolId))>=0;
+        $(this).toggleClass('sb-pod-selected', on)
+               .css('background', on?'#dbeafe':(i%2===1?'#fafafa':''));
+        _sbPodPaintRow(this, on?'sel':null);   // cell-level fill + left accent (or restore the originals)
+      });
+    }
+    function _podColorPopup($anchor, pod){
+      $('body > .sb-pod-colors').remove();
+      var PICK_COLORS=['#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688','#4caf50','#ffeb3b','#ffc107','#ff9800','#ff5722','#795548','#9e9e9e','#607d8b'];
+      var $pop=$('<div class="sb-pod-colors">').css({position:'fixed',zIndex:'100001',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.15)',padding:'8px'});
+      var $grid=$('<div>').css({display:'grid',gridTemplateColumns:'repeat(8,22px)',gap:'5px'});
+      PICK_COLORS.forEach(function(c2){
+        var isSel=(pod.color===c2);
+        var $opt=$('<div class="sb-pod-color-opt">').css({width:'22px',height:'22px',background:c2,border:isSel?'1.5px solid #bbb':'1px solid rgb(210,210,210)',borderRadius:'50%',cursor:'pointer'});
+        if(isSel) $opt.css('box-shadow','inset 0 0 0 2px rgba(0,0,0,0.18)');
+        $opt.on('mouseenter',function(){ if(!isSel) $(this).css('border','1.5px solid #999'); }).on('mouseleave',function(){ if(!isSel) $(this).css('border','1px solid rgb(210,210,210)'); });
+        $opt.on('click',function(e){ e.stopPropagation(); pod.color=c2; savePods(); $anchor.css('background',c2); $pop.remove(); refreshTable(); refreshSummary(g); });
+        $grid.append($opt);
+      });
+      $pop.append($grid); $('body').append($pop);
+      var r2=$anchor[0].getBoundingClientRect();
+      $pop.css({top:((r2.bottom||0)+6)+'px', left:(r2.left||0)+'px'});
+      $pop.on('mousedown click',function(e){ e.stopPropagation(); });
+    }
+    function _podOpenMenu(x,y){
+      _sbPodMenuClose();
+      var pods=podsFor(g,calId);
+      var selIds=_sbPodSel.ids.slice();
+      var $m=$('<div class="sb-pod-menu">').attr('data-guide',String(g.id)).css({position:'fixed',zIndex:'100000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 18px rgba(0,0,0,.14)',padding:'8px',minWidth:'210px',fontSize:'12px'});
+      $m.on('mousedown click contextmenu', function(e){ e.stopPropagation(); });
+      $m.append($('<div class="sb-pod-title">').css({fontWeight:'700',fontSize:'12px',color:'#212529',padding:'0 2px 6px'}).text('Add to Pod'));
+      var $search=$('<input type="text" class="sb-pod-search" placeholder="Search or create\u2026">').css({width:'100%',boxSizing:'border-box',border:'1px solid #dde3ea',borderRadius:'5px',padding:'4px 6px',fontSize:'12px',outline:'none',marginBottom:'6px',background:'#f7f9fc'});
+      $m.append($search);
+      var $list=$('<div class="sb-pod-list">').css({maxHeight:'220px',overflowY:'auto'});
+      $m.append($list);
+      function circle(color){ return $('<span class="sb-pod-circle">').css({display:'inline-block',width:'12px',height:'12px',borderRadius:'50%',background:color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}); }
+      function item(){ return $('<div>').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 6px',borderRadius:'5px',cursor:'pointer',color:'#212529'}).on('mouseenter',function(){$(this).css('background','#eef2f7');}).on('mouseleave',function(){$(this).css('background','transparent');}); }
+      function cap(s){ s=String(s||''); return s? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+      function assign(pod){ podAssignSchools(pods, selIds, pod); savePods(); _sbPodMenuClose(); _sbPodSelClear(); refreshTable(); refreshSummary(g); }
+      // ── Inline pod editing ── One pod row at a time can be in edit mode (editingId); opening Edit on
+      // another pod discards the previous unsaved edit. Edit mode swaps the name for a focused text field,
+      // adds the app's inline "×" delete control, and shows Cancel / Unassign Schools / Update under the row.
+      var editingId=null;
+      function _podNameDup(p, nm){ var lo=nm.toLowerCase(); return pods.some(function(q){ return q!==p && String(q.name||'').trim().toLowerCase()===lo; }); }
+      function _podAfterDataChange(){ savePods(); refreshTable(); refreshSummary(g); }
+      function rebuild(){
+        $list.empty();
+        var q=String($search.val()||'').trim(), qlo=q.toLowerCase();
+        pods.forEach(function(p){
+          if(qlo && p.name.toLowerCase().indexOf(qlo)!==0) return;   // starts-with match, case-insensitive
+          var cnt=(p.schoolIds||[]).length;
+          var $it=item().addClass('sb-pod-item').attr('data-pod-name',p.name);
+          var $cir=circle(p.color).css('cursor','pointer').on('click',function(e){ e.stopPropagation(); _podColorPopup($(this), p); });
+          if(p.id===editingId){
+            // ── Edit mode row: text field + delete "×" ──
+            $it.css('cursor','default').off('mouseenter mouseleave').on('click',function(e){ e.stopPropagation(); });   // never assigns while editing
+            var $inp=$('<input type="text" class="sb-pod-edit-input">').val(p.name)
+              .css({flex:'1',minWidth:'0',border:'1px solid #dde3ea',borderRadius:'5px',padding:'3px 6px',fontSize:'12px',outline:'none',background:'#fff'});
+            // the app's inline delete "×" (school chip clear): plain ×, bold, subtle until hovered, danger on hover
+            var $del=$('<span class="sb-pod-del" title="Delete pod">').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 3px',color:'#dc3545',flexShrink:'0'}).text('\u00d7')
+              .on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.7');});
+            $it.append($cir).append($inp).append($del);
+            $list.append($it);
+            // ── Action bar + validation, visually attached under the row being edited ──
+            var $bar=$('<div class="sb-pod-edit-bar">').css({display:'flex',gap:'6px',alignItems:'center',padding:'2px 6px 6px 25px'});
+            var $msg=$('<div class="sb-pod-edit-msg">').css({fontSize:'10.5px',color:'#c0392b',padding:'0 6px 4px 25px',display:'none'}).text('A pod with this name already exists.');
+            function smallBtn(label,primary){ return $('<button type="button">').text(label).css({border:primary?'none':'1px solid #dee2e6',background:primary?'#1a73e8':'none',color:primary?'#fff':'#6c757d',borderRadius:'5px',padding:'3px 10px',fontSize:'11px',cursor:'pointer',fontWeight:'600'}); }
+            var $cancelB=smallBtn('Cancel',false).addClass('sb-pod-edit-cancel').on('click',function(e){ e.stopPropagation(); editingId=null; rebuild(); });
+            var $updateB=smallBtn('Update',true).addClass('sb-pod-edit-update').hide();
+            $bar.append($cancelB);
+            if(cnt>0){
+              $bar.append(smallBtn('Unassign Schools',false).addClass('sb-pod-edit-unassign').css('color','#b26a00').on('click',function(e){
+                e.stopPropagation(); p.schoolIds=[]; editingId=null; _podAfterDataChange(); rebuild();   // unassign and leave edit mode
+              }));
+            }
+            $bar.append($updateB);
+            $list.append($msg).append($bar);
+            function validate(){
+              var nm=String($inp.val()||'').trim();
+              var dup=nm && nm.toLowerCase()!==String(p.name||'').trim().toLowerCase() && _podNameDup(p,nm);
+              $msg.toggle(!!dup);
+              var ok=!!nm && nm!==p.name && !dup;
+              $updateB.toggle(ok);
+              return ok?nm:null;
+            }
+            function applyUpdate(){ var nm=validate(); if(nm==null) return; p.name=nm; editingId=null; _podAfterDataChange(); rebuild(); }
+            $updateB.on('click',function(e){ e.stopPropagation(); applyUpdate(); });
+            $inp.on('input',validate).on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); applyUpdate(); } else if(e.key==='Escape'){ e.preventDefault(); editingId=null; rebuild(); } });
+            $del.on('click',function(e){
+              e.stopPropagation();
+              showConfirmPopup('Delete \u201c'+p.name+'\u201d?','Delete',true,function(){
+                var ix=pods.indexOf(p); if(ix>=0) pods.splice(ix,1);   // schools become unassigned; their rows stay
+                editingId=null; _podAfterDataChange(); rebuild();
+              }, $('<div>').css({fontSize:'12px',color:'#495057'}).text('Schools assigned to this pod will become unassigned.'));
+              // canceling the confirmation stays in edit mode and changes nothing
+            });
+            setTimeout(function(){ try{ $inp[0].focus(); $inp[0].select(); }catch(_e){} },0);
+            validate();
+            return;
+          }
+          // ── Regular row: bold name (with count) when assigned, plain name and no "(0)" when empty ──
+          var $nm=$('<span class="sb-pod-name">').text(cnt>0 ? (p.name+' ('+cnt+')') : p.name).css({fontWeight:cnt>0?'700':'400',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'});
+          var $ed=$('<span class="sb-pod-edit">').text('Edit').css({fontSize:'10.5px',color:'#8a94a0',visibility:'hidden',flexShrink:'0',cursor:'pointer',padding:'0 2px'})
+            .on('click',function(e){ e.stopPropagation(); editingId=p.id; rebuild(); });
+          $it.on('mouseenter',function(){ $ed.css('visibility','visible'); }).on('mouseleave',function(){ $ed.css('visibility','hidden'); });
+          $it.append($cir).append($nm).append($ed);
+          $it.on('click',function(){ assign(p); });
+          $list.append($it);
+        });
+        if(q && !pods.some(function(p){ return p.name.toLowerCase()===cap(q).toLowerCase(); })){
+          var newColor=POD_DEFAULT_COLORS[pods.length%POD_DEFAULT_COLORS.length];
+          var $cr=item().addClass('sb-pod-create');
+          $cr.append(circle(newColor)).append($('<span>').text('Create new ('+cap(q)+')'));
+          $cr.on('click',function(){
+            var nm=cap(q);
+            var ex=null; pods.forEach(function(p){ if(p.name.toLowerCase()===nm.toLowerCase()) ex=p; });
+            var pod=ex||{ id:_genEntityId('pod_'), name:nm, color:newColor, schoolIds:[] };
+            if(!ex) pods.push(pod);
+            assign(pod);
+          });
+          $list.append($cr);
+        }
+        var anyAssigned=selIds.some(function(id){ return !!podOfSchool(pods,id); });
+        var $foot=$m.children('.sb-pod-foot'); if(!$foot.length){ $foot=$('<div class="sb-pod-foot">').css({borderTop:'1px solid #f1f3f5',marginTop:'6px',paddingTop:'6px'}); $m.append($foot); }
+        $foot.empty();
+        if(anyAssigned) $foot.append(item().addClass('sb-pod-remove').css('color','#dc3545').text('Remove from existing pods').on('click',function(){ assign(null); }));
+        $foot.append(item().addClass('sb-pod-cancel').css('color','#6c757d').text('Cancel').on('click',function(){ _sbPodMenuClose(); }));
+      }
+      $search.on('input', rebuild);
+      rebuild();
+      $('body').append($m);
+      var vw=window.innerWidth||1200, vh=window.innerHeight||800;
+      var mr=$m[0].getBoundingClientRect(), mw=mr.width||220, mh=mr.height||220;
+      $m.css({left:Math.max(4,Math.min(x, vw-mw-8))+'px', top:Math.max(4,Math.min(y, vh-mh-8))+'px'});
+      setTimeout(function(){ try{$search[0].focus();}catch(e){} },0);
+      $(document).on('mousedown.sbpodmenu', function(ev){ if(!$(ev.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov').length) _sbPodMenuClose(); });
+    }
+    // Darken very light pod colors so the bracket line/label stay visible on white (mirrors the combined
+    // calendar's bracket color treatment).
+    // _podBracketColor is module-level (shared with the Calendar Summary Pod column).
+    // ── Visual pod brackets ── Brackets now live in a real leading "Pod" column (built inside buildTable),
+    // one column-cell per uninterrupted stretch of same-pod rows (rowspan across the stretch) carrying the
+    // colored line and the rotated pod name. That reads more clearly than the old left-gutter overlay and keeps
+    // the brackets aligned to the rows they group. _podStretches computes the runs; buildTable renders them.
+    // _podRefreshBrackets is retained as a no-op (its former callers just trigger a layout pass) and clears any
+    // legacy left padding the old overlay reserved.
+    function _podStretches(){
+      var pods=podsFor(g,calId), out=[], cur=null;
+      siteRows.forEach(function(r,i){
+        var p=(r&&r.schoolId!=null)?podOfSchool(pods,r.schoolId):null;
+        if(p && cur && cur.pod===p && cur.end===i-1){ cur.end=i; }
+        else if(p){ cur={pod:p,start:i,end:i}; out.push(cur); }
+        else cur=null;
+      });
+      return out;
+    }
+    // Build the Pod-column <td> for the row that starts a stretch: a rowspan cell with the colored line and the
+    // rotated pod name centered across the stretch. Keeps the sb-pod-bracket / data-pod-name / data-pod-rows /
+    // sb-pod-bracket-line / sb-pod-bracket-name hooks the old overlay used.
+    function _podBracketCell(st){
+      var col=_podBracketColor(st.pod.color);
+      var $td=$('<td class="sb-pod-cell sb-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1)})
+        .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle'});
+      $td.append($('<div class="sb-pod-bracket-line">').css({position:'absolute',top:'3px',bottom:'3px',left:'9px',width:'3px',borderRadius:'2px',background:col}));
+      var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'14px',right:'2px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
+      $lbl.append($('<span class="sb-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)',maxHeight:'100%'}).text(st.pod.name));
+      $td.append($lbl);
+      return $td;
+    }
+    // An empty Pod-column cell for unpodded rows and the totals row (keeps the column continuous top to bottom).
+    function _podEmptyCell(bg){ return $('<td class="sb-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'34px',minWidth:'34px'}); }
+    function _podRefreshBrackets(){ if($tableWrap) $tableWrap.css('padding-left',''); }
+    function _podRefreshBrackets_dead(){
+      if(!$tableWrap) return;
+      $tableWrap.children('.sb-pod-rail').remove();
+      var pods=podsFor(g,calId);
+      var stretches=[], cur=null;
+      siteRows.forEach(function(r,i){
+        var p=(r&&r.schoolId!=null)?podOfSchool(pods,r.schoolId):null;
+        if(p && cur && cur.pod===p && cur.end===i-1){ cur.end=i; }
+        else if(p){ cur={pod:p,start:i,end:i}; stretches.push(cur); }
+        else cur=null;
+      });
+      if(!stretches.length){ $tableWrap.css('padding-left',''); return; }
+      $tableWrap.css({position:'relative','padding-left':'24px'});
+      var $rail=$('<div class="sb-pod-rail">').css({position:'absolute',left:'0',top:'0',bottom:'0',width:'24px',pointerEvents:'none'});
+      var wrapRect=$tableWrap[0].getBoundingClientRect();
+      var rows=_podTbody?$(_podTbody).children('tr'):$();
+      stretches.forEach(function(st){
+        var rT=rows[st.start]?rows[st.start].getBoundingClientRect():{top:0,bottom:0};
+        var rB=rows[st.end]?rows[st.end].getBoundingClientRect():{top:0,bottom:0};
+        var top=(rT.top||0)-(wrapRect.top||0), hgt=Math.max(0,(rB.bottom||0)-(rT.top||0));
+        var col=_podBracketColor(st.pod.color);
+        var $seg=$('<div class="sb-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1)}).css({position:'absolute',left:'0',top:top+'px',height:hgt+'px',width:'24px',pointerEvents:'none'});
+        $seg.append($('<div class="sb-pod-bracket-line">').css({position:'absolute',top:'2px',bottom:'2px',left:'16px',width:'3px',borderRadius:'2px',background:col}));
+        var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'0',width:'15px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
+        $lbl.append($('<span class="sb-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)'}).text(st.pod.name));
+        $seg.append($lbl);
+        $rail.append($seg);
+      });
+      $tableWrap.append($rail);
+    }
+
     // ── "Copy to" action — mirrors the Staffing Hours Copy to. Shown only with 2+ Program Calendars.
     // Full-replaces the selected destination Site Breakdown table(s) with this table's rows. ──
     (function(){
@@ -13007,10 +13365,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           targets.forEach(function(destCalId){
             var destRows=siteRowsFor(g,destCalId);            // the actual array (aliased for the primary calendar)
             var copies=JSON.parse(JSON.stringify(src0));
-            copies.forEach(function(r){ r.schoolId=cdsForSchool(r.school,r.schoolAbbr)||_genEntityId('sch_'); }); // real schools keep their CDS id; blanks get fresh ids
+            var _podIdMap={};
+            copies.forEach(function(r){ var _old=r.schoolId; r.schoolId=cdsForSchool(r.school,r.schoolAbbr)||_genEntityId('sch_'); if(_old!=null&&String(_old)!==String(r.schoolId)) _podIdMap[String(_old)]=String(r.schoolId); }); // real schools keep their CDS id; blanks get fresh ids
             destRows.length=0; copies.forEach(function(r){ destRows.push(r); });   // remove old data, then replace (in place → alias preserved)
+            // Pods ride along with the copy: the destination Site Breakdown gets a deep clone of this table's
+            // pod names, colors, and assignments, with membership remapped to any freshly generated ids.
+            var det2=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
+            if(!det2.podsByCal) det2.podsByCal={};
+            det2.podsByCal[String(destCalId)]=JSON.parse(JSON.stringify(podsFor(g,calId))).map(function(p){ p.id=_genEntityId('pod_'); p.schoolIds=(p.schoolIds||[]).map(function(id){ return _podIdMap[String(id)]||id; }); return p; });
           });
           setGuideDetail(g.id,'siteRowsByCal',(guideDetails[String(g.id)]||{}).siteRowsByCal);
+          setGuideDetail(g.id,'podsByCal',(guideDetails[String(g.id)]||{}).podsByCal);
           if(_allCals.length) setGuideDetail(g.id,'siteRows',siteRowsFor(g,_allCals[0].calId));
           rebuildAllFromRoles();   // refresh Site Breakdown + Staffing Hours + Calendar
         });
@@ -13138,6 +13503,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _coachRoles=_roles.filter(function(r){return r.isCoach;});
       var _nonCoachRoles=_roles.filter(function(r){return !r.isCoach;});
 
+      // ── Pod column state ── The dedicated leading "Pod" column exists only once at least one school in this
+      // Site Breakdown is assigned to a pod. _podStretchStart maps a row index to the stretch that begins there
+      // (rowspan bracket cell); _podRowCovered marks rows folded under a rowspan above.
+      var _podStretchList=_podStretches();
+      var _podOn=_podStretchList.length>0;
+      var _podStretchStart={}, _podRowCovered={};
+      _podStretchList.forEach(function(st){ _podStretchStart[st.start]=st; for(var i=st.start+1;i<=st.end;i++) _podRowCovered[i]=true; });
+
       var $scroll=$('<div style="overflow-x:auto;">');
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
 
@@ -13154,6 +13527,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         {label:'# of Coaches', colspan:_coachRoles.length},
         {label:'Total', html:'Total<br># of Coaches Per Site', colspan:1, rowspan:2}
       ];
+      if(_podOn) headers1.unshift({label:'Pod', colspan:1, rowspan:2, isPod:true});   // dedicated Pod column, left of #
       if(_nonCoachRoles.length){
         headers1.push({label:'# of Specialized Staff', colspan:_nonCoachRoles.length});
       }
@@ -13161,6 +13535,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       headers1.push({label:'', colspan:1, rowspan:2});
       headers1.forEach(function(h){
         var $th=$('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:h.textAlign||'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:h.html?'normal':'nowrap'});
+        if(h.isPod) $th.css({width:'34px',minWidth:'34px',padding:'5px 2px'});
         if(h.html) $th.html(h.html); else $th.text(h.label);
         if(h.colspan>1)$th.attr('colspan',h.colspan);
         if(h.rowspan>1)$th.attr('rowspan',h.rowspan);
@@ -13178,6 +13553,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Body
       var $tbody=$('<tbody class="staffing-tbody">');
+      _podTbody=$tbody[0];   // pod selection highlights repaint against the card's live tbody
       // ── Duplicate-school highlight ── Schools should be unique within a calendar's Site Breakdown.
       // Key by CDS id (real picked schools) or normalized name; blank rows are never "duplicates".
       // Every row that shares a school with another row gets its School Name cell flagged. Recomputed on
@@ -13225,12 +13601,61 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         }
 
         // School name
+        // Pod column cell (only when this Site Breakdown uses pods): a rowspan bracket cell at the start of a
+        // stretch, nothing for rows folded under it, or an empty cell for unpodded rows - so the column runs
+        // continuously down the left edge and the brackets align to the rows they group.
+        if(_podOn){
+          if(_podStretchStart[ri]) $tr.append(_podBracketCell(_podStretchStart[ri]));
+          else if(!_podRowCovered[ri]) $tr.append(_podEmptyCell(ri%2===1?'#fafafa':'#ffffff'));
+        }
         // Row number cell
-        var $numTd=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1);
+        var $numTd=$('<td class="sb-num-cell">').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1);
         $tr.append($numTd);
 
+        // ── Pod selection ── Cmd/Ctrl-click on the # cell or the School Name cell toggles this row in the
+        // pod selection (one Site Breakdown at a time); right-clicking a highlighted row opens Add to Pod.
+        function _podEnsureId(){ if(!r.schoolId){ r.schoolId=cdsForSchool(r.school, r.schoolAbbr)||_genEntityId('sch_'); saveSiteRows(); } return String(r.schoolId); }
+        function _podToggleSelect(e){
+          var withKey=(e.metaKey||e.ctrlKey);
+          if(withKey){ e.preventDefault(); e.stopPropagation(); }   // plain clicks keep their normal cell behavior alongside selecting
+          var sid=_podEnsureId();
+          if(_sbPodSel.key!==_podSelKey){ _sbPodSelClear(); _sbPodSel.key=_podSelKey; _sbPodSel.ids=[]; }
+          _sbPodSel.repaint=_podRepaintSel;
+          if(withKey){
+            // Cmd/Ctrl-click: add the row, or remove it without clearing the rest.
+            var ix=_sbPodSel.ids.indexOf(sid);
+            if(ix>=0) _sbPodSel.ids.splice(ix,1); else _sbPodSel.ids.push(sid);
+          } else {
+            // Plain click: this row becomes the only highlighted row (idempotent when already the only one).
+            _sbPodSel.ids=[sid];
+          }
+          if(!_sbPodSel.ids.length) _sbPodSel.key=null;
+          _podRepaintSel();
+        }
+        $numTd.on('click', _podToggleSelect);
+        // While Cmd/Ctrl is held, hovering this row shows the "can be selected" affordance. mousemove carries
+        // the live modifier state, so pressing or releasing the key mid-hover updates the indicator instantly.
+        // A selected row keeps its stronger selected fill - the hover tint never overrides it.
+        $tr.on('mousemove.sbpodhover', function(e){
+          var held=!!(e.metaKey||e.ctrlKey);
+          $tr.toggleClass('sb-pod-cmd-hover', held);
+          if(!$tr.hasClass('sb-pod-selected')) _sbPodPaintRow($tr[0], held?'hover':null);
+        });
+        $tr.on('mouseleave.sbpodhover', function(){
+          $tr.removeClass('sb-pod-cmd-hover');
+          if(!$tr.hasClass('sb-pod-selected')) _sbPodPaintRow($tr[0], null);
+        });
+        $tr.attr('data-pod-school', String(r.schoolId||''));
+        $tr.on('contextmenu', function(e){
+          if(_sbPodSel.key!==_podSelKey || !_sbPodSel.ids.length) return;
+          if(_sbPodSel.ids.indexOf(String(r.schoolId))<0) return;
+          e.preventDefault(); e.stopPropagation();
+          _podOpenMenu(e.clientX, e.clientY);
+        });
+
         // School searchable single-select
-        var $nameTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',position:'relative',minWidth:'160px'});
+        var $nameTd=$('<td class="sb-name-cell">').css({border:'1px solid #dee2e6',padding:'2px 3px',position:'relative',minWidth:'160px'});
+        $nameTd.on('click', _podToggleSelect);
         var _schoolHideTimer=null;
 
         function buildSchoolCell(){
@@ -13452,17 +13877,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $del.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});})
             .on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
         (function(ri2){$del.on('click',function(){
+            var _delSid=r.schoolId;
             siteRows.splice(ri2,1);
+            if(_delSid!=null) podPurgeSchool(g, calId, _delSid, siteRows);   // deleted row → drop its pod assignment (unless a duplicate row still carries the id)
             if(siteRows.length===0) siteRows.push({school:''});
-            saveSiteRows(); refreshTable();
+            saveSiteRows(); savePods(); refreshTable();
           });})(ri);
         $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 6px',textAlign:'center',verticalAlign:'middle',background:'#fafafa',whiteSpace:'nowrap'}).append($del));
         $tbody.append($tr);
       });
+      _podRepaintSel();   // re-apply pod selection highlights across a rebuild
       // ── Totals row (dynamic) ──
       var totStyle={border:'1px solid #dee2e6',padding:'4px 6px',textAlign:'center',fontWeight:'700',background:'#f0f4f8',fontSize:'11px',color:'#212529'};
       var $trow=$('<tr class="site-total-row" style="border-top:2px solid #adb5bd;">');
       function tc(val,extra){ return $('<td>').css(Object.assign({},totStyle,extra||{})).text(val||''); }
+      if(_podOn) $trow.append(_podEmptyCell('#f8f9fb'));   // keep the Pod column running through the totals row
       $trow.append($('<td>').css(Object.assign({},totStyle,{background:'#f8f9fb'})));
       $trow.append(tc('Total :: '+siteRows.length+' School'+(siteRows.length===1?'':'s'),{textAlign:'left',color:'#495057',fontStyle:'normal'}));
       var _ts=0,_tc=0,_tst=0;
@@ -13497,6 +13926,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tableWrap.append($tableContent);
     $tableWrap.append($addRowBtn);
     $section.append($tableWrap);
+    setTimeout(_podRefreshBrackets,0);   // brackets measure row geometry, so build after attach/layout
 
     var _refreshTableTimer=null;
     function debouncedRefreshTable(){ if(_refreshTableTimer) clearTimeout(_refreshTableTimer); _refreshTableTimer=setTimeout(function(){ _refreshTableTimer=null; refreshTable(); },120); }
@@ -13506,6 +13936,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $tableContent=buildTable();
       $addRowBtn.detach();
       $tableWrap.append($tableContent).append($addRowBtn);
+      setTimeout(_podRefreshBrackets,0);   // re-measure row geometry after the rebuilt table lays out
       // Rebuild Staffing Hours when bySchool is on (school list may have changed)
       var _sopts2=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{};
       if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){
