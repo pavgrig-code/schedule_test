@@ -2186,7 +2186,7 @@ $(function(){
     var $m = $('<div class="ws-menu ws-panel-menu">');
     // View options — only for panels that can hold shortcuts (never Note panels). Tiles is the default; the
     // active view is subtly highlighted with a tint + check. Choosing one switches the panel body in place.
-    function mkIcon(icon){ return $('<span class="ws-menu-icon">').text(icon); }
+    function mkIcon(icon){ var $s=$('<span class="ws-menu-icon">'); if(typeof icon==='string' && icon.charAt(0)==='<') $s.html(icon).css({display:'inline-flex',alignItems:'center',justifyContent:'center'}); else $s.text(icon); return $s; }
     if(panel.type !== 'note'){
       var curView = (panel.view === 'list') ? 'list' : 'tiles';
       function viewItem(label, view, icon){
@@ -2195,12 +2195,12 @@ $(function(){
         $it.on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSetPanelView(panel, $el, view); });
         return $it;
       }
-      $m.append(viewItem('Tiles', 'tiles', '\u25a6'), viewItem('List', 'list', '\u2630'), $('<div class="ws-menu-divider">'));
+      $m.append(viewItem('Tiles', 'tiles', _pgIcon('tiles')), viewItem('List', 'list', _pgIcon('list')), $('<div class="ws-menu-divider">'));
     }
-    $m.append($('<div class="ws-menu-item">').append(mkIcon('\u2b06')).append(document.createTextNode('Bring to Front')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
-    $m.append($('<div class="ws-menu-item">').append(mkIcon('\u2b07')).append(document.createTextNode('Send to Back')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-item">').append(mkIcon(_pgIcon('front'))).append(document.createTextNode('Bring to Front')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsBringToFront(panel, $el[0]); }));
+    $m.append($('<div class="ws-menu-item">').append(mkIcon(_pgIcon('back'))).append(document.createTextNode('Send to Back')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsSendToBack(panel, $el[0]); }));
     $m.append($('<div class="ws-menu-divider">'));
-    $m.append($('<div class="ws-menu-item danger">').append(mkIcon('\ud83d\uddd1')).append(document.createTextNode('Delete')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsConfirmDelete(panel, $el); }));
+    $m.append($('<div class="ws-menu-item danger">').append(mkIcon(_pgIcon('trash'))).append(document.createTextNode('Delete')).on('click', function(e){ e.stopPropagation(); _wsCloseMenus(); _wsConfirmDelete(panel, $el); }));
     $('body').append($m);
     // Measure while fixed + off-screen so the menu is content-width, not a full-width block.
     $m.css({ position:'fixed', left:'-9999px', top:'0px', visibility:'hidden', zIndex:1000000 });
@@ -3615,6 +3615,24 @@ $(function(){
   var _guideOps = {};
   // Shared dropdown menu-item builder - keeps Duplicate / Delete (and the header Actions
   // items) visually identical across the guide-list "..." menu and the Actions menu.
+  // ── Menu icon set ── Small inline SVGs (16px) for the guide Actions / row menus and the Workspace panel menu,
+  // styled to match the app's reference: colored where the reference is colored (Excel green, JSON/pushpin purple,
+  // Import/Tiles blue, Delete red) and neutral gray otherwise. Each carries data-icon so it is identifiable.
+  var _PG_ICONS={
+    excel:'<svg data-icon="excel" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.6" fill="#1e7145"/><path d="M5 5.3l6 5.4M11 5.3l-6 5.4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    json:'<svg data-icon="json" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#f2ecfb" stroke="#7e57c2" stroke-width="1"/><path d="M6.6 7.1c-.9 0-.7.9-.7 1.4 0 .5-.5.6-.5.6s.5.1.5.6c0 .5-.2 1.4.7 1.4M9.4 7.1c.9 0 .7.9.7 1.4 0 .5.5.6.5.6s-.5.1-.5.6c0 .5.2 1.4-.7 1.4" stroke="#7e57c2" stroke-width=".95" stroke-linecap="round" fill="none"/></svg>',
+    import:'<svg data-icon="import" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M7.5 11.2V6.4M5.7 8.2l1.8-1.8 1.8 1.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    workspace:'<svg data-icon="workspace" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.6 1.9l4.5 4.5-1.6 1.6-1-.3-2.4 2.4.3 3-1 1-2.5-2.5-3 3-.7-.7 3-3L2.7 8.4l1-1 3 .3 2.4-2.4-.3-1 .8-.4z" fill="#7e57c2"/></svg>',
+    duplicate:'<svg data-icon="duplicate" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.4" y="5.4" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><rect x="2.5" y="2.5" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/></svg>',
+    tiles:'<svg data-icon="tiles" width="16" height="16" viewBox="0 0 16 16" fill="#2563eb"><rect x="2" y="2" width="5" height="5" rx="1.1"/><rect x="9" y="2" width="5" height="5" rx="1.1"/><rect x="2" y="9" width="5" height="5" rx="1.1"/><rect x="9" y="9" width="5" height="5" rx="1.1"/></svg>',
+    list:'<svg data-icon="list" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="4" r="1.2" fill="#5f6368"/><circle cx="3" cy="8" r="1.2" fill="#5f6368"/><circle cx="3" cy="12" r="1.2" fill="#5f6368"/><path d="M6 4h8M6 8h8M6 12h8" stroke="#5f6368" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    front:'<svg data-icon="front" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.7l5.3 2.9L8 7.5 2.7 4.6 8 1.7z" fill="#fff" stroke="#5f6368" stroke-width="1.1" stroke-linejoin="round"/><path d="M8 13V7.5M6 9.5l2-2 2 2" stroke="#5f6368" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    back:'<svg data-icon="back" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.7 8L8 10.9 13.3 8M2.7 11L8 13.9 13.3 11" stroke="#5f6368" stroke-width="1.1" stroke-linejoin="round" fill="none"/><path d="M8 1.7l5.3 2.9L8 7.5 2.7 4.6 8 1.7z" fill="#fff" stroke="#5f6368" stroke-width="1.1" stroke-linejoin="round"/></svg>',
+    trash:'<svg data-icon="trash" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4.4h10M6.4 4.4V3.1a.7.7 0 0 1 .7-.7h1.8a.7.7 0 0 1 .7.7v1.3M4.5 4.4l.55 8.3a.85.85 0 0 0 .85.8h4.2a.85.85 0 0 0 .85-.8l.55-8.3" stroke="#dc3545" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.7 6.8v4.2M9.3 6.8v4.2" stroke="#dc3545" stroke-width="1.1" stroke-linecap="round"/></svg>'
+  };
+  function _pgIcon(name){ return _PG_ICONS[name] || ''; }
+  // Fill a menu-icon span with an SVG string (data-icon...) or a plain glyph, whichever was passed.
+  function _pgSetMenuIcon($span, icon){ if(typeof icon==='string' && icon.charAt(0)==='<') $span.html(icon); else $span.text(icon); return $span; }
   function _buildGuideMenuItem(icon,label,opt){
     opt=opt||{};
     var $it=$('<button type="button">').css({
@@ -3622,7 +3640,7 @@ $(function(){
       background:'none',border:'none',padding:'6px 10px',borderRadius:'6px',
       cursor:'pointer',fontSize:'12px',textAlign:'left',color:(opt.danger?'#dc3545':'#212529'),whiteSpace:'nowrap'
     });
-    $it.append($('<span>').css({width:'16px',display:'inline-block',textAlign:'center',fontSize:'12px',opacity:(opt.danger?'1':'0.7'),flexShrink:'0'}).text(icon));
+    $it.append(_pgSetMenuIcon($('<span>').css({width:'16px',height:'16px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'12px',opacity:(opt.danger?'1':'0.85'),flexShrink:'0'}), icon));
     $it.append($('<span>').text(label));
     var _hov=opt.danger?'#fdecec':'#f5f5f5';
     $it.on('mouseenter',function(){ $(this).css('background',_hov); }).on('mouseleave',function(){ $(this).css('background','none'); });
@@ -3831,10 +3849,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});}).on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
         $dots.on('click',function(e){
           e.stopPropagation(); closePgMenu(); $pgMenu.empty();
-          $pgMenu.append(_wsBuildAddToWorkspaceItem(function(fn){ return pgMenuItem('\u2795','Add to Workspace',{fn:fn}); }, gObj, closePgMenu));
-          $pgMenu.append(pgMenuItem('\u29c9','Duplicate',{fn:function(){ closePgMenu(); _guideOps.duplicate(gObj); }}));
+          $pgMenu.append(_wsBuildAddToWorkspaceItem(function(fn){ return pgMenuItem(_pgIcon('workspace'),'Add to Workspace',{fn:fn}); }, gObj, closePgMenu));
+          $pgMenu.append(pgMenuItem(_pgIcon('duplicate'),'Duplicate',{fn:function(){ closePgMenu(); _guideOps.duplicate(gObj); }}));
           $pgMenu.append(_guideMenuDivider());
-          $pgMenu.append(pgMenuItem('\ud83d\uddd1','Delete',{danger:true,fn:function(){ closePgMenu(); _guideOps.delete(gObj); }}));
+          $pgMenu.append(pgMenuItem(_pgIcon('trash'),'Delete',{danger:true,fn:function(){ closePgMenu(); _guideOps.delete(gObj); }}));
           var r=$dots[0].getBoundingClientRect();
           var lft=Math.min(r.left, window.innerWidth-145);
           $pgMenu.css({top:(r.bottom+4)+'px',left:lft+'px'}).show();
@@ -3975,8 +3993,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     ).appendTo(document.head);
   }
   // Diagonal hatch bands (45deg, ~5.66px period) confined to a 6px strip on the left of the # cell.
-  var _SB_SEL_BAND='repeating-linear-gradient(45deg,#144ecc 0 2.83px,#ffffff 2.83px 5.66px) left/6px 100% no-repeat, #e3ebfb';
-  var _SB_HOVER_BAND='repeating-linear-gradient(45deg,#c7d6f5 0 2.83px,#ffffff 2.83px 5.66px) left/6px 100% no-repeat, #eef4ff';
+  var _SB_SEL_BAND='linear-gradient(45deg,#ffffff 37.5%,#757575 37.5%,#757575 50%,#ffffff 50%,#ffffff 87.5%,#757575 87.5%,#757575 100%) left/3px 5.66px repeat-y, #e9ecef';
+  var _SB_HOVER_BAND='linear-gradient(45deg,#ffffff 37.5%,#bdbdbd 37.5%,#bdbdbd 50%,#ffffff 50%,#ffffff 87.5%,#bdbdbd 87.5%,#bdbdbd 100%) left/3px 5.66px repeat-y, #f2f3f5';
   // Bracket/label ink for a pod color: the pod's own color, darkened when too light to read as a line or label.
   // Module-level so both the Site Breakdown Pod column and the Calendar Summary Pod column share it.
   function _podBracketColor(hex){
@@ -4011,6 +4029,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
     });
   }
+  // ── Row-scoped selection identity ── Selection is tracked per ROW (a WeakMap uid), never per schoolId:
+  // duplicate schools can legitimately share a schoolId (same CDS school twice), and keying the highlight on
+  // schoolId conflated such twins - clicking one lit both. schoolIds are resolved from the selected rows only
+  // when the Add to Pod menu needs them for assignment.
+  var _podRowUids=(typeof WeakMap!=='undefined')?new WeakMap():null, _podRowUidSeq=0;
+  function _podRowUid(r){
+    if(!r) return '';
+    if(!_podRowUids) return String(r.schoolId||'');
+    if(!_podRowUids.has(r)) _podRowUids.set(r,'prow_'+(++_podRowUidSeq));
+    return _podRowUids.get(r);
+  }
   function _sbPodSelClear(){ _sbPodSel.key=null; _sbPodSel.ids=[]; if(_sbPodSel.repaint){ var f=_sbPodSel.repaint; _sbPodSel.repaint=null; f(); } }
   function _sbPodMenuClose(){ $('body > .sb-pod-menu, body > .sb-pod-colors').remove(); $(document).off('mousedown.sbpodmenu'); }
   // A plain click (no Cmd/Ctrl) outside the highlighted rows clears the selection in whichever Site
@@ -4019,7 +4048,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   $(document).on('mousedown.sbpodclear', function(e){
     if(e.metaKey||e.ctrlKey) return;
     if(!_sbPodSel.key) return;
-    if($(e.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov').length) return;
+    if($(e.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov,.sb-pod-editov').length) return;
     if($(e.target).closest('tr.sb-pod-selected').length) return;
     _sbPodSelClear();
   });
@@ -11986,14 +12015,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       function mkDivider(){ return $('<div>').css({height:'1px',background:'#eceff2',margin:'4px 6px'}); }
       $menu.append(
-        mkItem('\u2193','Export as Excel',{fn:function(){ exportGuideToExcel(g); }}),
-        mkItem('\u2193','Export as JSON',{fn:function(){ exportGuideToJson(g); }}),
-        mkItem('\u2191','Import\u2026',{fn:function(){ if(_guideOps.import) _guideOps.import(g); }}),
+        mkItem(_pgIcon('excel'),'Export as Excel',{fn:function(){ exportGuideToExcel(g); }}),
+        mkItem(_pgIcon('json'),'Export as JSON',{fn:function(){ exportGuideToJson(g); }}),
+        mkItem(_pgIcon('import'),'Import\u2026',{fn:function(){ if(_guideOps.import) _guideOps.import(g); }}),
         mkDivider(),
-        _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem('\u2795','Add to Workspace',{fn:fn}); }, g, function(){ $menu.hide(); }),
-        mkItem('\u29c9','Duplicate',{fn:function(){ if(_guideOps.duplicate) _guideOps.duplicate(g); }}),
+        _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem(_pgIcon('workspace'),'Add to Workspace',{fn:fn}); }, g, function(){ $menu.hide(); }),
+        mkItem(_pgIcon('duplicate'),'Duplicate',{fn:function(){ if(_guideOps.duplicate) _guideOps.duplicate(g); }}),
         mkDivider(),
-        mkItem('\ud83d\uddd1','Delete',{danger:true,fn:function(){ if(_guideOps.delete) _guideOps.delete(g); }})
+        mkItem(_pgIcon('trash'),'Delete',{danger:true,fn:function(){ if(_guideOps.delete) _guideOps.delete(g); }})
       );
 
       var $wrapE=$('<div style="position:relative;display:inline-block;">').append($btn,$menu);
@@ -13102,7 +13131,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var sel=(_sbPodSel.key===_podSelKey)?_sbPodSel.ids:[];
       $(_podTbody).children('tr').each(function(i){
         var r=siteRows[i]; if(!r) return;   // totals row
-        var on=sel.indexOf(String(r.schoolId))>=0;
+        var on=sel.indexOf(_podRowUid(r))>=0;   // per-row identity: duplicate schoolIds never conflate
         $(this).toggleClass('sb-pod-selected', on)
                .css('background', on?'#dbeafe':(i%2===1?'#fafafa':''));
         _sbPodPaintRow(this, on?'sel':null);   // cell-level fill + left accent (or restore the originals)
@@ -13126,10 +13155,86 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $pop.css({top:((r2.bottom||0)+6)+'px', left:(r2.left||0)+'px'});
       $pop.on('mousedown click',function(e){ e.stopPropagation(); });
     }
+    // ── Edit Pod popup ── Opened by clicking a pod's bracket/name in the Site Breakdown Pod column. Tracks a
+    // PENDING state (name + assigned-school list) separately from the ORIGINAL captured at open: removing a
+    // school with its "\u00d7" or typing a new name only changes the pending state, saved on Update. Color is the
+    // exception by design - the circle opens the standard pod color picker, which applies immediately app-wide.
+    // Update (primary) appears only when the pending state differs from the original AND the trimmed name is
+    // non-blank and unique (case-insensitive) in this Site Breakdown. Cancel discards; Reset to Original appears
+    // only while dirty and restores the popup's opening state without closing or saving.
+    function _podEditPopup(pod){
+      $('.sb-pod-editov').remove();
+      var orig={ name:pod.name, ids:(pod.schoolIds||[]).slice() };
+      var pend={ name:pod.name, ids:orig.ids.slice() };
+      function schoolName(id){
+        var r=null; siteRows.forEach(function(sr){ if(sr && String(sr.schoolId)===String(id)) r=sr; });
+        return r ? ((r.school||r.schoolAbbr||'').trim()||'School') : '(removed school)';
+      }
+      var $ov=$('<div class="sb-pod-editov">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
+      var $box=$('<div class="sb-pod-editpop">').css({background:'#fff',borderRadius:'10px',padding:'18px 20px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'280px',maxWidth:'360px',fontSize:'12px'});
+      $box.on('mousedown click contextmenu',function(e){ e.stopPropagation(); });
+      $box.append($('<div class="sb-pod-editpop-title">').css({fontWeight:'700',fontSize:'13px',color:'#212529',marginBottom:'10px'}).text('Edit Pod: '+pod.name));
+      var $nameRow=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'});
+      var $circle=$('<span class="sb-pod-circle">').css({display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:pod.color,border:'1px solid rgb(180,180,180)',flexShrink:'0',cursor:'pointer'})
+        .on('click',function(e){ e.stopPropagation(); _podColorPopup($(this), pod); });   // immediate app-wide, per spec
+      var $inp=$('<input type="text" class="sb-pod-editpop-name">').val(pend.name)
+        .css({flex:'1',minWidth:'0',border:'1px solid #dde3ea',borderRadius:'5px',padding:'4px 7px',fontSize:'12px',outline:'none'});
+      $nameRow.append($circle,$inp); $box.append($nameRow);
+      var $msg=$('<div class="sb-pod-editpop-msg">').css({fontSize:'10.5px',color:'#c0392b',margin:'0 0 6px 22px',display:'none'}).text('A pod with this name already exists.');
+      $box.append($msg);
+      var $list=$('<div class="sb-pod-editpop-schools">').css({maxHeight:'200px',overflowY:'auto',margin:'2px 0 10px'});
+      $box.append($list);
+      var $bar=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px',borderTop:'1px solid #f1f3f5',paddingTop:'10px'});
+      function btn(label,primary){ return $('<button type="button">').text(label).css({border:primary?'none':'1px solid #dee2e6',background:primary?'#1a73e8':'none',color:primary?'#fff':'#6c757d',borderRadius:'6px',padding:'5px 14px',fontSize:'12px',cursor:'pointer',fontWeight:'600'}); }
+      var $reset=btn('Restore',false).addClass('sb-pod-editpop-reset').on('click',function(e){ e.stopPropagation(); pend.name=orig.name; pend.ids=orig.ids.slice(); $inp.val(pend.name); renderList(); refreshButtons(); });
+      var $cancel=btn('Cancel',false).addClass('sb-pod-editpop-cancel').on('click',function(e){ e.stopPropagation(); $ov.remove(); });
+      var $update=btn('Update',true).addClass('sb-pod-editpop-update').on('click',function(e){
+        e.stopPropagation();
+        var nm=String(pend.name||'').trim(); if(!nm) return;
+        pod.name=nm; pod.schoolIds=pend.ids.slice();
+        savePods(); $ov.remove(); refreshTable(); refreshSummary(g);
+      });
+      $bar.append($cancel,$reset,$update); $box.append($bar);   // Cancel | Restore | Update
+      function sameIds(a,b){ if(a.length!==b.length) return false; var s={}; a.forEach(function(x){s[String(x)]=1;}); return b.every(function(x){ return s[String(x)]; }); }
+      var _updOn=false;
+      function refreshButtons(){
+        var nm=String(pend.name||'').trim();
+        var dirty=nm!==orig.name || !sameIds(pend.ids,orig.ids);
+        var dup=!!nm && nm.toLowerCase()!==String(orig.name).trim().toLowerCase() && podsFor(g,calId).some(function(q){ return q!==pod && String(q.name||'').trim().toLowerCase()===nm.toLowerCase(); });
+        $msg.toggle(dup);
+        _updOn=dirty && !!nm && !dup;
+        $update.toggle(_updOn);
+        $reset.toggle(dirty);
+      }
+      function renderList(){
+        $list.empty();
+        if(!pend.ids.length){ $list.append($('<div>').css({color:'#8a94a0',fontSize:'11px',padding:'2px 0 2px 22px'}).text('No schools assigned.')); return; }
+        pend.ids.forEach(function(id){
+          var $r=$('<div class="sb-pod-editpop-school">').attr('data-school-id',String(id)).css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 0 3px 22px'});
+          $r.append($('<span>').css({flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529'}).text(schoolName(id)));
+          $r.append($('<span class="sb-pod-editpop-del" title="Remove from pod">').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 4px',color:'#dc3545',flexShrink:'0'}).text('\u00d7')
+            .on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.7');})
+            .on('click',function(e){ e.stopPropagation(); pend.ids=pend.ids.filter(function(x){ return String(x)!==String(id); }); renderList(); refreshButtons(); }));
+          $list.append($r);
+        });
+      }
+      $inp.on('input',function(){ pend.name=$inp.val(); refreshButtons(); });
+      $inp.on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); if(_updOn) $update.trigger('click'); } else if(e.key==='Escape'){ e.preventDefault(); $ov.remove(); } });
+      $ov.append($box).on('mousedown',function(e){ if($(e.target).is($ov)) $ov.remove(); });
+      $('body').append($ov);
+      renderList(); refreshButtons();
+      setTimeout(function(){ try{ $inp[0].focus(); }catch(_e){} },0);
+    }
     function _podOpenMenu(x,y){
       _sbPodMenuClose();
       var pods=podsFor(g,calId);
-      var selIds=_sbPodSel.ids.slice();
+      var selIds=[];
+      siteRows.forEach(function(rr){
+        if(!rr || _sbPodSel.ids.indexOf(_podRowUid(rr))<0) return;
+        if(!rr.schoolId){ rr.schoolId=cdsForSchool(rr.school, rr.schoolAbbr)||_genEntityId('sch_'); saveSiteRows(); }
+        var sid=String(rr.schoolId);
+        if(selIds.indexOf(sid)<0) selIds.push(sid);
+      });
       var $m=$('<div class="sb-pod-menu">').attr('data-guide',String(g.id)).css({position:'fixed',zIndex:'100000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 18px rgba(0,0,0,.14)',padding:'8px',minWidth:'210px',fontSize:'12px'});
       $m.on('mousedown click contextmenu', function(e){ e.stopPropagation(); });
       $m.append($('<div class="sb-pod-title">').css({fontWeight:'700',fontSize:'12px',color:'#212529',padding:'0 2px 6px'}).text('Add to Pod'));
@@ -13229,6 +13334,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $foot.empty();
         if(anyAssigned) $foot.append(item().addClass('sb-pod-remove').css('color','#dc3545').text('Remove from existing pods').on('click',function(){ assign(null); }));
         $foot.append(item().addClass('sb-pod-cancel').css('color','#6c757d').text('Cancel').on('click',function(){ _sbPodMenuClose(); }));
+        $foot.append(item().addClass('sb-pod-close').css('color','#6c757d').text('Close').on('click',function(){ _sbPodMenuClose(); }));
       }
       $search.on('input', rebuild);
       rebuild();
@@ -13237,7 +13343,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var mr=$m[0].getBoundingClientRect(), mw=mr.width||220, mh=mr.height||220;
       $m.css({left:Math.max(4,Math.min(x, vw-mw-8))+'px', top:Math.max(4,Math.min(y, vh-mh-8))+'px'});
       setTimeout(function(){ try{$search[0].focus();}catch(e){} },0);
-      $(document).on('mousedown.sbpodmenu', function(ev){ if(!$(ev.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov').length) _sbPodMenuClose(); });
+      $(document).on('mousedown.sbpodmenu', function(ev){ if(!$(ev.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov,.sb-pod-editov').length) _sbPodMenuClose(); });
     }
     // Darken very light pod colors so the bracket line/label stay visible on white (mirrors the combined
     // calendar's bracket color treatment).
@@ -13263,8 +13369,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // sb-pod-bracket-line / sb-pod-bracket-name hooks the old overlay used.
     function _podBracketCell(st){
       var col=_podBracketColor(st.pod.color);
-      var $td=$('<td class="sb-pod-cell sb-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1)})
-        .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle'});
+      var $td=$('<td class="sb-pod-cell sb-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1),title:'Edit pod'})
+        .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle',cursor:'pointer'});
+      // The whole bracket + name area opens the Edit Pod popup; it never selects/highlights the school rows.
+      $td.on('click',function(e){ e.stopPropagation(); _podEditPopup(st.pod); });
+      $td.on('mousedown',function(e){ e.stopPropagation(); });
       $td.append($('<div class="sb-pod-bracket-line">').css({position:'absolute',top:'3px',bottom:'3px',left:'9px',width:'3px',borderRadius:'2px',background:col}));
       var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'14px',right:'2px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
       $lbl.append($('<span class="sb-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)',maxHeight:'100%'}).text(st.pod.name));
@@ -13614,11 +13723,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         // ── Pod selection ── Cmd/Ctrl-click on the # cell or the School Name cell toggles this row in the
         // pod selection (one Site Breakdown at a time); right-clicking a highlighted row opens Add to Pod.
-        function _podEnsureId(){ if(!r.schoolId){ r.schoolId=cdsForSchool(r.school, r.schoolAbbr)||_genEntityId('sch_'); saveSiteRows(); } return String(r.schoolId); }
         function _podToggleSelect(e){
           var withKey=(e.metaKey||e.ctrlKey);
           if(withKey){ e.preventDefault(); e.stopPropagation(); }   // plain clicks keep their normal cell behavior alongside selecting
-          var sid=_podEnsureId();
+          var sid=_podRowUid(r);   // per-row token; the schoolId is resolved when the pod menu opens
           if(_sbPodSel.key!==_podSelKey){ _sbPodSelClear(); _sbPodSel.key=_podSelKey; _sbPodSel.ids=[]; }
           _sbPodSel.repaint=_podRepaintSel;
           if(withKey){
@@ -13648,7 +13756,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.attr('data-pod-school', String(r.schoolId||''));
         $tr.on('contextmenu', function(e){
           if(_sbPodSel.key!==_podSelKey || !_sbPodSel.ids.length) return;
-          if(_sbPodSel.ids.indexOf(String(r.schoolId))<0) return;
+          if(_sbPodSel.ids.indexOf(_podRowUid(r))<0) return;
           e.preventDefault(); e.stopPropagation();
           _podOpenMenu(e.clientX, e.clientY);
         });
