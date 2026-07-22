@@ -13164,6 +13164,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // only while dirty and restores the popup's opening state without closing or saving.
     function _podEditPopup(pod){
       $('.sb-pod-editov').remove();
+      _podHealDuplicateIds();   // the popup's per-school \u00d7 must act on one row, never a twin
       var orig={ name:pod.name, ids:(pod.schoolIds||[]).slice() };
       var pend={ name:pod.name, ids:orig.ids.slice() };
       function schoolName(id){
@@ -13225,8 +13226,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       renderList(); refreshButtons();
       setTimeout(function(){ try{ $inp[0].focus(); }catch(_e){} },0);
     }
+    // ── Duplicate-id healing ── Pod membership is stored by schoolId, so rows sharing an id (the same CDS
+    // school twice) were inseparable at the pod layer: assigning one twin dragged the other along. When a pod
+    // interaction touches this Site Breakdown, give each later twin its own fresh id, replicating its currently
+    // visible pod membership so nothing changes on screen - from then on assignment is exactly row-precise.
+    // (Renames already downgrade ids to generated ones elsewhere, so a non-CDS id on a named row is a normal state.)
+    function _podHealDuplicateIds(){
+      var pods=podsFor(g,calId), seen={}, healed=false;
+      siteRows.forEach(function(rr){
+        if(!rr || rr.schoolId==null) return;
+        var sid=String(rr.schoolId);
+        if(seen[sid]){
+          var nid=_genEntityId('sch_');
+          pods.forEach(function(p){
+            var has=(p.schoolIds||[]).some(function(x){ return String(x)===sid; });
+            if(has && p.schoolIds.indexOf(nid)<0) p.schoolIds.push(nid);   // the twin keeps the pod it visibly shows
+          });
+          rr.schoolId=nid; healed=true;
+        } else seen[sid]=true;
+      });
+      if(healed){ saveSiteRows(); savePods(); refreshTable(); refreshSummary(g); }
+      return healed;
+    }
     function _podOpenMenu(x,y){
       _sbPodMenuClose();
+      _podHealDuplicateIds();   // selection is per row; make the ids the assignment uses per row too
       var pods=podsFor(g,calId);
       var selIds=[];
       siteRows.forEach(function(rr){
