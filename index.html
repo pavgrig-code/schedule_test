@@ -4068,6 +4068,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     return det.staffingOptsByCal[k];
   }
 
+  // ── Staffing slot suffix for a school row under the calendar's grouping ──
+  // '' (aggregate), 's{si}' (Separate by School, or an unassigned school under Separate by Pods),
+  // or 'p{podId}' (Separate by Pods: every school in a pod shares the pod's slot). Central resolver
+  // used by every reader so calculations, tooltips, and summaries agree with the table grouping.
+  function staffSuffixFor(g, calId, si){
+    var co=(calId!=null)?calStaffOpts(g,calId):null;
+    if(co && co.byPods && si!=null){
+      var rows=siteRowsFor(g,calId)||[];
+      var r=rows[si];
+      var p=(r && r.schoolId!=null)?podOfSchool(podsFor(g,calId), r.schoolId):null;
+      return p?('p'+p.id):('s'+si);
+    }
+    return (co && co.bySchool && si!=null)?('s'+si):'';
+  }
+  // True when any school in the calendar's Site Breakdown is assigned to a pod
+  // (the condition for offering / honoring "Separate by Pods").
+  function calHasAssignedPods(g, calId){
+    if(calId==null) return false;
+    var pods=podsFor(g,calId), rows=siteRowsFor(g,calId)||[];
+    return rows.some(function(r){ return r && r.schoolId!=null && !!podOfSchool(pods, r.schoolId); });
+  }
+
   // True if a calendar's per-calendar Site Breakdown contains a school (by stable schoolId).
   // With no calId/schoolId it returns true (nothing to constrain).
   function _schedCalHasSchool(g, calId, schoolId){
@@ -4752,7 +4774,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var anyOpt=true;
       var ci=(origIdx!=null)?origIdx:null;
       var wk=byAB?(abWeek||'a'):'';
-      var slot = anyOpt ? (sfSlots[slotKey2(_rdCo.bySchool?si:null, ci, wk)]||{}) : (det.staffingHours||{});
+      var slot = anyOpt ? (sfSlots[staffSuffixFor(g,_rdCalId,si)+slotKey2(null, ci, wk)]||{}) : (det.staffingHours||{});
       var sdId=markerSdId(_rdCalId, dateKey, si);
       var sd=sdId?getSdById(g.id, sdId):null;
       if(sd && sd.noHours) return {noHours:true, sd:sd, blocks:[]};
@@ -5278,7 +5300,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _rdCo=(_rdCalId!=null)?calStaffOpts(g,_rdCalId):{bySchool:false,alternateWeeks:false};
     var ci=(origIdx!=null)?origIdx:null;
     var wk=_rdCo.alternateWeeks?(abWeek||'a'):'';
-    var slot=sfSlots[slotKey2(_rdCo.bySchool?si:null, ci, wk)]||{};
+    var slot=sfSlots[staffSuffixFor(g,_rdCalId,si)+slotKey2(null, ci, wk)]||{};
     var sdId=markerSdId(_rdCalId, dateKey, si);
     var sd=sdId?getSdById(guideId, sdId):null;
     if(sd && sd.noHours) return null;                        // Special Day with no hours
@@ -6413,12 +6435,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _calSlots.forEach(function(cal){
         var _cSiteRows=(cal.calRow&&cal.calRow.calId!=null)?siteRowsFor(g,cal.calRow.calId):_allSiteRows;
         var _calOpt=(cal.calRow&&cal.calRow.calId!=null)?calStaffOpts(g,cal.calRow.calId):{bySchool:false,alternateWeeks:false};
-        var _cSchoolSlots=_calOpt.bySchool
-          ? _cSiteRows.map(function(r,i){ return {sRow:r,si:i}; })
-          : [{sRow:null,si:null}];
+        var _cSchoolSlots;
+        if(_calOpt.byPods && cal.calRow && cal.calRow.calId!=null && calHasAssignedPods(g,cal.calRow.calId)){
+          // Separate by Pods: one table per pod (covering all its schools) + one per unassigned school,
+          // ordered exactly as the Site Breakdown lists them. Unassigned schools keep their per-school
+          // slots and behavior; pods get their own pod-id-keyed slot.
+          var _cPods=podsFor(g,cal.calRow.calId), _seenPod={};
+          _cSchoolSlots=[];
+          _cSiteRows.forEach(function(r,i){
+            var p=(r&&r.schoolId!=null)?podOfSchool(_cPods,r.schoolId):null;
+            if(p){
+              if(!_seenPod[p.id]){
+                var unit={sRow:null,si:null,pod:p,podKey:'p'+p.id,podSchools:[]};
+                _seenPod[p.id]=unit; _cSchoolSlots.push(unit);
+              }
+              _seenPod[p.id].podSchools.push({sRow:r,si:i});
+            } else {
+              _cSchoolSlots.push({sRow:r,si:i});
+            }
+          });
+        } else if(_calOpt.bySchool){
+          _cSchoolSlots=_cSiteRows.map(function(r,i){ return {sRow:r,si:i}; });
+        } else {
+          _cSchoolSlots=[{sRow:null,si:null}];
+        }
         var _cWkSlots=_calOpt.alternateWeeks?['a','b']:[''];
         _cSchoolSlots.forEach(function(sch){
-          _cWkSlots.forEach(function(wk){ _combos.push({si:sch.si,sRow:sch.sRow,ci:cal.ci,calRow:cal.calRow,wk:wk,calSiteRows:_cSiteRows,calOpt:_calOpt}); });
+          _cWkSlots.forEach(function(wk){ _combos.push({si:sch.si,sRow:sch.sRow,pod:sch.pod||null,podKey:sch.podKey||null,podSchools:sch.podSchools||null,ci:cal.ci,calRow:cal.calRow,wk:wk,calSiteRows:_cSiteRows,calOpt:_calOpt}); });
         });
       });
       // View-selector dimensions are the union across calendars (each calendar may differ).
@@ -6722,14 +6765,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var calRows=det.calendarRows||[]; var ci=-1;
             for(var i=0;i<calRows.length;i++){ if(String(calRows[i].calId)===String(_calId)){ ci=i; break; } }
             if(ci<0) return;
-            var bySch=!!calStaffOpts(g,_calId).bySchool;
-            var siList=bySch?((siteRowsFor(g,_calId)||[]).map(function(_r,_i){return _i;})):[null];
-            function K(si,wk){ return (si!==null?'s'+si:'')+'c'+ci+(wk||''); }
+            // Grouping units: '' aggregate, 's{si}' per school, or (byPods) 'p{podId}' per pod + 's{si}' per unassigned school.
+            var _o=calStaffOpts(g,_calId), rows=siteRowsFor(g,_calId)||[], sufList=[];
+            if(_o.byPods && calHasAssignedPods(g,_calId)){
+              var seenPod={};
+              rows.forEach(function(r,si2){
+                var p=(r&&r.schoolId!=null)?podOfSchool(podsFor(g,_calId),r.schoolId):null;
+                if(p){ if(!seenPod[p.id]){ seenPod[p.id]=1; sufList.push('p'+p.id); } }
+                else sufList.push('s'+si2);
+              });
+            } else if(_o.bySchool){ sufList=rows.map(function(_r,_i){ return 's'+_i; }); }
+            else sufList=[''];
+            function K(suf,wk){ return suf+'c'+ci+(wk||''); }
             var seeded=false;
-            siList.forEach(function(si){
-              var base=slots[K(si,'')];
+            sufList.forEach(function(suf){
+              var base=slots[K(suf,'')];
               if(!base||!Object.keys(base).length) return;              // nothing to copy from
-              var aK=K(si,'a'), bK=K(si,'b');
+              var aK=K(suf,'a'), bK=K(suf,'b');
               var aEmpty=!slots[aK]||!Object.keys(slots[aK]).length;
               var bEmpty=!slots[bK]||!Object.keys(slots[bK]).length;
               if(aEmpty&&bEmpty){ slots[aK]=JSON.parse(JSON.stringify(base)); slots[bK]=JSON.parse(JSON.stringify(base)); seeded=true; }
@@ -6737,8 +6789,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(seeded) setGuideDetail(g.id,'staffingHoursSlots',slots);
           }
           function _applyCalOpt(key,v){
-            var was=!!calStaffOpts(g,_calId)[key];
-            calStaffOpts(g,_calId)[key]=v;
+            var _o=calStaffOpts(g,_calId);
+            var was=!!_o[key];
+            _o[key]=v;
+            // Separate by School and Separate by Pods are mutually exclusive grouping modes;
+            // Alternate Weeks stays independent and combines with either.
+            if(v && key==='bySchool') _o.byPods=false;
+            if(v && key==='byPods') _o.bySchool=false;
             if(key==='alternateWeeks' && v && !was) _seedABForCal();   // seed on the off->on transition
             _persist();
           }
@@ -6755,6 +6812,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $dd.empty();
             // "Separate by School" only when this calendar's Site Breakdown has more than one school.
             if(((siteRowsFor(g,_calId))||[]).length>1) $dd.append(optRowCal('Separate by School','bySchool'));
+            // "Separate by Pods" only when this calendar's Site Breakdown has pods (assigned schools).
+            if(calHasAssignedPods(g,_calId)) $dd.append(optRowCal('Separate by Pods','byPods'));
             $dd.append(optRowCal('Alternate Weeks (A/B)','alternateWeeks'));
           }
           function closeDD(){ $dd.hide(); $(document).off('mousedown.'+_ddUid); }
@@ -6811,12 +6870,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         }
 
         _combos.forEach(function(combo){
-          var sfx=slotKey(combo.si,combo.ci,combo.wk);
-          var shData=getSlotData(combo.si,combo.ci,combo.wk);
+          var _cSuf=combo.podKey?combo.podKey:(combo.si!==null?'s'+combo.si:'');
+          var sfx=_cSuf+(combo.ci!==null?'c'+combo.ci:'')+(combo.wk||'');
+          var shData=(function(){ if(!_slots[sfx]) _slots[sfx]={}; return _slots[sfx]; })();
           var _calSec=ensureCalSection(combo);
 
           var _sfDiv={marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'};
-          var _hasSub=(combo.si!==null)||(!!combo.wk);
+          var _hasSub=(combo.si!==null)||(!!combo.wk)||(!!combo.pod);
 
           // Copy to button — only when more than one Staffing Hours table exists overall.
           var $copyToBtn=null;
@@ -6840,8 +6900,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               fontSize:'11px', background:'#fcfdfe', borderTop:'1px solid #eef1f4',
               padding:'5px 12px', fontWeight:'600', color:'#495057',
               display:'flex', alignItems:'center', gap:'0'
-            }).attr({'data-sf-school':combo.si!==null?String(combo.si):'','data-sf-cal':combo.ci!==null?String(combo.ci):'','data-sf-wk':combo.wk||''});
+            }).attr({'data-sf-school':combo.si!==null?String(combo.si):'','data-sf-cal':combo.ci!==null?String(combo.ci):'','data-sf-wk':combo.wk||'','data-sf-pod':combo.pod?String(combo.pod.id):''});
             var _firstSeg=true;
+            if(combo.pod){
+              // Pod header: color circle + pod name, with the assigned schools listed compactly under it
+              // (Site Breakdown order), visually subordinate to the pod name.
+              var $podSeg=$('<span class="sf-pod-label">').css({display:'inline-flex',alignItems:'center',gap:'6px'});
+              $podSeg.append($('<span class="sf-pod-circle">').css({display:'inline-block',width:'11px',height:'11px',borderRadius:'50%',background:combo.pod.color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}));
+              $podSeg.append($('<span>').css({fontWeight:'700'}).text(combo.pod.name));
+              var _schBits=(combo.podSchools||[]).map(function(u){
+                var nm=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||''; nm=String(nm).trim();
+                return 'School '+(u.si+1)+(nm?('. '+nm):'');
+              });
+              if(_schBits.length) $podSeg.append($('<span class="sf-pod-schools">').css({fontWeight:'400',fontSize:'10px',color:'#8a94a0',marginLeft:'2px'}).text(_schBits.join(' \u00b7 ')));
+              $hdr.append($podSeg);
+              _firstSeg=false;
+            }
             if(combo.si!==null){
               var _sN='School '+(combo.si+1);
               var _sL=(combo.sRow&&(combo.sRow.school||combo.sRow.schoolAbbr))||'';
@@ -6859,9 +6933,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           } else {
             if($copyToBtn) _calSec.$hdr.append($copyToBtn);
           }
-          var cFn=(function(sr,csr){ return function(){ return getSchoolCounts(sr,csr); }; })(combo.sRow,combo.calSiteRows);
+          var cFn=combo.pod
+            ? (function(list,csr){ return function(){
+                var t={}; ROLES.forEach(function(r){ t[r.countKey]=0; });
+                (list||[]).forEach(function(u){
+                  var c1=getSchoolCounts(u.sRow,csr);
+                  ROLES.forEach(function(r){ t[r.countKey]+=(parseInt(c1[r.countKey])||0); });
+                });
+                return t;
+              }; })(combo.podSchools,combo.calSiteRows)
+            : (function(sr,csr){ return function(){ return getSchoolCounts(sr,csr); }; })(combo.sRow,combo.calSiteRows);
           var res=buildOneTable(shData,cFn,sfx,combo.calRow);
-          res.$scroll.attr({'data-sf-cal':combo.ci!=null?String(combo.ci):'','data-sf-school':combo.si!=null?String(combo.si):'','data-sf-wk':combo.wk||''});
+          res.$scroll.attr({'data-sf-cal':combo.ci!=null?String(combo.ci):'','data-sf-school':combo.si!=null?String(combo.si):'','data-sf-wk':combo.wk||'','data-sf-pod':combo.pod?String(combo.pod.id):''});
           _calSec.$section.append(res.$scroll);
           _allRecalcs.push(res);
           _comboResults.push({combo:combo,shData:shData,res:res,$hdr:$hdr||$(),$calSection:_calSec.$section});
@@ -6900,16 +6983,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               // from the combo list, so schools are grouped under the calendar they actually belong to.
               var _calNodeMap={}, _calNodeOrder=[];
               _combos.forEach(function(cm){
-                if(_calNodeMap[cm.ci]===undefined){ _calNodeMap[cm.ci]={ci:cm.ci, calRow:cm.calRow, bySch:!!(cm.calOpt&&cm.calOpt.bySchool), schools:[], _seen:{}}; _calNodeOrder.push(cm.ci); }
+                if(_calNodeMap[cm.ci]===undefined){ _calNodeMap[cm.ci]={ci:cm.ci, calRow:cm.calRow, bySch:!!(cm.calOpt&&(cm.calOpt.bySchool||cm.calOpt.byPods)), schools:[], _seen:{}}; _calNodeOrder.push(cm.ci); }
                 var _nd=_calNodeMap[cm.ci];
-                if(_nd.bySch && cm.si!==null && _nd._seen[cm.si]===undefined){ _nd._seen[cm.si]=1; _nd.schools.push({si:cm.si, sRow:cm.sRow}); }
+                // Split calendars list their units in Site Breakdown order: pods (with color + name)
+                // under Separate by Pods, schools under Separate by School, unassigned schools either way.
+                if(_nd.bySch && cm.podKey && _nd._seen[cm.podKey]===undefined){ _nd._seen[cm.podKey]=1; _nd.schools.push({podKey:cm.podKey, pod:cm.pod}); }
+                if(_nd.bySch && cm.si!==null && _nd._seen['s'+cm.si]===undefined){ _nd._seen['s'+cm.si]=1; _nd.schools.push({si:cm.si, sRow:cm.sRow}); }
               });
               var _calNodes=_calNodeOrder.map(function(k){ return _calNodeMap[k]; });
               function _calNm(nd){ return (nd.calRow&&nd.calRow.name&&String(nd.calRow.name).trim())||('Calendar '+(nd.ci+1)); }
-              function _schNm(sc){ var s2=(sc.sRow&&(sc.sRow.school||sc.sRow.schoolAbbr))||''; s2=String(s2).trim(); return s2||('School '+(sc.si+1)); }
+              function _schNm(sc){ if(sc.pod) return sc.pod.name; var s2=(sc.sRow&&(sc.sRow.school||sc.sRow.schoolAbbr))||''; s2=String(s2).trim(); return s2||('School '+(sc.si+1)); }
+              function _leafKeyOf(sc){ return (sc.podKey!=null)?sc.podKey:((sc.si!=null)?String(sc.si):''); }
               var _leafN=0; _calNodes.forEach(function(nd){ _leafN += nd.bySch ? nd.schools.length : 1; });
+              var _anySplit=_anyBySchool||_combos.some(function(c){ return !!c.podKey; });
 
-              if(_anyBySchool){
+              if(_anySplit){
                 // Separate by School: nested "All Schools" -> Program Calendar -> School checkboxes.
                 if(_leafN>1){
                   var $grp=$('<div>').css({marginBottom:'8px'});
@@ -6935,9 +7023,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     var _en={node:nd,$cb:_cCb.$cb,schCbs:[]}; _calEntries.push(_en);
                     if(nd.bySch){
                       nd.schools.forEach(function(sc){
-                        var _sCb=mkCb(_schNm(sc),true); _sCb.$row.css({paddingLeft:'30px'});
+                        var _sCb=sc.pod?mkCb(_schNm(sc),true,sc.pod.color):mkCb(_schNm(sc),true); _sCb.$row.css({paddingLeft:'30px'});
                         $grp.append(_sCb.$row);
-                        state.leaves.push({ci:nd.ci,si:sc.si,$cb:_sCb.$cb});
+                        state.leaves.push({ci:nd.ci,si:(sc.si!=null?sc.si:null),k:_leafKeyOf(sc),$cb:_sCb.$cb});
                         _en.schCbs.push(_sCb.$cb);
                         _sCb.$cb.on('change',function(){ _refreshParents(); });
                       });
@@ -6951,7 +7039,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   $dd.append($grp);
                   _refreshParents();
                 } else {
-                  _calNodes.forEach(function(nd){ if(nd.bySch){ nd.schools.forEach(function(sc){ state.leaves.push({ci:nd.ci,si:sc.si,$cb:null}); }); } else { state.leaves.push({ci:nd.ci,si:null,$cb:null}); } });
+                  _calNodes.forEach(function(nd){ if(nd.bySch){ nd.schools.forEach(function(sc){ state.leaves.push({ci:nd.ci,si:(sc.si!=null?sc.si:null),k:_leafKeyOf(sc),$cb:null}); }); } else { state.leaves.push({ci:nd.ci,si:null,$cb:null}); } });
                 }
               } else {
                 // Not Separate by School: keep the flat "All Calendars" group (unchanged behavior).
@@ -7012,7 +7100,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
                 // Determine which (calendar, school) destinations + weeks are selected.
                 var selLeaf={};
-                state.leaves.forEach(function(lf){ if(!lf.$cb || lf.$cb.prop('checked')) selLeaf[lf.ci+'|'+(lf.si===null?'':lf.si)]=true; });
+                state.leaves.forEach(function(lf){ var _k=(lf.k!==undefined)?lf.k:((lf.si===null||lf.si===undefined)?'':String(lf.si)); if(!lf.$cb || lf.$cb.prop('checked')) selLeaf[lf.ci+'|'+_k]=true; });
                 var selWk=state.wks.length
                   ? state.wks.filter(function(x){ return !x.$cb||x.$cb.prop('checked'); }).map(function(x){return x.wk;})
                   : [''];
@@ -7022,7 +7110,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var _fmt=window._PICKER_FMT||function(v){return v;};
                 _comboResults.forEach(function(tgt){
                   var tc=tgt.combo;
-                  var pairOk=!!selLeaf[tc.ci+'|'+(tc.si===null?'':tc.si)];
+                  var pairOk=!!selLeaf[tc.ci+'|'+(tc.podKey?tc.podKey:(tc.si===null?'':tc.si))];
                   var wkOk=(!tc.wk)||selWk.indexOf(tc.wk)>=0;
                   if(!pairOk||!wkOk) return;
 
@@ -8011,7 +8099,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function _slotFor(si){
         if(!_anyOpt) return _baseSH;
         var siReal=(si==='_none_')?null:si;
-        var key=(_ccCo.bySchool&&siReal!==null?'s'+siReal:'')+(_ciPart!==null?'c'+_ciPart:'')+_wkPart;
+        var key=staffSuffixFor(g,_ccCalId,siReal)+(_ciPart!==null?'c'+_ciPart:'')+_wkPart;
         return _slots[key]||{};
       }
       // One school's total hours: its OWN counts × adjusted hours of its resolved column.
@@ -9443,7 +9531,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Staffing data {role:{day:{start,end,brk}}} for a school context.
       function _slotForTip(si){
         if(!_anyOpt3) return _gdet.staffingHours||{};
-        var key=_slotKey2(_tipCo.bySchool?si:null, ciForTip, wkForTip);
+        var key=staffSuffixFor(gObj,(_tipCalRow&&_tipCalRow.calId!=null)?_tipCalRow.calId:null,si)+_slotKey2(null, ciForTip, wkForTip);
         return _sfSlots[key]||{};
       }
       // Resolve a school's own applicable column: its assigned Special Day's id (when that SD has
@@ -9648,7 +9736,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function slotKey(si,ci,wk){ return (si!==null?'s'+si:'')+(ci!==null?'c'+ci:'')+(wk||''); }
       var ci=(calOrigIdx!=null)?calOrigIdx:null;
       var wk=co.alternateWeeks?(abWeek||'a'):'';
-      var slot=_sfSlots[slotKey(co.bySchool?schoolIdx:null, ci, wk)]||{};
+      var slot=_sfSlots[staffSuffixFor(gObj,calId,schoolIdx)+slotKey(null, ci, wk)]||{};
       // Resolve this school's applicable column: its Special Day (when it has hours) or the weekday.
       var sdId=getMarkerSdId(calId,dateKey,schoolIdx);
       var sd=sdId?getSdById(gid,sdId):null;
@@ -10389,7 +10477,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Staffing data {role:{day:{start,end,brk}}} for a school context.
       function _slotForTip(si){
         if(!_anyOpt3) return _gdet.staffingHours||{};
-        var key=_slotKey2(_tipCo.bySchool?si:null, ciForTip, wkForTip);
+        var key=staffSuffixFor(gObj,(_tipCalRow&&_tipCalRow.calId!=null)?_tipCalRow.calId:null,si)+_slotKey2(null, ciForTip, wkForTip);
         return _sfSlots[key]||{};
       }
       // Resolve a school's own applicable column: its assigned Special Day's id (when that SD has
@@ -11039,7 +11127,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var sdId=markerSdId(cr.calId,dateKey,si);
       var srcKey=DOW[dateObj.getDay()];
       if(sdId){ var sd=getSdById(g.id,sdId); if(sd){ out.sd=sd; if(sd.noHours){ out.noHours=true; return out; } srcKey=sd.id; } }
-      var slot=sfSlots[slotKey2(co.bySchool?si:null,vc.origIdx,abWeekFor(cr,dateObj,co))]||{};
+      var slot=sfSlots[staffSuffixFor(g,cr.calId,si)+slotKey2(null,vc.origIdx,abWeekFor(cr,dateObj,co))]||{};
       roles.forEach(function(role){
         var origCnt=parseInt(sr[role.countKey])||0, cnt=origCnt;
         var rd=slot[role.key], baseTm=rd?rd[srcKey]:null, tm=baseTm;
@@ -11726,9 +11814,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function _adjH(tm){ if(!tm) return 0; var _hk=tm.start+'|'+tm.end; var v=(_hk in _adjCache)?_adjCache[_hk]:(_adjCache[_hk]=adjForBillable(calcH(tm.start,tm.end),cr)); return (v>0)?v:0; }
       var schoolTotals=schools.map(function(sr,si){
         // Hoist slot(s) once per school (constant across days unless Week A/B alternates); pre-collect >0-count roles.
-        var _sBase=_isAB?null:(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'')]||{});
-        var _sA=_isAB?(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'a')]||{}):null;
-        var _sB=_isAB?(sfSlots[slotKey2(_co.bySchool?si:null,_ci2,'b')]||{}):null;
+        var _sSuf=staffSuffixFor(g,_calId2,si);
+        var _sBase=_isAB?null:(sfSlots[_sSuf+slotKey2(null,_ci2,'')]||{});
+        var _sA=_isAB?(sfSlots[_sSuf+slotKey2(null,_ci2,'a')]||{}):null;
+        var _sB=_isAB?(sfSlots[_sSuf+slotKey2(null,_ci2,'b')]||{}):null;
         var _active=[]; roles.forEach(function(role){ var c=parseInt(sr[role.countKey])||0; if(c) _active.push({k:role.key,c:c}); });
         var tot=0;
         if(!_hasMarks && !_isAB && !_hasOv && _active.length){
@@ -13126,6 +13215,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _podSelKey=String(g.id)+'|'+String(calId);
     var _podTbody=null;   // the card's current tbody; set by buildTable, used to repaint selection highlights
     function savePods(){ setGuideDetail(g.id,'podsByCal',(guideDetails[String(g.id)]||{}).podsByCal); }
+    // When this calendar's Staffing Hours are grouped by pods, pod changes (assign/rename/recolor/
+    // membership/delete) regroup the tables - rebuild the Staffing and Calendar sections like the
+    // Options control does, so tables, calculations, and Copy To all reflect the new membership.
+    function _podRefreshStaffing(){
+      if(!calStaffOpts(g,calId).byPods) return;
+      var $newSf=buildStaffingSection(g);
+      $('#staffing-section-'+g.id).replaceWith($newSf);
+      var $newCal=buildCalendarSection(g);
+      $('#cal-section-'+g.id).replaceWith($newCal);
+      setTimeout(function(){
+        if($newSf[0]&&$newSf[0]._recalcAll) $newSf[0]._recalcAll();
+        if($newCal[0]&&$newCal[0]._updateHours) $newCal[0]._updateHours();
+      },0);
+    }
     function _podRepaintSel(){
       if(!_podTbody) return;
       var sel=(_sbPodSel.key===_podSelKey)?_sbPodSel.ids:[];
@@ -13147,7 +13250,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $opt=$('<div class="sb-pod-color-opt">').css({width:'22px',height:'22px',background:c2,border:isSel?'1.5px solid #bbb':'1px solid rgb(210,210,210)',borderRadius:'50%',cursor:'pointer'});
         if(isSel) $opt.css('box-shadow','inset 0 0 0 2px rgba(0,0,0,0.18)');
         $opt.on('mouseenter',function(){ if(!isSel) $(this).css('border','1.5px solid #999'); }).on('mouseleave',function(){ if(!isSel) $(this).css('border','1px solid rgb(210,210,210)'); });
-        $opt.on('click',function(e){ e.stopPropagation(); pod.color=c2; savePods(); $anchor.css('background',c2); $pop.remove(); refreshTable(); refreshSummary(g); });
+        $opt.on('click',function(e){ e.stopPropagation(); pod.color=c2; savePods(); $anchor.css('background',c2); $pop.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing(); });
         $grid.append($opt);
       });
       $pop.append($grid); $('body').append($pop);
@@ -13193,7 +13296,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         e.stopPropagation();
         var nm=String(pend.name||'').trim(); if(!nm) return;
         pod.name=nm; pod.schoolIds=pend.ids.slice();
-        savePods(); $ov.remove(); refreshTable(); refreshSummary(g);
+        savePods(); $ov.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing();
       });
       $bar.append($cancel,$reset,$update); $box.append($bar);   // Cancel | Restore | Update
       function sameIds(a,b){ if(a.length!==b.length) return false; var s={}; a.forEach(function(x){s[String(x)]=1;}); return b.every(function(x){ return s[String(x)]; }); }
@@ -13269,13 +13372,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function circle(color){ return $('<span class="sb-pod-circle">').css({display:'inline-block',width:'12px',height:'12px',borderRadius:'50%',background:color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}); }
       function item(){ return $('<div>').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 6px',borderRadius:'5px',cursor:'pointer',color:'#212529'}).on('mouseenter',function(){$(this).css('background','#eef2f7');}).on('mouseleave',function(){$(this).css('background','transparent');}); }
       function cap(s){ s=String(s||''); return s? s.charAt(0).toUpperCase()+s.slice(1) : s; }
-      function assign(pod){ podAssignSchools(pods, selIds, pod); savePods(); _sbPodMenuClose(); _sbPodSelClear(); refreshTable(); refreshSummary(g); }
+      function assign(pod){ podAssignSchools(pods, selIds, pod); savePods(); _sbPodMenuClose(); _sbPodSelClear(); refreshTable(); refreshSummary(g); _podRefreshStaffing(); }
       // ── Inline pod editing ── One pod row at a time can be in edit mode (editingId); opening Edit on
       // another pod discards the previous unsaved edit. Edit mode swaps the name for a focused text field,
       // adds the app's inline "×" delete control, and shows Cancel / Unassign Schools / Update under the row.
       var editingId=null;
       function _podNameDup(p, nm){ var lo=nm.toLowerCase(); return pods.some(function(q){ return q!==p && String(q.name||'').trim().toLowerCase()===lo; }); }
-      function _podAfterDataChange(){ savePods(); refreshTable(); refreshSummary(g); }
+      function _podAfterDataChange(){ savePods(); refreshTable(); refreshSummary(g); _podRefreshStaffing(); }
       function rebuild(){
         $list.empty();
         var q=String($search.val()||'').trim(), qlo=q.toLowerCase();
