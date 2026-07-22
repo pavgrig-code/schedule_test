@@ -3733,7 +3733,9 @@ $(function(){
           var _sbc=guideDetails[nid].siteRowsByCal;
           if(_sbc && _oldCal!=null && _sbc[String(_oldCal)]!==undefined){ _sbc[String(r.calId)]=_sbc[String(_oldCal)]; delete _sbc[String(_oldCal)]; }
           var _pbc=guideDetails[nid].podsByCal;
-          if(_pbc && _oldCal!=null && _pbc[String(_oldCal)]!==undefined){ _pbc[String(r.calId)]=_pbc[String(_oldCal)]; delete _pbc[String(_oldCal)]; }   // pods follow their Site Breakdown
+          if(_pbc && _oldCal!=null && _pbc[String(_oldCal)]!==undefined){ _pbc[String(r.calId)]=_pbc[String(_oldCal)]; delete _pbc[String(_oldCal)]; }   // pods
+          var _soc=guideDetails[nid].staffingOptsByCal;
+          if(_soc && _oldCal!=null && _soc[String(_oldCal)]!==undefined){ _soc[String(r.calId)]=_soc[String(_oldCal)]; delete _soc[String(_oldCal)]; }   // per-calendar staffing options (bySchool/byPods/A-B) follow their Site Breakdown
           var _ubc=guideDetails[nid].unschedByCal;
           if(_ubc && _oldCal!=null && _ubc[String(_oldCal)]!==undefined){ _ubc[String(r.calId)]=_ubc[String(_oldCal)]; delete _ubc[String(_oldCal)]; }
         });
