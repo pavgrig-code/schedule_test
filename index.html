@@ -4084,6 +4084,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     return (co && co.bySchool && si!=null)?('s'+si):'';
   }
+  // ── Pod tags/rails for the Calendar Hours Breakdown ── A proportional, scaled-down take on the Site
+  // Breakdown / Calendar Summary pod brackets for the popup's compact typography: a thin 2px line in the
+  // pod's bracket ink with a small bold pod name beside it. _tipPodTag renders the inline one-school form
+  // (per-school section headers, including a single visible pod member - never omitted for being alone);
+  // _tipPodListify wraps a vertical school list so each run of consecutive pod-mates shares one rail
+  // spanning the run, Site Breakdown order preserved. Both read the live pods, so renames, recolors,
+  // reassignments, and deletions show on the next breakdown render with no separate state to sync.
+  function _tipPodTag(pod){
+    var ink=_podBracketColor(pod.color);
+    return $('<span class="tip-pod-tag">').attr({'data-pod-name':pod.name,title:'Pod: '+pod.name})
+      .css({display:'inline-flex',alignItems:'center',gap:'3px',marginLeft:'6px',flexShrink:'0',verticalAlign:'middle'})
+      .append($('<span class="tip-pod-line">').css({width:'2px',height:'9px',borderRadius:'1px',background:ink,display:'inline-block'}))
+      .append($('<span class="tip-pod-name">').css({fontSize:'8px',fontWeight:'700',color:ink,whiteSpace:'nowrap',lineHeight:'1'}).text(pod.name));
+  }
+  function _tipPodListify($host, sites, pods, mkLine){
+    var runs=[], cur=null;
+    (sites||[]).forEach(function(sr,si){
+      var p=(sr&&sr.schoolId!=null&&pods)?podOfSchool(pods,sr.schoolId):null;
+      if(cur&&cur.pod===p){ cur.items.push(si); } else { cur={pod:p,items:[si]}; runs.push(cur); }
+    });
+    runs.forEach(function(run){
+      if(run.pod){
+        var ink=_podBracketColor(run.pod.color);
+        var $rail=$('<span class="tip-pod-rail">').css({display:'inline-flex',alignItems:'center',gap:'3px',flexShrink:'0'})
+          .append($('<span class="tip-pod-name">').css({fontSize:'8px',fontWeight:'700',color:ink,whiteSpace:'nowrap',lineHeight:'1'}).text(run.pod.name))
+          .append($('<span class="tip-pod-line">').css({width:'2px',borderRadius:'1px',background:ink,alignSelf:'stretch',minHeight:'9px'}));
+        var $names=$('<span>').css({display:'block',flex:'1',minWidth:'0'});
+        run.items.forEach(function(si){ $names.append(mkLine(sites[si],si)); });
+        $host.append($('<div class="tip-pod-run">').attr({'data-pod-name':run.pod.name,'data-pod-size':String(run.items.length)})
+          .css({display:'flex',alignItems:'stretch',gap:'5px'}).append($rail).append($names));
+      } else {
+        run.items.forEach(function(si){ $host.append(mkLine(sites[si],si)); });
+      }
+    });
+  }
   // True when any school in the calendar's Site Breakdown is assigned to a pod
   // (the condition for offering / honoring "Separate by Pods").
   function calHasAssignedPods(g, calId){
@@ -9671,15 +9706,32 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // shown under the Program Calendar name. A single-school heading stays plain (a lone bullet reads oddly).
       // Each name is a subtle click target (via _schoolNameEl) that opens that school's individual breakdown.
       var _bulletSchools=_names.length>1;
+      // Pod tag beside the grouped school names, matching the Site Breakdown assignments. A section with
+      // a single visible pod member still gets its (one-school) tag.
+      var _hpPods=null,_hpSites=null;
+      if(clickCtx && clickCtx.gObj && clickCtx.calRow && clickCtx.calRow.calId!=null){
+        _hpPods=podsFor(clickCtx.gObj, clickCtx.calRow.calId);
+        _hpSites=siteRowsFor(clickCtx.gObj, clickCtx.calRow.calId)||[];
+      }
+      function _hpTagFor(_si2){
+        if(_si2==null||!_hpPods||!_hpSites) return null;
+        var _sr2=_hpSites[_si2]; var _p2=(_sr2&&_sr2.schoolId!=null)?podOfSchool(_hpPods,_sr2.schoolId):null;
+        return _p2?_tipPodTag(_p2):null;
+      }
       _names.forEach(function(nm,_ni){
         var _si=(clickCtx && _idxs.length===_names.length)?_idxs[_ni]:null;
+        var _tag=_hpTagFor(_si);
         if(_bulletSchools){
-          $td.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontWeight:'700',fontSize:'9.5px',color:'#3c4043',lineHeight:'1.4'})
+          var $bl=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',fontWeight:'700',fontSize:'9.5px',color:'#3c4043',lineHeight:'1.4'})
             .append($('<span>').css({color:'#adb5bd',fontWeight:'400',flexShrink:'0'}).text('•'))
-            .append(_schoolNameEl(nm, clickCtx, _si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#3c4043'})));
+            .append(_schoolNameEl(nm, clickCtx, _si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#3c4043'}));
+          if(_tag) $bl.append(_tag);
+          $td.append($bl);
         } else {
-          $td.append($('<div>').css({fontWeight:'700',fontSize:'9.5px',lineHeight:'1.4'})
-            .append(_schoolNameEl(nm, clickCtx, _si, {color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})));
+          var $sl=$('<div>').css({fontWeight:'700',fontSize:'9.5px',lineHeight:'1.4'})
+            .append(_schoolNameEl(nm, clickCtx, _si, {color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}));
+          if(_tag) $sl.append(_tag);
+          $td.append($sl);
         }
       });
       if(sd){
@@ -10256,12 +10308,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $sltd=$('<td>').attr('colspan',_ncol).css({padding:'0 6px 3px 22px'});
             var $slw=$('<div class="cal-tip-schoollist">').css({lineHeight:'1.4'});
             var _slCtx={gObj:gObj,calRow:cr,calOrigIdx:oi,dayKey:dayKey,cellDate:cellDate,abWeek:gp.abWeek};
-            _grpSites.forEach(function(sr,si){
+            // Pod rails: consecutive pod-mates share one thin colored rail + small pod name (SB order kept).
+            var _slPods=(cr.calId!=null)?podsFor(gObj,cr.calId):null;
+            _tipPodListify($slw, _grpSites, _slPods, function(sr,si){
               var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
               // Subtle bullet: muted dot + clickable name, each school on its own line (min-width:0 keeps ellipsis in flex).
-              $slw.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'5px',fontSize:'9px',color:'#6c757d',lineHeight:'1.4'})
+              return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'5px',fontSize:'9px',color:'#6c757d',lineHeight:'1.4'})
                 .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
-                .append(_schoolNameEl(_nm, _slCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#6c757d'})));
+                .append(_schoolNameEl(_nm, _slCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#6c757d'}));
             });
             $sltd.append($slw); $slr.append($sltd); $tb.append($slr);
           }
@@ -10655,12 +10709,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!bySchool && _siteRows.length){
         var $schoolList=$('<div class="cal-tip-schoollist">').css({marginBottom:'6px',lineHeight:'1.45'});
         var _ivSlCtx={gObj:gObj,calRow:_tipCalRow,calOrigIdx:calOrigIdx,dayKey:dayKey,cellDate:cellDate,abWeek:abWeek};
-        _siteRows.forEach(function(sr,si){
+        // Pod rails: consecutive pod-mates share one thin colored rail + small pod name (SB order kept).
+        var _ivPods=(_tipCalRow&&_tipCalRow.calId!=null)?podsFor(gObj,_tipCalRow.calId):null;
+        _tipPodListify($schoolList, _siteRows, _ivPods, function(sr,si){
           var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
           // Subtle bullet: muted dot + clickable name, each school on its own line (min-width:0 keeps ellipsis in flex).
-          $schoolList.append($('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontSize:'10px',color:'#5f6368',lineHeight:'1.45'})
+          return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontSize:'10px',color:'#5f6368',lineHeight:'1.45'})
             .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
-            .append(_schoolNameEl(_nm, _ivSlCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#5f6368'})));
+            .append(_schoolNameEl(_nm, _ivSlCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#5f6368'}));
         });
         $hdrPad.append($schoolList);
       }
