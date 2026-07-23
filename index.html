@@ -6917,7 +6917,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $cancel=mkBtn('Cancel',false).addClass('sh-cnt-popup-cancel');
             var $discard=mkBtn('Discard',false).addClass('sh-cnt-popup-discard');
             var $save=mkBtn('Save',true).addClass('sh-cnt-popup-save');
-            function refreshFooter(){ $foot.children().detach(); if(isDirty()){ $foot.append($discard).append($save); } else { $foot.append($cancel); } }   // detach() keeps the buttons' handlers; empty() would strip them
+            // Reset to Original Counts: a PENDING edit like any other - sets every school back to its Site
+            // Breakdown count; nothing is applied until Save. Visible only while at least one school's value
+            // (saved override or pending edit) differs from its SB count; hidden once everything matches.
+            var $resetC=mkBtn('Reset to Original Counts',false).addClass('sh-cnt-popup-reset');
+            function anyDiff(){ return rowsState.some(function(r){ return r.val!==r.sb; }); }
+            $resetC.on('click',function(e){
+              e.stopPropagation();
+              rowsState.forEach(function(r){ r.val=r.sb; paintRow(r); });
+              paintTotal(); refreshFooter();
+            });
+            function refreshFooter(){
+              $foot.children().detach();   // detach() keeps the buttons' handlers; empty() would strip them
+              if(isDirty()){ if(anyDiff()) $foot.append($resetC); $foot.append($discard).append($save); }
+              else { $foot.append($cancel); if(anyDiff()) $foot.append($resetC); }
+            }
             function close(){ $ov.remove(); }
             function doSave(){
               rowsState.forEach(function(r){
