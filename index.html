@@ -6878,16 +6878,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $ctd.on('click',function(e){
                 e.stopPropagation();
                 if($ctd.find('input').length) return;
-                var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(String(r.val));
+                var _preEdit=r.val;   // Escape / empty-blur restore point
+                var $inp=$('<input type="text" inputmode="numeric">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(String(r.val));
                 r.$span.hide(); $ctd.append($inp);
                 $inp.on('click',function(e2){ e2.stopPropagation(); });
+                $inp.on('input',function(){
+                  var _f=String($inp.val()||'').replace(/\D+/g,'');   // numeric-only as typed
+                  if(String($inp.val())!==_f) $inp.val(_f);
+                  if(_f!=='') r.val=parseInt(_f,10);   // live: Total + footer track typing, no blur required
+                  paintRow(r); paintTotal(); refreshFooter();
+                });
                 $inp.on('keydown',function(e2){
                   if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
-                  else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); $inp.remove(); r.$span.show(); }
+                  else if(e2.key==='Escape'){ e2.stopPropagation(); r.val=_preEdit; $inp.off('blur'); $inp.remove(); r.$span.show(); paintRow(r); paintTotal(); refreshFooter(); }
                 });
                 $inp.on('blur',function(){
                   var raw=String($inp.val()||'').trim();
-                  if(raw!==''&&/^\d+$/.test(raw)) r.val=parseInt(raw,10);
+                  r.val=(raw!==''&&/^\d+$/.test(raw))?parseInt(raw,10):_preEdit;
                   $inp.remove(); r.$span.show();
                   paintRow(r); paintTotal(); refreshFooter();
                 });
@@ -8390,8 +8397,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var role=_roles[ri];
           var ck=role.isCoach?'coaches_'+role.key:role.key;
           var cnt;
-          if(sRow) cnt=parseInt(sRow[ck])||0;
-          else { cnt=0; for(var j=0;j<_siteRows.length;j++){ if(_siteRows[j]) cnt+=parseInt(_siteRows[j][ck])||0; } }
+          if(sRow){
+            cnt=parseInt(sRow[ck])||0;
+            var _shcCal=shSchoolCntOv(_slots,si,_ciPart,_wkPart,role.key,srcKey);   // Staffing Hours count override (canonical per-school) sits between the SB default and the CHB cell override
+            if(_shcCal!=null) cnt=_shcCal;
+          } else {
+            cnt=0;
+            for(var j=0;j<_siteRows.length;j++){
+              if(!_siteRows[j]) continue;
+              var _shcC2=shSchoolCntOv(_slots,j,_ciPart,_wkPart,role.key,srcKey);
+              cnt+=(_shcC2!=null)?_shcC2:(parseInt(_siteRows[j][ck])||0);
+            }
+          }
           var rd=slot[role.key]; var d=(rd&&rd[srcKey])||null;
           // Per-cell override (saved from the pinned breakdown popup) replaces the Staffing Hours
           // time/count for THIS calendar+date+school+role only. Applied before the zero guards so an
@@ -10123,7 +10140,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         return $w;
       }
       function curVal(m,field){ return (m.edits[field]!=null)?m.edits[field]:(field==='cnt'?m.openCnt:(field==='start'?m.openStart:m.openEnd)); }
-      function isDirty(){ return model.some(function(m){ return ['start','end','cnt'].some(function(f){
+      var _isbTyping=false;   // an in-progress keystroke counts as an edit: the footer reacts while typing
+      function isDirty(){ if(_isbTyping) return true; return model.some(function(m){ return ['start','end','cnt'].some(function(f){
         if(m.edits[f]==null) return false;
         var openV=(f==='cnt'?m.openCnt:(f==='start'?m.openStart:m.openEnd));
         return String(m.edits[f])!==String(openV);
@@ -10150,25 +10168,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if($td.find('input').length) return;
           if(field==='cnt'){
             var cur=String(curVal(m,'cnt'));
-            var $inp=$('<input type="text">').css({width:'40px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(cur);
+            var _preCnt=(m.edits.cnt==null)?null:m.edits.cnt;   // Escape / empty-blur restore point
+            var $inp=$('<input type="text" inputmode="numeric">').css({width:'40px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(cur);
             $td.empty().append($inp);
             $inp.on('click',function(e2){ e2.stopPropagation(); });
-            $inp.on('keydown',function(e2){ if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); } else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); paint(); } });
+            $inp.on('input',function(){
+              var _f=String($inp.val()||'').replace(/\D+/g,'');   // numeric-only as typed
+              if(String($inp.val())!==_f) $inp.val(_f);
+              if(/^\d+$/.test(_f)){ var _n=parseInt(_f,10); m.edits.cnt=(_n===m.openCnt)?null:_n; if(m.edits.cnt==null) delete m.edits.cnt; _isbTyping=false; }
+              else { _isbTyping=(_f!==cur); }
+              recalc(); updBar();   // live while typing; paint() waits for blur (it would replace this input)
+            });
+            $inp.on('keydown',function(e2){ if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); } else if(e2.key==='Escape'){ e2.stopPropagation(); _isbTyping=false; if(_preCnt==null) delete m.edits.cnt; else m.edits.cnt=_preCnt; $inp.off('blur'); paint(); recalc(); updBar(); } });
             $inp.on('blur',function(){
               var raw=String($inp.val()||'').trim();
+              _isbTyping=false;
               if(/^\d+$/.test(raw)){ var n=parseInt(raw,10); m.edits.cnt=(n===m.openCnt)?null:n; if(m.edits.cnt==null) delete m.edits.cnt; }
+              else { if(_preCnt==null) delete m.edits.cnt; else m.edits.cnt=_preCnt; }
               paint(); recalc(); updBar();
             });
             $inp.trigger('focus'); if($inp[0].select) $inp[0].select();
           } else {
             var eff=curVal(m,field);
             var $tp=mkTimePicker(eff||'',function(v24){
+              _isbTyping=false;
               if(!v24 || v24===(field==='start'?m.openStart:m.openEnd)){ delete m.edits[field]; }
               else { m.edits[field]=v24; }
               paint(); recalc(); updBar();
             });
             $td.empty().append($tp);
             $tp.on('click',function(e2){ e2.stopPropagation(); });
+            $tp.find('input').on('input.isbtyping',function(){ _isbTyping=true; updBar(); })
+              .on('blur.isbtyping',function(){ setTimeout(function(){ _isbTyping=false; updBar(); },60); });
             $tp.find('input').trigger('focus');
           }
         });
@@ -13595,6 +13626,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $ov=$('<div class="sb-pod-editov">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
       var $box=$('<div class="sb-pod-editpop">').css({background:'#fff',borderRadius:'10px',padding:'18px 20px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'280px',maxWidth:'360px',fontSize:'12px'});
       $box.on('mousedown click contextmenu',function(e){ e.stopPropagation(); });
+      $box.css('position','relative');
+      var $podX=$('<button type="button" class="sb-pod-editpop-x">').text('\u00d7').css({position:'absolute',top:'8px',right:'10px',border:'none',background:'transparent',fontSize:'16px',cursor:'pointer',color:'#6c757d',lineHeight:'1',padding:'0 4px'})
+        .on('click',function(e){ e.stopPropagation(); _podTryClose(); });
+      $box.append($podX);
       $box.append($('<div class="sb-pod-editpop-title">').css({fontWeight:'700',fontSize:'13px',color:'#212529',marginBottom:'10px'}).text('Edit Pod: '+pod.name));
       var $nameRow=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'});
       var $circle=$('<span class="sb-pod-circle">').css({display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:pod.color,border:'1px solid rgb(180,180,180)',flexShrink:'0',cursor:'pointer'})
@@ -13610,12 +13645,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function btn(label,primary){ return $('<button type="button">').text(label).css({border:primary?'none':'1px solid #dee2e6',background:primary?'#1a73e8':'none',color:primary?'#fff':'#6c757d',borderRadius:'6px',padding:'5px 14px',fontSize:'12px',cursor:'pointer',fontWeight:'600'}); }
       var $reset=btn('Restore',false).addClass('sb-pod-editpop-reset').on('click',function(e){ e.stopPropagation(); pend.name=orig.name; pend.ids=orig.ids.slice(); $inp.val(pend.name); renderList(); refreshButtons(); });
       var $cancel=btn('Cancel',false).addClass('sb-pod-editpop-cancel').on('click',function(e){ e.stopPropagation(); $ov.remove(); });
-      var $update=btn('Update',true).addClass('sb-pod-editpop-update').on('click',function(e){
-        e.stopPropagation();
-        var nm=String(pend.name||'').trim(); if(!nm) return;
+      function _podDirty(){ return String(pend.name||'').trim()!==orig.name || !sameIds(pend.ids,orig.ids); }
+      function doUpdate(){
+        refreshButtons();   // recompute _updOn: non-blank + unique name, and actually dirty
+        if(!_updOn) return false;
+        var nm=String(pend.name||'').trim();
         pod.name=nm; pod.schoolIds=pend.ids.slice();
         savePods(); $ov.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing();
-      });
+        return true;
+      }
+      function _podTryClose(){
+        if(!_podDirty()){ $ov.remove(); return; }
+        _xsDialog('This POD has unsaved changes.',[
+          {label:'Discard Changes',fn:function(){ $ov.remove(); }},
+          {label:'Continue Editing'},
+          {label:'Update',primary:true,fn:function(){ doUpdate(); }}   // on validation failure the popup stays open with its message
+        ]);
+      }
+      var $update=btn('Update',true).addClass('sb-pod-editpop-update').on('click',function(e){ e.stopPropagation(); doUpdate(); });
       $bar.append($cancel,$reset,$update); $box.append($bar);   // Cancel | Restore | Update
       function sameIds(a,b){ if(a.length!==b.length) return false; var s={}; a.forEach(function(x){s[String(x)]=1;}); return b.every(function(x){ return s[String(x)]; }); }
       var _updOn=false;
@@ -13642,7 +13689,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       $inp.on('input',function(){ pend.name=$inp.val(); refreshButtons(); });
       $inp.on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); if(_updOn) $update.trigger('click'); } else if(e.key==='Escape'){ e.preventDefault(); $ov.remove(); } });
-      $ov.append($box).on('mousedown',function(e){ if($(e.target).is($ov)) $ov.remove(); });
+      $ov.append($box).on('mousedown',function(e){ if($(e.target).is($ov)) _podTryClose(); });
       $('body').append($ov);
       renderList(); refreshButtons();
       setTimeout(function(){ try{ $inp[0].focus(); }catch(_e){} },0);
