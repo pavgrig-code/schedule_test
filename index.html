@@ -7061,7 +7061,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             function paintRow(r){ _shCntPaint(r.$span, r.val!==r.sb?r.val:null, r.sb); }
             function paintTotal(){ var t=0; rowsState.forEach(function(r){ t+=r.val; }); _shCntPaint($totSpan, t!==sbTot?t:null, sbTot); }
             var $foot=$('<div class="sh-cnt-popup-foot">').css({display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'12px'});
-            function mkBtn(txt,primary){ return $('<button type="button">').text(txt).css(primary
+            function mkBtn(txt,primary){ return $('<button type="button">').on('mousedown',function(e){ e.preventDefault(); })   // keep focus in the field: no blur, no re-render, so the FIRST click lands
+              .text(txt).css(primary
               ?{background:'#1a73e8',color:'#fff',border:'1px solid #1a73e8',borderRadius:'6px',padding:'5px 14px',fontSize:'11.5px',fontWeight:'600',cursor:'pointer'}
               :{background:'#fff',color:'#3c4043',border:'1px solid #dadce0',borderRadius:'6px',padding:'5px 14px',fontSize:'11.5px',fontWeight:'600',cursor:'pointer'}); }
             var $cancel=mkBtn('Cancel',false).addClass('sh-cnt-popup-cancel');
@@ -7074,10 +7075,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             function anyDiff(){ return rowsState.some(function(r){ return r.val!==r.sb; }); }
             $resetC.on('click',function(e){
               e.stopPropagation();
-              rowsState.forEach(function(r){ r.val=r.sb; paintRow(r); });
+              $card.find('.sh-cnt-popup-row input').remove();   // an editor may still be open (buttons don't take focus)
+              rowsState.forEach(function(r){ r.val=r.sb; r.$span.show(); paintRow(r); });
               paintTotal(); refreshFooter();
             });
+            var _footSig=null;
             function refreshFooter(){
+              // Idempotent: rebuild ONLY when the button set actually changes. Detaching and re-appending a
+              // button between its mousedown and mouseup would swallow the click, which is why a focused
+              // field used to eat the first press on Save / Discard / Reset.
+              var sig=(isDirty()?'D':'C')+(anyDiff()?'R':'');
+              if(sig===_footSig) return;
+              _footSig=sig;
               $foot.children().detach();   // detach() keeps the buttons' handlers; empty() would strip them
               if(isDirty()){ if(anyDiff()) $foot.append($resetC); $foot.append($discard).append($save); }
               else { $foot.append($cancel); if(anyDiff()) $foot.append($resetC); }
@@ -9501,8 +9510,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(!$ar.children('.cal-tip-save').length){
           var $disc=$('<button type="button" class="cal-tip-discard">').text('Discard').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'4px',cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'});
           var $save=$('<button type="button" class="cal-tip-save">').text('Save').css({fontSize:'10px',fontWeight:'600',padding:'2px 9px',background:'#0d6efd',color:'#fff',border:'1px solid #0d6efd',borderRadius:'4px',cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'});
-          $disc.on('click',function(e){ e.stopPropagation(); _discardTipEdits(); });
-          $save.on('click',function(e){ e.stopPropagation(); _saveTipEdits(); });
+          $disc.on('mousedown',function(e){ e.preventDefault(); }).on('click',function(e){ e.stopPropagation(); _discardTipEdits(); });   // don't blur the field: the first click must land
+          $save.on('mousedown',function(e){ e.preventDefault(); }).on('click',function(e){ e.stopPropagation(); _saveTipEdits(); });
           $ar.append($disc,$save);
         }
         var invalid=_tipHasInvalid();
@@ -10558,9 +10567,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center',color:'#212529',background:'#fff'}).val(cur==='—'?'':cur);
               $td.empty().append($inp);
               $inp.on('click',function(e2){ e2.stopPropagation(); });
+              $inp.on('input',function(){
+                var _f=String($inp.val()||'').replace(/\D+/g,'');            // counts are digits only
+                if(String($inp.val())!==_f) $inp.val(_f);
+                var _k=_tipEditKey(r,field);
+                if(_f===String(r.cnt)) delete _tipEdits[_k];
+                else _tipEdits[_k]={row:r,field:field,disp:_f,norm:(_f!==''?parseInt(_f,10):null),valid:/^\d+$/.test(_f),changed:true};
+                _updEditBar(); if(_tipLiveRecalc)_tipLiveRecalc();            // Save/Discard appear while the field still has focus; no paint() (it would replace this input)
+              });
               $inp.on('keydown',function(e2){
                 if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
-                else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); recordDone(); }  // cancel this field only
+                else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); delete _tipEdits[_tipEditKey(r,field)]; recordDone(); }  // cancel this field only
               });
               $inp.on('blur',function(){
                 var raw=String($inp.val()||'').trim();
