@@ -6797,7 +6797,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // clears the override so future Site Breakdown changes flow through again.
           function _wireShCnt($td,$span,role,dayK){
             $td.css({cursor:'pointer'}).attr('title','Click to edit');
-            $td.on('mouseenter.shcnt',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
+            $td.on('mouseenter.shcnt',function(){ $td.css({background:'rgb(220 238 255)',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
             $td.on('mouseleave.shcnt',function(){ $td.css({background:'#f0f4f8',boxShadow:''}); });
             $td.on('click.shcnt',function(e){
               e.stopPropagation();
@@ -6831,7 +6831,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // unsaved-changes confirmation.
           function _wireShCntComposite($td,role,dayO){
             $td.css({cursor:'pointer'}).attr('title','Click to edit');
-            $td.on('mouseenter.shcnt',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
+            $td.on('mouseenter.shcnt',function(){ $td.css({background:'rgb(220 238 255)',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
             $td.on('mouseleave.shcnt',function(){ $td.css({background:'#f0f4f8',boxShadow:''}); });
             $td.on('click.shcnt',function(e){ e.stopPropagation(); _openShCntPopup(role,dayO); });
           }
