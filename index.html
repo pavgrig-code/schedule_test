@@ -1903,6 +1903,14 @@ $(function(){
       '.ws-panel-menu-btn{flex:0 0 auto;border:none;background:transparent;color:#6c757d;cursor:pointer;'+
         'font-size:15px;line-height:1;padding:2px 7px;border-radius:4px;}'+
       '.ws-panel-menu-btn:hover{background:#e2e8f0;color:#212529;}'+
+      '.ws-shortcut.ws-dragging{transition:width .12s ease,height .12s ease;}'+
+      '.ws-drag-rowpreview{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #b6c9e2;border-radius:5px;box-shadow:0 6px 16px rgba(0,0,0,.18);padding:0 10px;overflow:hidden;white-space:nowrap;}'+
+      '.ws-drag-rowpreview .ws-shortcut-avatar{width:18px;height:18px;flex:0 0 auto;overflow:hidden;}'+
+      '.ws-drag-rowpreview .ws-rp-name{font-size:12px;color:#212529;font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}'+
+      '.ws-row-drag-src{opacity:.35;}'+
+      '.ws-drop-line{position:absolute;left:6px;right:6px;height:2px;background:#1a73e8;border-radius:1px;z-index:60;pointer-events:none;}'+
+      '.ws-drop-cell{position:absolute;border:2px dashed #86b7fe;border-radius:8px;background:rgba(220,238,255,.35);z-index:5;pointer-events:none;}'+
+      '.ws-canvas.ws-drop-target-canvas{outline:2px solid #cfe2ff;outline-offset:-2px;}'+
       '.ws-panel-body{flex:1;overflow:auto;background:#fff;min-height:0;position:relative;}'+
       '.ws-shortcut{position:absolute;width:74px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:8px;cursor:pointer;user-select:none;text-align:center;box-sizing:border-box;}'+
       '.ws-shortcut:hover{background:rgba(13,110,253,.08);}'+
@@ -2574,6 +2582,17 @@ $(function(){
           else { $tr.append($('<td>').attr('title', rd[c.key]).text(rd[c.key])); }
         });
         $tr.on('click', function(e){ e.stopPropagation(); if(!rd.deleted) _wsOpenGuideShortcut(rd.sc.guideId); });   // open the guide; a deleted row is passive
+        $tr.on('mousedown', function(ev){   // rows drag too: they start as a ROW preview and morph per territory
+          if(ev.button !== 0) return;
+          ev.preventDefault(); ev.stopPropagation();
+          _wsStartShortcutDrag(rd.sc, $tr[0], ev, {
+            kind: 'row',
+            makeDragEl: function(){ $tr.addClass('ws-row-drag-src'); return _wsBuildShortcut(rd.sc)[0]; },   // a REAL shortcut node (attrs + wiring) painted as a row preview
+            onClick: null,   // the row's own click handler opens the guide
+            restore: function(de){ if(de && de.parentNode) de.parentNode.removeChild(de); $tr.removeClass('ws-row-drag-src'); },
+            afterDrop: function(){ $tr.removeClass('ws-row-drag-src'); }
+          });
+        });
         $tr.on('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); _wsShortcutContextMenu(rd.sc, $tr, ev); });   // same Delete menu as tiles
         $tb.append($tr);
       });
@@ -2681,7 +2700,7 @@ $(function(){
     if(!_wsCellFree(sc.container, gx, gy, sc)){ var free = _wsFirstFreeCell(sc.container, sc); gx = free.gx; gy = free.gy; }
     sc.gx = gx; sc.gy = gy;
   }
-  function _wsDropShortcut(sc, $sc, panelEl, cx, cy){
+  function _wsDropShortcut(sc, $sc, panelEl, cx, cy, beforeScId){
     var el = $sc[0];
     if(panelEl && panelEl.getAttribute('data-ws-id') !== undefined && _wsPanelById(panelEl.getAttribute('data-ws-id')) && _wsPanelById(panelEl.getAttribute('data-ws-id')).type !== 'note'){
       var pid = panelEl.getAttribute('data-ws-id');
@@ -2701,7 +2720,20 @@ $(function(){
     el.style.left = px.left + 'px'; el.style.top = px.top + 'px';
     _wsSave();
     var destPanel = _wsPanelById(sc.container);
-    if(destPanel && destPanel.view === 'list'){ if(el.parentNode) el.parentNode.removeChild(el); _wsRefreshPanelBody(sc.container); }   // a tile dropped into a list panel becomes a row
+    if(destPanel && destPanel.view === 'list'){
+      // Honor the insertion position shown during the drag: reorder the model so the unsorted list renders
+      // the shortcut where it was dropped (a sorted list still orders by its sort column).
+      var _oi = workspaceShortcuts.indexOf(sc);
+      if(_oi >= 0){
+        workspaceShortcuts.splice(_oi, 1);
+        var _bi = -1;
+        if(beforeScId != null){ for(var _k = 0; _k < workspaceShortcuts.length; _k++){ if(String(workspaceShortcuts[_k].id) === String(beforeScId)){ _bi = _k; break; } } }
+        if(_bi >= 0) workspaceShortcuts.splice(_bi, 0, sc); else workspaceShortcuts.push(sc);
+        _wsSave();
+      }
+      if(el.parentNode) el.parentNode.removeChild(el);
+      _wsRefreshPanelBody(sc.container);
+    }
   }
   function _wsDeleteShortcut(sc, $sc){
     var container = sc.container;
@@ -2734,48 +2766,166 @@ $(function(){
     $m.css({ left: left + 'px', top: top + 'px', visibility: 'visible' });
     setTimeout(function(){ $(document).on('mousedown.wsmenu', function(e2){ if(!$m[0].contains(e2.target)) _wsCloseMenus(); }); }, 0);
   }
+  // ── Morphing drag ── A dragged Planning Guide shows as a TILE over tile territory (the desktop canvas or a
+  // tiles-view panel) and as a TABLE ROW over a list-view panel, switching live while it moves. The pointer
+  // stays aligned through each switch (the grab point is kept as a RATIO of the preview's size), the active
+  // territory highlights, list panels show the insertion line, tile territories show the prospective cell,
+  // and Escape cancels the drag returning the item to its original place and format.
+  var _WS_ROWPRE_W = 240, _WS_ROWPRE_H = 28;
+  function _wsPanelViewOf(panelEl){ var p = panelEl ? _wsPanelById(panelEl.getAttribute('data-ws-id')) : null; return p ? (p.view || 'tiles') : null; }
+  function _wsDragKindFor(panelEl){ return _wsPanelViewOf(panelEl) === 'list' ? 'row' : 'tile'; }
+  function _wsPaintDragEl(el, sc, kind){
+    var nm = _wsShortcutName(sc), muted = _wsShortcutDeleted(sc);
+    el.innerHTML = '';
+    if(kind === 'tile'){
+      el.className = 'ws-shortcut' + (muted ? ' ws-shortcut-muted' : '');
+      $(el).append($('<div class="ws-shortcut-avatar">').html(_wsShortcutAvatarHtml()));
+      $(el).append($('<div class="ws-shortcut-name">').text(nm));
+      var $st = _wsStatusPillEl((getGuideDetail(sc.guideId) || {}).status);
+      if($st){ $st.addClass('ws-shortcut-status'); $(el).append($st); }
+    } else {
+      el.className = 'ws-shortcut ws-drag-rowpreview' + (muted ? ' ws-shortcut-muted' : '');
+      $(el).append($('<div class="ws-shortcut-avatar">').html(_wsShortcutAvatarHtml()));
+      $(el).append($('<div class="ws-rp-name">').text(nm));
+      var $p = _wsStatusPillEl((getGuideDetail(sc.guideId) || {}).status);
+      if($p) $(el).append($p);
+    }
+  }
+  function _wsClearDropHints(){
+    $('.ws-drop-line,.ws-drop-cell').remove();
+    $('.ws-panel').removeClass('ws-drop-target');
+    var cv = _wsCanvasEl(); if(cv) cv.classList.remove('ws-drop-target-canvas');
+  }
+  function _wsListInsertBeforeRow(panelEl, clientY, excludeScId){
+    var body = panelEl ? panelEl.querySelector('.ws-panel-body') : null;
+    if(!body) return { beforeId: null, y: null, body: body };
+    var rows = [].slice.call(body.querySelectorAll('tr.ws-list-row')).filter(function(r){ return r.getAttribute('data-sc-id') !== String(excludeScId); });
+    var br = body.getBoundingClientRect ? body.getBoundingClientRect() : { top: 0 };
+    for(var i = 0; i < rows.length; i++){
+      var rr = rows[i].getBoundingClientRect ? rows[i].getBoundingClientRect() : null;
+      if(!rr || !rr.height) return { beforeId: null, y: null, body: body };   // unmeasurable (jsdom) → append at end, no line
+      if(clientY < rr.top + rr.height / 2) return { beforeId: rows[i].getAttribute('data-sc-id'), y: rr.top - br.top + (body.scrollTop || 0), body: body };
+    }
+    var last = rows[rows.length - 1], ly = null;
+    if(last && last.getBoundingClientRect){ var lr = last.getBoundingClientRect(); if(lr && lr.height) ly = lr.bottom - br.top + (body.scrollTop || 0); }
+    return { beforeId: null, y: ly, body: body };
+  }
+  function _wsShowDropLine(body, y){
+    if(!body || y == null){ $('.ws-drop-line').remove(); return; }
+    var $l = $('.ws-drop-line'); if(!$l.length) $l = $('<div class="ws-drop-line">');
+    if($l[0].parentNode !== body) $(body).append($l);
+    $l.css('top', y + 'px');
+  }
+  function _wsShowDropCell(container, cell){
+    if(!container){ $('.ws-drop-cell').remove(); return; }
+    var $c = $('.ws-drop-cell'); if(!$c.length) $c = $('<div class="ws-drop-cell">');
+    if($c[0].parentNode !== container) $(container).append($c);
+    var px = _wsGridToPx(cell.gx, cell.gy);
+    $c.css({ left: px.left + 'px', top: px.top + 'px', width: _WS_SC_W + 'px', height: '84px' });
+  }
+  function _wsStartShortcutDrag(sc, srcEl, ev, src){
+    var startX = ev.clientX, startY = ev.clientY, moved = false, curPanel = null, lastX = startX, lastY = startY;
+    var defW = (src.kind === 'row') ? _WS_ROWPRE_W : _WS_SC_W, defH = (src.kind === 'row') ? _WS_ROWPRE_H : 84;
+    var r0 = srcEl.getBoundingClientRect ? srcEl.getBoundingClientRect() : { left: 0, top: 0, width: defW, height: defH };
+    var w0 = r0.width || defW, h0 = r0.height || defH;
+    var rx = (startX - r0.left) / w0, ry = (startY - r0.top) / h0;   // pointer ratio survives morphs
+    if(!(rx >= 0 && rx <= 1)) rx = .5; if(!(ry >= 0 && ry <= 1)) ry = .5;
+    var kind = null, grabX = rx * w0, grabY = ry * h0, dragEl = null;
+    var prevContainer = sc.container;
+    function sizeFor(k){ return k === 'row' ? { w: _WS_ROWPRE_W, h: _WS_ROWPRE_H } : { w: _WS_SC_W, h: 84 }; }
+    function moveTo(cx, cy){ dragEl.style.left = (cx - grabX) + 'px'; dragEl.style.top = (cy - grabY) + 'px'; }
+    function setKind(k, force){
+      if(!force && k === kind) return;
+      kind = k;
+      _wsPaintDragEl(dragEl, sc, k);
+      dragEl.classList.add('ws-dragging');
+      var sz = sizeFor(k);
+      dragEl.style.width = sz.w + 'px'; dragEl.style.height = sz.h + 'px';
+      grabX = rx * sz.w; grabY = ry * sz.h;   // pointer stays on the same relative spot through the morph
+      dragEl.style.position = 'fixed'; dragEl.style.margin = '0'; dragEl.style.pointerEvents = 'none'; dragEl.style.zIndex = '999999';
+      moveTo(lastX, lastY);
+    }
+    function lift(){
+      dragEl = src.makeDragEl ? src.makeDragEl() : srcEl;
+      document.body.appendChild(dragEl);
+      setKind(src.kind, true);
+    }
+    function cleanup(){ $(document).off('.wssc'); _wsClearDropHints(); }
+    function unstyle(){
+      dragEl.classList.remove('ws-dragging');
+      dragEl.style.position = ''; dragEl.style.width = ''; dragEl.style.height = ''; dragEl.style.margin = ''; dragEl.style.pointerEvents = ''; dragEl.style.zIndex = '';
+    }
+    function mm(e){
+      lastX = e.clientX; lastY = e.clientY;
+      if(!moved && (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3)){ moved = true; lift(); }
+      if(!moved) return;
+      moveTo(e.clientX, e.clientY);
+      var over = _wsPanelUnderPoint(e.clientX, e.clientY);
+      setKind(_wsDragKindFor(over));
+      if(over !== curPanel){
+        $('.ws-panel').removeClass('ws-drop-target');
+        if(over) $(over).addClass('ws-drop-target');
+        var cv = _wsCanvasEl(); if(cv) cv.classList.toggle('ws-drop-target-canvas', !over);
+        $('.ws-drop-line,.ws-drop-cell').remove();
+        curPanel = over;
+      }
+      if(kind === 'row' && over){
+        var ins = _wsListInsertBeforeRow(over, e.clientY, sc.id);
+        $('.ws-drop-cell').remove();
+        _wsShowDropLine(ins.body, ins.y);
+      } else {
+        $('.ws-drop-line').remove();
+        if(over){
+          var body = over.querySelector('.ws-panel-body');
+          var br2 = (body && body.getBoundingClientRect) ? body.getBoundingClientRect() : null;
+          if(body && br2 && br2.width) _wsShowDropCell(body, _wsPxToGrid((e.clientX - br2.left) + (body.scrollLeft || 0) - _WS_SC_W / 2, (e.clientY - br2.top) + (body.scrollTop || 0) - 20));
+          else $('.ws-drop-cell').remove();
+        } else {
+          var cv2 = _wsCanvasEl();
+          var cr = (cv2 && cv2.getBoundingClientRect) ? cv2.getBoundingClientRect() : null;
+          if(cv2 && cr && cr.width) _wsShowDropCell(cv2, _wsPxToGrid((e.clientX - cr.left) + (cv2.scrollLeft || 0) - _WS_SC_W / 2, (e.clientY - cr.top) + (cv2.scrollTop || 0) - 20));
+          else $('.ws-drop-cell').remove();
+        }
+      }
+    }
+    function mu(e){
+      cleanup();
+      if(!moved){ if(src.onClick) src.onClick(); return; }
+      var over = _wsPanelUnderPoint(e.clientX, e.clientY);
+      var beforeId = null;
+      if(_wsDragKindFor(over) === 'row' && over) beforeId = _wsListInsertBeforeRow(over, e.clientY, sc.id).beforeId;
+      unstyle();
+      if(kind !== 'tile') _wsPaintDragEl(dragEl, sc, 'tile');   // whatever lands in tile territory must BE a tile
+      _wsDropShortcut(sc, $(dragEl), over, e.clientX, e.clientY, beforeId);
+      if(prevContainer !== sc.container){ var pp = _wsPanelById(prevContainer); if(pp && pp.view === 'list') _wsRefreshPanelBody(prevContainer); }   // the source list drops its row
+      if(src.afterDrop) src.afterDrop();
+    }
+    $(document).on('mousemove.wssc', mm)
+      .on('mouseup.wssc', mu)
+      .on('keydown.wssc', function(ke){
+        if(ke.key !== 'Escape') return;
+        cleanup();
+        if(moved && src.restore) src.restore(dragEl, unstyle);   // canceled → original location and format
+      });
+  }
   function _wsWireShortcut(sc, $sc){
     $sc.on('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); _wsShortcutContextMenu(sc, $sc, ev); });
     $sc.on('mousedown', function(ev){
       if(ev.button !== 0) return;
       ev.preventDefault(); ev.stopPropagation();
       var el = $sc[0];
-      var startX = ev.clientX, startY = ev.clientY, moved = false, curPanel = null;
-      // Grab offset within the tile so it stays under the cursor once it is lifted.
-      var r0 = el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 0, top: 0, width: _WS_SC_W, height: 84 };
-      var grabX = r0.width ? (startX - r0.left) : (_WS_SC_W / 2), grabY = r0.height ? (startY - r0.top) : 20;
-      var w0 = r0.width || _WS_SC_W, h0 = r0.height || 84;
-      // Lift the tile out of its (clipping) panel body onto <body> at fixed coordinates, on top of everything,
-      // so it can never be clipped by a panel's overflow or hidden behind another panel while being dragged.
-      function lift(){
-        el.classList.add('ws-dragging');
-        el.style.position = 'fixed';
-        el.style.width = w0 + 'px';
-        el.style.height = h0 + 'px';
-        el.style.margin = '0';
-        el.style.pointerEvents = 'none';   // so _wsPanelUnderPoint sees the panel under the cursor, not the tile
-        document.body.appendChild(el);
-      }
-      function moveTo(cx, cy){ el.style.left = (cx - grabX) + 'px'; el.style.top = (cy - grabY) + 'px'; }
-      function drop(){
-        el.classList.remove('ws-dragging');
-        el.style.position = ''; el.style.width = ''; el.style.height = ''; el.style.margin = ''; el.style.pointerEvents = '';
-      }
-      function mm(e){
-        var dx = e.clientX - startX, dy = e.clientY - startY;
-        if(!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)){ moved = true; lift(); }
-        if(!moved) return;
-        moveTo(e.clientX, e.clientY);
-        var over = _wsPanelUnderPoint(e.clientX, e.clientY);
-        if(over !== curPanel){ $('.ws-panel').removeClass('ws-drop-target'); if(over) $(over).addClass('ws-drop-target'); curPanel = over; }
-      }
-      function mu(e){
-        $(document).off('.wssc'); $('.ws-panel').removeClass('ws-drop-target');
-        if(!moved){ if(!_wsShortcutDeleted(sc)) _wsOpenGuideShortcut(sc.guideId); return; }   // a click opens the guide; a deleted shortcut is passive
-        drop();                                                   // restore normal positioning before placing back
-        _wsDropShortcut(sc, $sc, _wsPanelUnderPoint(e.clientX, e.clientY), e.clientX, e.clientY);
-      }
-      $(document).on('mousemove.wssc', mm).on('mouseup.wssc', mu);
+      var parent0 = el.parentNode, next0 = el.nextSibling, left0 = el.style.left, top0 = el.style.top;
+      _wsStartShortcutDrag(sc, el, ev, {
+        kind: 'tile',
+        makeDragEl: null,   // tiles drag the REAL element (it lifts to <body> and never disappears)
+        onClick: function(){ if(!_wsShortcutDeleted(sc)) _wsOpenGuideShortcut(sc.guideId); },
+        restore: function(de, unstyle){   // Escape → back to the original spot, as a tile
+          unstyle();
+          _wsPaintDragEl(el, sc, 'tile');
+          el.style.left = left0; el.style.top = top0;
+          if(parent0){ if(next0 && next0.parentNode === parent0) parent0.insertBefore(el, next0); else parent0.appendChild(el); }
+        }
+      });
     });
   }
 
