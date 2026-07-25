@@ -6220,6 +6220,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     });
     var $hdrLabel=$('<span class="fw-bold text-dark">').text('Staffing Hours');
     $hd.append($hdrLabel);
+    var $filterSlot=$('<span class="sf-filter-slot">').css({display:'inline-flex',alignItems:'center'});
+    $hd.append($filterSlot);   // the Filter menu mounts here, directly beside the label
 
     // Options button + badge
     var $optsBtn=$('<button type="button">').css({
@@ -6333,7 +6335,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
       display:'none',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'0'
     }).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
-    $viewBtn.css('marginLeft','auto');
+    $viewBtn.css('marginLeft','4px');   // sits next to the Staffing Hours label, not pushed right
     var $viewDD=$('<div>').css({
       position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
       borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'4px 0',
@@ -6366,7 +6368,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       setTimeout(function(){ $(document).on('mousedown.'+_viewUid,function(e2){ if(!$viewDD[0].contains(e2.target)&&!$viewBtn[0].contains(e2.target)) closeViewDD(); }); },0);
     });
     $viewDD.on('click',function(e){ e.stopPropagation(); });
-    $hd.append($viewBtn);
+    $filterSlot.append($viewBtn);
 
     $section.on('remove',function(){ $optsDD.remove(); $viewDD.remove(); closeViewDD(); $(document).off('mousedown._sopts'); if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;} });
     $section.append($hd);
@@ -6730,12 +6732,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $viewBtn.css('display','inline-flex');
 
           // Persistent selection state — null means "all" (default)
-          var _viewSel={schools:null, cals:null, wks:null};
+          var _viewSel={leaves:null, wks:null};
 
           function updateViewBtn(){
             var parts=[];
-            if(_schoolSlots.length>1 && _viewSel.schools && _viewSel.schools.length<_schoolSlots.length) parts.push(_viewSel.schools.length+' School'+((_viewSel.schools.length===1)?'':'s'));
-            if(_calSlots.length>1 && _viewSel.cals && _viewSel.cals.length<_calSlots.length) parts.push(_viewSel.cals.length+' Calendar'+((_viewSel.cals.length===1)?'':'s'));
+            if(_viewSel.leaves) parts.push(_viewSel.leaves.length+' selected');
             if(_anyAltWk && _viewSel.wks && _viewSel.wks.length<2) parts.push(_viewSel.wks.map(function(w){return w==='a'?'Week A':'Week B';}).join(', '));
             var badge=parts.join(' \u00b7 ');
             $viewBtn.html((badge||'Filter')+' <span style="font-size:8px;opacity:.7;">&#9660;</span>');
@@ -6746,32 +6747,127 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
           function buildViewDD(){
             $viewDD.empty();
-            var state={schools:[], cals:[], wks:[]};
+            var state={leaves:[], wks:[]};
 
-            function mkVCb(lbl,checked){
+            function mkVCb(lbl,checked,color){
               var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'3px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
               var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',width:'13px',height:'13px',accentColor:'#0d6efd',margin:'0'});
-              $row.append($cb,$('<span>').css({fontSize:'11px'}).text(lbl));
+              var $lbl=$('<span>').css({fontSize:'11px'}).text(lbl);
+              if(color!==undefined) $row.append($cb,_calCircle(color),$lbl); else $row.append($cb,$lbl);
               $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
               return {$row:$row,$cb:$cb};
             }
             function mkSep(){ $viewDD.append($('<div>').css({borderTop:'1px solid #f0f0f0',margin:'3px 0'})); }
 
-            if(_schoolSlots.length>1){
-              var _selSiSet=_viewSel.schools;
-              var allSchVCb=mkVCb('All Schools',!_selSiSet||_selSiSet.length===_schoolSlots.length); allSchVCb.$row.css({fontWeight:'600'}); $viewDD.append(allSchVCb.$row);
-              var childSchVCbs=[];
-              _schoolSlots.forEach(function(sch){ var nm='School '+(sch.si+1); var sl=(sch.sRow&&(sch.sRow.school||sch.sRow.schoolAbbr))||''; if(sl) nm+='. '+sl; var checked=!_selSiSet||_selSiSet.indexOf(sch.si)>=0; var cb=mkVCb(nm,checked); cb.$row.css({paddingLeft:'28px'}); state.schools.push({si:sch.si,$cb:cb.$cb}); childSchVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allSchVCb.$cb.prop('checked',childSchVCbs.every(function(c){return c.prop('checked');})); }); });
-              allSchVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childSchVCbs.forEach(function(c){c.prop('checked',v);}); });
-              mkSep();
+            // Applies the current checkbox state to the tables straight away and remembers it on _viewSel so
+            // reopening the menu restores it. A table shows when its leaf (calendar, or school/POD within a
+            // split calendar) is checked and its Week is checked.
+            function _fApply(){
+              var _selK=state.leaves.filter(function(lf){ return lf.$cb.prop('checked'); }).map(function(lf){ return lf.k; });
+              var _allK=state.leaves.map(function(lf){ return lf.k; });
+              _viewSel.leaves=(state.leaves.length&&_selK.length<_allK.length)?_selK:null;
+              var selWk=state.wks.length ? state.wks.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.wk;}) : _wkSlots.slice();
+              _viewSel.wks=(_anyAltWk&&selWk.length<2)?selWk:null;
+              updateViewBtn();
+              function _leafOf(tc){ return String(tc.ci)+'|'+((tc.podKey!=null)?tc.podKey:((tc.si!=null)?('s'+tc.si):'')); }
+              var _secVis={};
+              _comboResults.forEach(function(cr){
+                var tc=cr.combo;
+                var vis=(!state.leaves.length||_selK.indexOf(_leafOf(tc))>=0)&&(!tc.wk||selWk.indexOf(tc.wk)>=0);
+                if(cr.$hdr) cr.$hdr.toggle(vis);
+                if(cr.res&&cr.res.$strip) cr.res.$strip.toggle(vis);   // the composite school strip follows its table
+                cr.res.$scroll.toggle(vis);
+                var k=tc.ci; if(!_secVis[k]) _secVis[k]={sec:cr.$calSection,any:false}; if(vis) _secVis[k].any=true;
+              });
+              Object.keys(_secVis).forEach(function(k){ if(_secVis[k].sec) _secVis[k].sec.toggle(_secVis[k].any); });
             }
 
-            if(_calSlots.length>1){
-              var _selCiSet=_viewSel.cals;
-              var allCalVCb=mkVCb('All Calendars',!_selCiSet||_selCiSet.length===_calSlots.length); allCalVCb.$row.css({fontWeight:'600'}); $viewDD.append(allCalVCb.$row);
-              var childCalVCbs=[];
-              _calSlots.forEach(function(cal){ var nm=(cal.calRow&&cal.calRow.name&&cal.calRow.name.trim())||('Calendar '+(cal.ci+1)); var checked=!_selCiSet||_selCiSet.indexOf(cal.ci)>=0; var cb=mkVCb(nm,checked); cb.$row.css({paddingLeft:'28px'}); state.cals.push({ci:cal.ci,$cb:cb.$cb}); childCalVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allCalVCb.$cb.prop('checked',childCalVCbs.every(function(c){return c.prop('checked');})); }); });
-              allCalVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childCalVCbs.forEach(function(c){c.prop('checked',v);}); });
+            // Nested hierarchy mirroring the Copy to menu: All Schools / All PODs -> Program Calendar ->
+            // School / POD. Parent toggles set every child; a partly-selected parent shows indeterminate.
+            // Selections live in _viewSel so they survive close/reopen, and every change applies immediately.
+            var _fCalMap={}, _fCalOrder=[];
+            _combos.forEach(function(cm){
+              if(_fCalMap[cm.ci]===undefined){ _fCalMap[cm.ci]={ci:cm.ci, calRow:cm.calRow, bySch:!!(cm.calOpt&&(cm.calOpt.bySchool||cm.calOpt.byPods)), units:[], _seen:{}}; _fCalOrder.push(cm.ci); }
+              var _nd=_fCalMap[cm.ci];
+              if(_nd.bySch && cm.podKey && _nd._seen[cm.podKey]===undefined){ _nd._seen[cm.podKey]=1; _nd.units.push({podKey:cm.podKey, pod:cm.pod}); }
+              if(_nd.bySch && cm.si!==null && _nd._seen['s'+cm.si]===undefined){ _nd._seen['s'+cm.si]=1; _nd.units.push({si:cm.si, sRow:cm.sRow}); }
+            });
+            var _fCalNodes=_fCalOrder.map(function(k){ return _fCalMap[k]; });
+            function _fCalNm(nd){ return (nd.calRow&&nd.calRow.name&&String(nd.calRow.name).trim())||('Calendar '+(nd.ci+1)); }
+            function _fUnitNm(u){ if(u.pod) return u.pod.name; var s2=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||''; s2=String(s2).trim(); return s2||('School '+(u.si+1)); }
+            function _fLeafKey(ci,u){ return String(ci)+'|'+((u&&u.podKey!=null)?u.podKey:((u&&u.si!=null)?('s'+u.si):'')); }
+            var _fAnyPod=_combos.some(function(c){ return !!c.podKey; });
+            var _fLeafN=0; _fCalNodes.forEach(function(nd){ _fLeafN += nd.bySch ? nd.units.length : 1; });
+
+            if(_fLeafN>1){
+              var _fSel=_viewSel.leaves;   // null = everything selected (no active filter)
+              function _fIsOn(k){ return !_fSel || _fSel.indexOf(k)>=0; }
+              var $fGrp=$('<div>').css({marginBottom:'4px'});
+              var _fTop=mkVCb(_fAnyPod?'All PODs':'All Schools',true); _fTop.$row.css({fontWeight:'600'});
+              $fGrp.append(_fTop.$row);
+              var _fCalEntries=[];
+              function _fRefreshTop(){
+                var _all=state.leaves.every(function(lf){ return lf.$cb.prop('checked'); });
+                var _none=state.leaves.every(function(lf){ return !lf.$cb.prop('checked'); });
+                _fTop.$cb.prop('checked',_all).prop('indeterminate',!_all&&!_none);
+              }
+              function _fRefreshParents(){
+                _fCalEntries.forEach(function(en){
+                  if(!en.node.bySch||!en.kids.length) return;
+                  var _n=en.kids.filter(function(c){ return c.prop('checked'); }).length;
+                  en.$cb.prop('checked',_n===en.kids.length).prop('indeterminate',_n>0&&_n<en.kids.length);
+                });
+                _fRefreshTop();
+              }
+              _fCalNodes.forEach(function(nd){
+                var _cCb=mkVCb(_fCalNm(nd),true,(nd.calRow&&nd.calRow.color)||'#ffffff'); _cCb.$row.css({paddingLeft:'28px',fontWeight:nd.bySch?'600':'400'});
+                $fGrp.append(_cCb.$row);
+                var _en={node:nd,$cb:_cCb.$cb,kids:[]}; _fCalEntries.push(_en);
+                if(nd.bySch){
+                  // Separate by School with pods: consecutive schools of the same pod share a narrow
+                  // name+rail bracket (the shared pod style) overlaid in a fixed 36px column, while every
+                  // school keeps its own checkbox. All school rows in the group take the SAME extra indent
+                  // (podded or not) so checkboxes and names stay vertically aligned. Pod units (Separate by
+                  // Pods) get a color circle instead and no bracket.
+                  var _ndPods=podsFor(g,(nd.calRow&&nd.calRow.calId!=null)?nd.calRow.calId:null)||[];
+                  function _uPod(u){ if(u.podKey!=null) return null; var sid=u.sRow&&u.sRow.schoolId; if(sid==null) return null; for(var _pi2=0;_pi2<_ndPods.length;_pi2++){ if((_ndPods[_pi2].schoolIds||[]).indexOf(sid)>=0) return _ndPods[_pi2]; } return null; }
+                  var _ndAnyPod=nd.units.some(function(u){ return !!_uPod(u); });
+                  var _ui=0;
+                  while(_ui<nd.units.length){
+                    var _p0=_uPod(nd.units[_ui]), _uj=_ui+1;
+                    while(_uj<nd.units.length&&_uPod(nd.units[_uj])===_p0){ _uj++; }
+                    var $run=$('<section class="sf-menu-pod-run">').css({display:'block',position:'relative'});
+                    for(var _uk=_ui;_uk<_uj;_uk++){
+                      (function(u){
+                        var _k=_fLeafKey(nd.ci,u);
+                        var _uCb=mkVCb(_fUnitNm(u),_fIsOn(_k),(u.pod&&u.pod.color)||undefined);
+                        _uCb.$row.css({paddingLeft:_ndAnyPod?'84px':'44px'});
+                        $run.append(_uCb.$row);
+                        state.leaves.push({ci:nd.ci,si:(u.si!=null?u.si:null),podKey:(u.podKey!=null?u.podKey:null),k:_k,$cb:_uCb.$cb});
+                        _en.kids.push(_uCb.$cb);
+                        _uCb.$cb.on('change',function(){ _fRefreshParents(); _fApply(); });
+                      })(nd.units[_uk]);
+                    }
+                    if(_p0){
+                      var _pc=_podBracketColor(_p0.color);
+                      $run.append($('<div class="sf-menu-pod-bracket">').attr('title',_p0.name).css({position:'absolute',left:'44px',top:'2px',bottom:'2px',width:'36px',display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',overflow:'hidden'})
+                        .append($('<span class="sf-menu-pod-name">').attr('title',_p0.name).css({alignSelf:'center',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'24px',fontSize:'10px',fontWeight:'700',color:_pc,lineHeight:'1.1',textAlign:'right'}).text(_p0.name))
+                        .append($('<div class="sf-menu-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:_pc,flexShrink:'0'})));
+                    }
+                    $fGrp.append($run);
+                    _ui=_uj;
+                  }
+                  _cCb.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _en.kids.forEach(function(c){ c.prop('checked',v).prop('indeterminate',false); }); _fRefreshTop(); _fApply(); });
+                } else {
+                  var _k0=_fLeafKey(nd.ci,null);
+                  _cCb.$cb.prop('checked',_fIsOn(_k0));
+                  state.leaves.push({ci:nd.ci,si:null,podKey:null,k:_k0,$cb:_cCb.$cb});
+                  _cCb.$cb.on('change',function(){ $(this).prop('indeterminate',false); _fRefreshTop(); _fApply(); });
+                }
+              });
+              _fTop.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _fCalEntries.forEach(function(en){ en.$cb.prop('checked',v).prop('indeterminate',false); en.kids.forEach(function(c){ c.prop('checked',v).prop('indeterminate',false); }); }); _fApply(); });
+              $viewDD.append($fGrp);
+              _fRefreshParents();
               mkSep();
             }
 
@@ -6780,29 +6876,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var allWkVCb=mkVCb('All Weeks',!_selWkSet||_selWkSet.length===2); allWkVCb.$row.css({fontWeight:'600'}); $viewDD.append(allWkVCb.$row);
               var childWkVCbs=[];
               ['a','b'].forEach(function(wk){ var checked=!_selWkSet||_selWkSet.indexOf(wk)>=0; var cb=mkVCb(wk==='a'?'Week A':'Week B',checked); cb.$row.css({paddingLeft:'28px'}); state.wks.push({wk:wk,$cb:cb.$cb}); childWkVCbs.push(cb.$cb); $viewDD.append(cb.$row); cb.$cb.on('change',function(){ allWkVCb.$cb.prop('checked',childWkVCbs.every(function(c){return c.prop('checked');})); }); });
-              allWkVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); childWkVCbs.forEach(function(c){c.prop('checked',v);}); });
+              allWkVCb.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); childWkVCbs.forEach(function(c){c.prop('checked',v);}); _fApply(); });
+              function _fRefreshWk(){ var _n=childWkVCbs.filter(function(c){return c.prop('checked');}).length; allWkVCb.$cb.prop('checked',_n===childWkVCbs.length).prop('indeterminate',_n>0&&_n<childWkVCbs.length); }
+              childWkVCbs.forEach(function(c){ c.on('change',function(){ _fRefreshWk(); _fApply(); }); });
+              _fRefreshWk();
               mkSep();
             }
 
             var $btns=$('<div>').css({display:'flex',gap:'6px',padding:'6px 16px 4px'});
-            var $applyVBtn=$('<button type="button">').text('Apply').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'#1a73e8',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'});
-            var $rstVBtn=$('<button type="button">').text('Reset').css({fontSize:'11px',padding:'4px 8px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
-            $rstVBtn.on('click',function(e){ e.stopPropagation(); _viewSel={schools:null,cals:null,wks:null}; buildViewDD(); $viewDD.show(); });
-            $applyVBtn.on('click',function(e){
-              e.stopPropagation(); closeViewDD();
-              var selSi=state.schools.length ? state.schools.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.si;}) : _schoolSlots.map(function(s){return s.si;});
-              var selCi=state.cals.length ? state.cals.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.ci;}) : _calSlots.map(function(c){return c.ci;});
-              var selWk=state.wks.length ? state.wks.filter(function(x){return x.$cb.prop('checked');}).map(function(x){return x.wk;}) : _wkSlots.slice();
-              // Save selection (null = all selected = no active filter)
-              _viewSel.schools=(_schoolSlots.length>1&&selSi.length<_schoolSlots.length)?selSi:null;
-              _viewSel.cals=(_calSlots.length>1&&selCi.length<_calSlots.length)?selCi:null;
-              _viewSel.wks=(_anyAltWk&&selWk.length<2)?selWk:null;
-              updateViewBtn();
-              var _secVis={};
-              _comboResults.forEach(function(cr){ var tc=cr.combo; var vis=(tc.si===null||selSi.indexOf(tc.si)>=0)&&(selCi.indexOf(tc.ci)>=0)&&(!tc.wk||selWk.indexOf(tc.wk)>=0); if(cr.$hdr) cr.$hdr.toggle(vis); cr.res.$scroll.toggle(vis); var k=tc.ci; if(!_secVis[k]) _secVis[k]={sec:cr.$calSection,any:false}; if(vis) _secVis[k].any=true; });
-              Object.keys(_secVis).forEach(function(k){ if(_secVis[k].sec) _secVis[k].sec.toggle(_secVis[k].any); });
-            });
-            $btns.append($rstVBtn,$applyVBtn); $viewDD.append($btns);
+            var $rstVBtn=$('<button type="button">').text('Reset').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+            $rstVBtn.on('click',function(e){ e.stopPropagation(); _viewSel={leaves:null,wks:null}; buildViewDD(); $viewDD.show(); _fApply(); });
+            $btns.append($rstVBtn); $viewDD.append($btns);
           }
         }
 
@@ -7005,9 +7089,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $card.append($hdr);
             var lbl=isCoach?'Coach Count':'Staff Count';
             var $tbl=$('<table>').css({width:'100%',borderCollapse:'collapse',fontSize:'11.5px'});
-            $tbl.append($('<tr>').append(
+            // Pod grouping for the popup rows: same name-left bracket layout as the Site Breakdown and the
+            // Staffing Hours school strip. A rowspan bracket cell spans each contiguous pod run; unpodded rows
+            // get an empty pod cell; the Pod column only appears when at least one school is assigned.
+            var _popPods=podsFor(g,(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[];
+            function _popPodOf(row){ var sid=row&&row.schoolId; if(sid==null) return null; for(var _pi=0;_pi<_popPods.length;_pi++){ if((_popPods[_pi].schoolIds||[]).indexOf(sid)>=0) return _popPods[_pi]; } return null; }
+            var _compList=(_compSchools?_compSchools():[]);
+            var _anyPod=_compList.some(function(u){ return !!_popPodOf(u.sRow); });
+            var $headRow=$('<tr>');
+            if(_anyPod) $headRow.append($('<th class="sh-cnt-pod-cell">').css({textAlign:'left',padding:'4px 4px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700',whiteSpace:'nowrap',width:'1px'}).text('Pod'));
+            $headRow.append(
               $('<th>').css({textAlign:'left',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text('School'),
-              $('<th>').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text(lbl)));
+              $('<th>').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text(lbl));
+            $tbl.append($headRow);
+            // Pod column: the pod NAME sits left of its bracket rail (the shared layout), with the rail
+            // spanning the pod's rows via rowspan. The name is capped (ellipsis + title tooltip) so a long
+            // pod name cannot widen the column and shift the School/Count columns; a hidden sizer with the
+            // SAME cap gives the column its intrinsic width, identical for every row.
+            var _POP_POD_NAME_CAP='64px';
+            function _popPodBracketCell(pod,span){
+              var col=_podBracketColor(pod.color);
+              var $td=$('<td class="sh-cnt-pod-cell sh-cnt-pod-bracket">').attr({rowspan:span,title:pod.name})
+                .css({padding:'0',width:'1px',whiteSpace:'nowrap',position:'relative',verticalAlign:'middle',borderBottom:'1px solid #f1f3f5'});
+              $td.append($('<div class="sh-cnt-pod-wrap">').css({position:'absolute',top:'0',bottom:'0',left:'0',right:'0',display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',padding:'0 3px',overflow:'hidden'})
+                .append($('<span class="sh-cnt-pod-name">').attr('title',pod.name).css({alignSelf:'center',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:_POP_POD_NAME_CAP,textAlign:'right',fontSize:'10px',fontWeight:'700',color:col,lineHeight:'1.1'}).text(pod.name))
+                .append($('<div class="sh-cnt-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:col,flexShrink:'0'})));
+              $td.append($('<div class="sh-cnt-pod-sizer">').css({visibility:'hidden',display:'flex',alignItems:'center',gap:'3px',padding:'0 3px',height:'0',overflow:'hidden'})
+                .append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',maxWidth:_POP_POD_NAME_CAP,fontSize:'10px',fontWeight:'700'}).text(pod.name))
+                .append($('<span>').css({width:'3px',flexShrink:'0'})));
+              return $td;
+            }
+            function _popPodEmptyCell(){ return $('<td class="sh-cnt-pod-cell">').css({width:'1px',borderBottom:'1px solid #f1f3f5'}); }
             var rowsState=(_compSchools?_compSchools():[]).map(function(u){
               var sb=parseInt(u.sRow&&u.sRow[role.countKey])||0;
               var saved=shSchoolCntOv(_slots,u.si,_cCi,_cWk,role.key,dayO.k);
@@ -7016,9 +7128,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             });
             var sbTot=0; rowsState.forEach(function(r){ sbTot+=r.sb; });
             function isDirty(){ return rowsState.some(function(r){ return r.val!==r.openVal; }); }
-            rowsState.forEach(function(r){
+            // Precompute the pod run each row belongs to (start index + length): the first row of a run gets
+            // a rowspan bracket cell, the rest are covered by it.
+            var _runStart={}, _runLen={};
+            // Only rows in the SAME pod are grouped into a rowspan run. Unpodded rows are each their own
+            // run of one, so EVERY unpodded row renders its own empty Pod cell - grouping them under a
+            // single cell without a rowspan left later rows short a cell and shifted School/Count left.
+            (function(){ var i=0; while(i<rowsState.length){ var p0=_popPodOf(rowsState[i].sRow); if(!p0){ _runStart[i]=null; _runLen[i]=1; i++; continue; } var j=i+1; while(j<rowsState.length&&_popPodOf(rowsState[j].sRow)===p0){ j++; } _runStart[i]=p0; _runLen[i]=j-i; i=j; } })();
+            rowsState.forEach(function(r,_ri){
               var nm=(r.sRow&&r.sRow.school&&r.sRow.school.trim())||('School '+(r.si+1));
               var $tr=$('<tr class="sh-cnt-popup-row">').attr('data-si',String(r.si));
+              if(_anyPod){
+                if(_runStart.hasOwnProperty(_ri)){
+                  var _rp=_runStart[_ri];
+                  if(_rp) $tr.append(_popPodBracketCell(_rp,_runLen[_ri]));   // first row of a pod run: rowspan bracket
+                  else $tr.append(_popPodEmptyCell());                        // unpodded run start: empty pod cell
+                }
+                // rows inside a multi-row pod run add no cell; the rowspan covers them
+              }
               $tr.append($('<td>').css({padding:'4px 6px',borderBottom:'1px solid #f1f3f5',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'240px'}).text(nm));
               var $ctd=$('<td>').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',cursor:'pointer'}).attr('title','Click to edit');
               r.$span=$('<span class="sh-cnt-popup-val">').css({fontSize:'11px',color:'#495057',fontWeight:'600'});
@@ -7054,6 +7181,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             });
             var $totSpan=$('<span class="sh-cnt-popup-total">').css({fontSize:'11px',color:'#212529',fontWeight:'700'});
             var $trT=$('<tr class="sh-cnt-popup-total-row">');
+            if(_anyPod) $trT.append($('<td class="sh-cnt-pod-cell">').css({width:'1px'}));
             $trT.append($('<td>').css({padding:'5px 6px',fontWeight:'700',color:'#212529'}).text('Total'));
             $trT.append($('<td>').css({padding:'4px 5px',textAlign:'center'}).append($totSpan));
             $tbl.append($trT);
@@ -7122,7 +7250,51 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             rowsState.forEach(paintRow); paintTotal(); refreshFooter();
             $card.append($foot); $ov.append($card); $('body').append($ov);
           }
+          // ── Composite school strip ── a composite table (aggregate or pod) lists the schools it sums
+          // over, in Site Breakdown order, directly beneath the table title and above the column headers.
+          // Pod brackets sit LEFT of their schools ([pod name | 2px rail] spanning the group, SB colors and
+          // labels); unassigned schools have no bracket. Hidden for single-school composites and rebuilt on
+          // every updU so SB edits, adds/removes, pod reassignments, and pod renames show immediately.
+          var $schoolStrip=null;
+          function _stripSchools(){
+            if(!editCombo||editCombo.si!==null) return [];
+            return editCombo.pod?(editCombo.podSchools||[]):((editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};}));
+          }
+          function _rebuildSchoolStrip(){
+            if(!$schoolStrip) return;
+            $schoolStrip.empty();
+            var list=_stripSchools();
+            if(list.length<2){ $schoolStrip.hide(); return; }
+            $schoolStrip.show();
+            var pods=podsFor(g,(editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[];
+            function podOf(row){ var sid=row&&row.schoolId; if(sid==null) return null; for(var i2=0;i2<pods.length;i2++){ if((pods[i2].schoolIds||[]).indexOf(sid)>=0) return pods[i2]; } return null; }
+            var i=0;
+            while(i<list.length){
+              var p0=podOf(list[i].sRow), j=i+1;
+              while(j<list.length&&podOf(list[j].sRow)===p0) j++;
+              var $grp=$('<div class="sf-strip-group">').css({display:'flex',alignItems:'stretch',gap:'4px'});
+              if(p0){
+                var $tag=$('<span class="sf-strip-pod">').attr('data-pod-name',p0.name||'').css({display:'inline-flex',alignItems:'stretch',gap:'3px',flexShrink:'0'});
+                $tag.append($('<span class="sf-strip-pod-name">').css({alignSelf:'center',fontSize:'8px',fontWeight:'700',color:p0.color||'#6c757d',whiteSpace:'nowrap'}).text(p0.name||''));
+                $tag.append($('<span class="sf-strip-pod-line">').css({alignSelf:'stretch',width:'2px',minHeight:'9px',background:p0.color||'#6c757d',borderRadius:'1px'}));
+                $grp.append($tag);
+              }
+              var $names=$('<div>').css({display:'flex',flexDirection:'column'});
+              for(var k2=i;k2<j;k2++){
+                var r2s=list[k2].sRow, nm2=(r2s&&(r2s.school||r2s.schoolAbbr))||('School '+(list[k2].si+1));
+                $names.append($('<span class="sf-strip-school">').css({fontSize:'10px',lineHeight:'14px',color:'#495057',whiteSpace:'nowrap'}).text(nm2));
+              }
+              $grp.append($names);
+              $schoolStrip.append($grp);
+              i=j;
+            }
+          }
+          if(editCombo&&editCombo.si===null){
+            $schoolStrip=$('<div class="sf-school-strip">').css({display:'flex',flexDirection:'column',gap:'2px',padding:'2px 2px 4px',marginTop:'2px'});
+            _rebuildSchoolStrip();
+          }
           function updU($tb){
+            _rebuildSchoolStrip();
             var c=getCountsFn();
             ROLES.forEach(function(role){
               var _anyOvC=(editableCnt||_compSchools)&&DAYS.some(function(_d){return (editableCnt?(shCntOv(shData,role.key,_d.k)||0):_effComposite(role,_d.k))>0;});
@@ -7174,7 +7346,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $frU.append($('<td colspan="2">').css(Object.assign({},FOOT_CU,{textAlign:'left',textTransform:'uppercase',letterSpacing:'.03em',color:'#3d5a80',background:'#e8eef5'})).text('Total Hrs/Day'));
           DAYS.forEach(function(day,di){ var W=day.k==='sat'||day.k==='sun'; var _isSepUF=(_lastSdIdxU>=0&&di===_lastSdIdxU); $frU.append($('<td class="day-total-u">').attr({'data-day':day.k,'data-sfx':sfxClass}).css(Object.assign({},FOOT_CU,{fontSize:'11px',color:'#1a3a5c'},W?{background:'#c8dbee'}:{},_isSepUF?{borderRight:'2px solid #9aafc5'}:{})).text('')); });
           $tfU.append($frU); $tblU.append($tbU,$tfU); $scr.append($tblU);
-          return {$scroll:$scr,$tbody:$tbU,pickers:_p,recalc:function(){updU($tbU);}};
+          return {$scroll:$scr,$tbody:$tbU,pickers:_p,$strip:$schoolStrip,recalc:function(){updU($tbU);}};
         }
 
         // ── Render all slots ────────────────────────────────────────────────
@@ -7362,16 +7534,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }).attr({'data-sf-school':combo.si!==null?String(combo.si):'','data-sf-cal':combo.ci!==null?String(combo.ci):'','data-sf-wk':combo.wk||'','data-sf-pod':combo.pod?String(combo.pod.id):''});
             var _firstSeg=true;
             if(combo.pod){
-              // Pod header: color circle + pod name, with the assigned schools listed compactly under it
-              // (Site Breakdown order), visually subordinate to the pod name.
+              // Pod header: color circle + 'POD {name}'. The member schools are NOT repeated here -
+              // the composite school strip directly beneath the header already lists them with brackets.
               var $podSeg=$('<span class="sf-pod-label">').css({display:'inline-flex',alignItems:'center',gap:'6px'});
               $podSeg.append($('<span class="sf-pod-circle">').css({display:'inline-block',width:'11px',height:'11px',borderRadius:'50%',background:combo.pod.color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}));
-              $podSeg.append($('<span>').css({fontWeight:'700'}).text(combo.pod.name));
-              var _schBits=(combo.podSchools||[]).map(function(u){
-                var nm=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||''; nm=String(nm).trim();
-                return 'School '+(u.si+1)+(nm?('. '+nm):'');
-              });
-              if(_schBits.length) $podSeg.append($('<span class="sf-pod-schools">').css({fontWeight:'400',fontSize:'10px',color:'#8a94a0',marginLeft:'2px'}).text(_schBits.join(' \u00b7 ')));
+              $podSeg.append($('<span>').css({fontWeight:'700'}).text('POD '+combo.pod.name));   // consistent 'POD {name}' section label
               $hdr.append($podSeg);
               _firstSeg=false;
             }
@@ -7404,6 +7571,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             : (function(sr,csr){ return function(){ return getSchoolCounts(sr,csr); }; })(combo.sRow,combo.calSiteRows);
           var res=buildOneTable(shData,cFn,sfx,combo.calRow,combo);
           res.$scroll.attr({'data-sf-cal':combo.ci!=null?String(combo.ci):'','data-sf-school':combo.si!=null?String(combo.si):'','data-sf-wk':combo.wk||'','data-sf-pod':combo.pod?String(combo.pod.id):''});
+          if(res.$strip) _calSec.$section.append(res.$strip);   // composite school strip: below the title, above the column headers
           _calSec.$section.append(res.$scroll);
           _allRecalcs.push(res);
           _comboResults.push({combo:combo,shData:shData,res:res,$hdr:$hdr||$(),$calSection:_calSec.$section});
@@ -7481,13 +7649,36 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     $grp.append(_cCb.$row);
                     var _en={node:nd,$cb:_cCb.$cb,schCbs:[]}; _calEntries.push(_en);
                     if(nd.bySch){
-                      nd.schools.forEach(function(sc){
-                        var _sCb=sc.pod?mkCb(_schNm(sc),true,sc.pod.color):mkCb(_schNm(sc),true); _sCb.$row.css({paddingLeft:'30px'});
-                        $grp.append(_sCb.$row);
-                        state.leaves.push({ci:nd.ci,si:(sc.si!=null?sc.si:null),k:_leafKeyOf(sc),$cb:_sCb.$cb});
-                        _en.schCbs.push(_sCb.$cb);
-                        _sCb.$cb.on('change',function(){ _refreshParents(); });
-                      });
+                      // Same pod grouping as the Filter menu: consecutive same-pod schools share a narrow
+                      // name+rail bracket in a fixed 36px column; every school keeps its checkbox and all
+                      // school rows share the same indent so labels stay aligned. Pod units keep circles.
+                      var _ctPods=podsFor(g,(nd.calRow&&nd.calRow.calId!=null)?nd.calRow.calId:null)||[];
+                      function _scPod(sc){ if(sc.podKey!=null) return null; var sid=sc.sRow&&sc.sRow.schoolId; if(sid==null) return null; for(var _pj=0;_pj<_ctPods.length;_pj++){ if((_ctPods[_pj].schoolIds||[]).indexOf(sid)>=0) return _ctPods[_pj]; } return null; }
+                      var _ctAnyPod=nd.schools.some(function(sc){ return !!_scPod(sc); });
+                      var _si2=0;
+                      while(_si2<nd.schools.length){
+                        var _sp0=_scPod(nd.schools[_si2]), _sj=_si2+1;
+                        while(_sj<nd.schools.length&&_scPod(nd.schools[_sj])===_sp0){ _sj++; }
+                        var $ctRun=$('<section class="sf-menu-pod-run">').css({display:'block',position:'relative'});
+                        for(var _sk=_si2;_sk<_sj;_sk++){
+                          (function(sc){
+                            var _sCb=sc.pod?mkCb(_schNm(sc),true,sc.pod.color):mkCb(_schNm(sc),true);
+                            _sCb.$row.css({paddingLeft:_ctAnyPod?'70px':'30px'});
+                            $ctRun.append(_sCb.$row);
+                            state.leaves.push({ci:nd.ci,si:(sc.si!=null?sc.si:null),k:_leafKeyOf(sc),$cb:_sCb.$cb});
+                            _en.schCbs.push(_sCb.$cb);
+                            _sCb.$cb.on('change',function(){ _refreshParents(); });
+                          })(nd.schools[_sk]);
+                        }
+                        if(_sp0){
+                          var _spc=_podBracketColor(_sp0.color);
+                          $ctRun.append($('<div class="sf-menu-pod-bracket">').attr('title',_sp0.name).css({position:'absolute',left:'30px',top:'2px',bottom:'2px',width:'36px',display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',overflow:'hidden'})
+                            .append($('<span class="sf-menu-pod-name">').attr('title',_sp0.name).css({alignSelf:'center',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'24px',fontSize:'10px',fontWeight:'700',color:_spc,lineHeight:'1.1',textAlign:'right'}).text(_sp0.name))
+                            .append($('<div class="sf-menu-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:_spc,flexShrink:'0'})));
+                        }
+                        $grp.append($ctRun);
+                        _si2=_sj;
+                      }
                       _cCb.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); _en.schCbs.forEach(function(c){ c.prop('checked',v).prop('indeterminate',false); }); _refreshTop(); });
                     } else {
                       state.leaves.push({ci:nd.ci,si:null,$cb:_cCb.$cb});
@@ -12418,18 +12609,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function _sumPodBracketTd(st){
         var col=_podBracketColor(st.pod.color);
         var $td=$('<td class="sum-pod-cell sum-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1)})
-          .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle'});
-        $td.append($('<div class="sum-pod-bracket-line">').css({position:'absolute',top:'3px',bottom:'3px',left:'9px',width:'3px',borderRadius:'2px',background:col}));
-        var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'14px',right:'2px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
-        $lbl.append($('<span class="sum-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)',maxHeight:'100%'}).text(st.pod.name));
-        $td.append($lbl);
+          .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'1px',whiteSpace:'nowrap',position:'relative',verticalAlign:'middle'});
+        $td.append($('<div class="sum-pod-bracket-wrap">').css({display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',position:'absolute',top:'0',bottom:'0',left:'0',right:'0',padding:'0 3px',overflow:'hidden'})
+          .append($('<span class="sum-pod-bracket-name">').attr('title',st.pod.name).css({alignSelf:'center',whiteSpace:'nowrap',textAlign:'right',fontSize:'10px',fontWeight:'700',color:col,lineHeight:'1.1'}).text(st.pod.name))
+          .append($('<div class="sum-pod-bracket-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:col,flexShrink:'0'})));
+        $td.append($('<div class="sum-pod-bracket-sizer">').css({visibility:'hidden',display:'flex',alignItems:'center',gap:'3px',padding:'0 3px',height:'0',overflow:'hidden'})
+          .append($('<span>').css({whiteSpace:'nowrap',fontSize:'10px',fontWeight:'700'}).text(st.pod.name))
+          .append($('<span>').css({width:'3px',flexShrink:'0'})));
         return $td;
       }
-      function _sumPodEmptyTd(bg){ return $('<td class="sum-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'34px',minWidth:'34px'}); }
+      function _sumPodEmptyTd(bg){ return $('<td class="sum-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'1px'}); }
       var $scroll=$('<div style="overflow-x:auto;">');
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $hr=$('<tr>');
-      if(_sumPodOn) $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 2px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'34px',minWidth:'34px'}).text('Pod'));
+      if(_sumPodOn) $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 4px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1px'}).text('Pod'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('#'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('School Name'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
@@ -13749,7 +13942,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // membership/delete) regroup the tables - rebuild the Staffing and Calendar sections like the
     // Options control does, so tables, calculations, and Copy To all reflect the new membership.
     function _podRefreshStaffing(){
-      if(!calStaffOpts(g,calId).byPods) return;
+      if(!calStaffOpts(g,calId).byPods){
+        // Composite school strips show pod groupings even without pod separation: repaint them so pod
+        // assignment, rename, add, and delete reflect immediately.
+        var $sfStrip=$('#staffing-section-'+g.id);
+        if($sfStrip.length&&$sfStrip[0]._recalcAll) $sfStrip[0]._recalcAll();
+        return;
+      }
       var $newSf=buildStaffingSection(g);
       $('#staffing-section-'+g.id).replaceWith($newSf);
       var $newCal=buildCalendarSection(g);
@@ -14043,18 +14242,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function _podBracketCell(st){
       var col=_podBracketColor(st.pod.color);
       var $td=$('<td class="sb-pod-cell sb-pod-bracket">').attr({'data-pod-name':st.pod.name,'data-pod-rows':(st.start+1)+'-'+(st.end+1),rowspan:(st.end-st.start+1),title:'Edit pod'})
-        .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'34px',minWidth:'34px',position:'relative',verticalAlign:'middle',cursor:'pointer'});
+        .css({border:'1px solid #dee2e6',background:'#ffffff',padding:'0',width:'1px',whiteSpace:'nowrap',position:'relative',verticalAlign:'middle',cursor:'pointer'});
       // The whole bracket + name area opens the Edit Pod popup; it never selects/highlights the school rows.
       $td.on('click',function(e){ e.stopPropagation(); _podEditPopup(st.pod); });
       $td.on('mousedown',function(e){ e.stopPropagation(); });
-      $td.append($('<div class="sb-pod-bracket-line">').css({position:'absolute',top:'3px',bottom:'3px',left:'9px',width:'3px',borderRadius:'2px',background:col}));
-      var $lbl=$('<div>').css({position:'absolute',top:'2px',bottom:'2px',left:'14px',right:'2px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'});
-      $lbl.append($('<span class="sb-pod-bracket-name">').attr('title',st.pod.name).css({writingMode:'vertical-rl',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:'10px',fontWeight:'700',color:col,transform:'rotate(180deg)',maxHeight:'100%'}).text(st.pod.name));
-      $td.append($lbl);
+      $td.append($('<div class="sb-pod-bracket-wrap">').css({display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',position:'absolute',top:'0',bottom:'0',left:'0',right:'0',padding:'0 3px',overflow:'hidden'})
+        .append($('<span class="sb-pod-bracket-name">').attr('title',st.pod.name).css({alignSelf:'center',whiteSpace:'nowrap',textAlign:'right',fontSize:'10px',fontWeight:'700',color:col,lineHeight:'1.1'}).text(st.pod.name))
+        .append($('<div class="sb-pod-bracket-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:col,flexShrink:'0'})));
+      $td.append($('<div class="sb-pod-bracket-sizer">').css({visibility:'hidden',display:'flex',alignItems:'center',gap:'3px',padding:'0 3px',height:'0',overflow:'hidden'})
+        .append($('<span>').css({whiteSpace:'nowrap',fontSize:'10px',fontWeight:'700'}).text(st.pod.name))
+        .append($('<span>').css({width:'3px',flexShrink:'0'})));
       return $td;
     }
     // An empty Pod-column cell for unpodded rows and the totals row (keeps the column continuous top to bottom).
-    function _podEmptyCell(bg){ return $('<td class="sb-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'34px',minWidth:'34px'}); }
+    function _podEmptyCell(bg){ return $('<td class="sb-pod-cell">').css({border:'1px solid #dee2e6',background:bg||'#ffffff',width:'1px'}); }
     function _podRefreshBrackets(){ if($tableWrap) $tableWrap.css('padding-left',''); }
     function _podRefreshBrackets_dead(){
       if(!$tableWrap) return;
@@ -14317,7 +14518,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       headers1.push({label:'', colspan:1, rowspan:2});
       headers1.forEach(function(h){
         var $th=$('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:h.textAlign||'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:h.html?'normal':'nowrap'});
-        if(h.isPod) $th.css({width:'34px',minWidth:'34px',padding:'5px 2px'});
+        if(h.isPod) $th.css({width:'1px',whiteSpace:'nowrap',padding:'5px 4px'});
         if(h.html) $th.html(h.html); else $th.text(h.label);
         if(h.colspan>1)$th.attr('colspan',h.colspan);
         if(h.rowspan>1)$th.attr('rowspan',h.rowspan);
