@@ -172,7 +172,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
 .block-time-row{display:flex;align-items:center;gap:4px;position:relative;z-index:2;flex-shrink:0;margin-top:2px;overflow:hidden;}
 .block-time{font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;}
-/* Site Schedule day-matrix blocks: border-box so the block never overflows its compact row, a touch
+/* Shift Schedule day-matrix blocks: border-box so the block never overflows its compact row, a touch
    more interior padding, and tighter spacing between the role line and the time line — so both lines
    sit balanced with even breathing room top and bottom, consistent with the rest of the app. */
 .sched-block.site-sched-block{box-sizing:border-box;padding:6px 10px;}
@@ -384,7 +384,7 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
       <button class="mode-btn" id="btn-workspace"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></svg>Workspace</button>
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-planning">Planning Guides</button>
-      <button class="mode-btn" id="btn-schedule">Site Schedule</button>
+      <button class="mode-btn" id="btn-schedule">Shift Schedule</button>
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-people">Staff</button>
       <button class="mode-btn" id="btn-availability">Availability</button>
@@ -1591,7 +1591,7 @@ $(function(){
   /* ── URL state sync ── */
   function buildURLParams(){
     var params = new URLSearchParams();
-    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'site_schedule'))));
+    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'shift_schedule'))));
     if(pageMode==='workspace'){
       // Workspace is a standalone, user-specific area — no guide/staff/date params ride along with it.
     } else if(pageMode==='people'){
@@ -1604,7 +1604,7 @@ $(function(){
       if(selectedGuideId) params.set('planning_guide', selectedGuideId);
     } else if(pageMode==='schedule'){
       // Guide-driven schedule: planning_guide + view/date + (school / calendar) filters
-      params.set('section','site_schedule');
+      params.set('section','shift_schedule');
       if(selectedGuideId)          params.set('planning_guide', selectedGuideId);
       params.set('view', viewMode);
       params.set('day',  viewDateStr());
@@ -1708,7 +1708,7 @@ $(function(){
         var _sd=params.get('date');   // open the month containing the passed date and scroll to it
         if(_sd && /^\d{4}-\d{2}-\d{2}$/.test(_sd)){ var _dp=_sd.split('-'); _ssY=parseInt(_dp[0],10); _ssM=parseInt(_dp[1],10)-1; _ssScrollDate=_sd; }
       }
-    } else if(sec==='schedule'||sec==='site_schedule'){
+    } else if(sec==='schedule'||sec==='site_schedule'||sec==='shift_schedule'){   // legacy values accepted; render() re-writes the URL as shift_schedule
       pageMode='schedule';
       // Restore guide + Calendars/Schools filters from the URL
       try{ var _sgid=params.get('planning_guide'); selectedGuideId=_sgid||null; }catch(e){ selectedGuideId=null; }
@@ -4354,11 +4354,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(schedFilterSchool && schedFilterCalendar && !_schedCalHasSchool(g, schedFilterCalendar, schedFilterSchool)) schedFilterCalendar='';
   }
 
-  // Build the schedule URL (section=site_schedule; legacy section=schedule still accepted on load)
+  // Build the schedule URL (section=shift_schedule; legacy section=schedule / section=site_schedule
+  // are still accepted on load and transparently normalized to shift_schedule by the URL sync).
   function schedUpdateURL(replace){
     try{
       var p=new URLSearchParams();
-      p.set('section','site_schedule');
+      p.set('section','shift_schedule');
       if(selectedGuideId) p.set('planning_guide',selectedGuideId);
       if(schedFilterSchool!=='')   p.set('school',  schedFilterSchool);
       if(schedFilterCalendar!=='') p.set('calendar',schedFilterCalendar);
@@ -11102,7 +11103,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // omits the regular view's marginLeft (matching how '+ Add Extra Shift' is adapted just above).
       if(gObj && gObj.id){
         var _spC=new URLSearchParams();
-        _spC.set('section','site_schedule'); _spC.set('planning_guide', gObj.id); _spC.set('view','day'); _spC.set('day', isoDate(cellDate));
+        _spC.set('section','shift_schedule'); _spC.set('planning_guide', gObj.id); _spC.set('view','day'); _spC.set('day', isoDate(cellDate));
         var _schedHrefC=window.location.pathname+'?'+_spC.toString();
         var $schedLinkC=$('<a>').attr({href:_schedHrefC,title:'Open this day in Schedule mode'}).css({
           display:'inline-flex',alignItems:'center',gap:'3px',flexShrink:'0',
@@ -11541,7 +11542,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       if(gObj && gObj.id){
         var _sp=new URLSearchParams();
-        _sp.set('section','site_schedule'); _sp.set('planning_guide', gObj.id); _sp.set('view','day'); _sp.set('day', isoDate(cellDate));
+        _sp.set('section','shift_schedule'); _sp.set('planning_guide', gObj.id); _sp.set('view','day'); _sp.set('day', isoDate(cellDate));
         var _schedHref=window.location.pathname+'?'+_sp.toString();
         var $schedLink=$('<a>').attr({href:_schedHref,title:'Open this day in Schedule mode'}).css({
           display:'inline-flex',alignItems:'center',gap:'3px',marginLeft:'8px',flexShrink:'0',
