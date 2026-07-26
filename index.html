@@ -4376,6 +4376,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   function _calCircle(color){
     return $('<span>').css({width:'10px',height:'10px',borderRadius:'50%',border:'1px solid rgb(180,180,180)',background:color||'#ffffff',display:'inline-block',flexShrink:'0',verticalAlign:'middle'});
   }
+  // ── Calendar school-view filter ── per guide + per calendar, VIEWING ONLY: limits which schools
+  // contribute hours to calendar day cells, hover breakdowns and the pinned Hours Breakdown. Never
+  // touches Staffing Hours, Site Breakdown, overrides or saved data. null = all schools (no filter).
+  var _calVF={};
+  function _cvfKey(gid,calId){ return String(gid)+'|'+(calId==null?'':String(calId)); }
+  function _cvfSel(gid,calId){ return _calVF[_cvfKey(gid,calId)]||null; }
+  function _cvfSet(gid,calId,map){ if(map) _calVF[_cvfKey(gid,calId)]=map; else delete _calVF[_cvfKey(gid,calId)]; }
+
   function buildCalFilterDropdown(g){
     var $wrap=$('#filter-calendar-dd').empty();
     var cals=schedGuideCalendars(g);
@@ -8103,6 +8111,80 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Returns a <span> containing the calendar name (bold) and, when dates are
     // present, the ":: Start – End, Year" range in a lighter style.
     var _FULL_MONTHS_HD=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    // Filter action for a calendar header: opens a Copy-to-style menu (parent calendar row with its
+    // color circle, nested schools in Site Breakdown order, pod name+rail brackets, parent/child +
+    // indeterminate behavior). Every change applies immediately; Reset restores all schools.
+    function _calVFBtn(scopeCals){
+      var $b=$('<button type="button" class="cal-vf-btn">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'5px',padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'8px'}).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+      var $dd=$('<div class="cal-vf-dd">').css({position:'fixed',zIndex:12050,background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 8px 24px rgba(0,0,0,.14)',padding:'8px 0',minWidth:'230px',maxHeight:'340px',overflowY:'auto',display:'none'}).appendTo('body');
+      function badge(){ var f=scopeCals.some(function(sc){ return !!_cvfSel(g.id,(sc.cr.calId!=null?sc.cr.calId:null)); }); $b.css({color:f?'#0d6efd':'#6c757d',borderColor:f?'#9ec5fe':'#dee2e6'}); }
+      function applyNow(){ updateCalendarHours(); try{ hideCalTooltip(); }catch(_e){} badge(); }
+      function mkRow(lbl,checked,color){
+        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',padding:'3px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
+        var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',width:'13px',height:'13px',accentColor:'#0d6efd',margin:'0'});
+        var $lbl=$('<span>').css({fontSize:'11px'}).text(lbl);
+        if(color!==undefined) $row.append($cb,_calCircle(color),$lbl); else $row.append($cb,$lbl);
+        $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
+        return {$row:$row,$cb:$cb};
+      }
+      function build(){
+        $dd.empty();
+        scopeCals.forEach(function(sc,ci){
+          var cr=sc.cr, calId=(cr.calId!=null?cr.calId:null);
+          var sr=(calId!=null)?(siteRowsFor(g,calId)||[]):(((guideDetails[String(g.id)]||{}).siteRows)||[]);
+          if(ci>0) $dd.append($('<div>').css({borderTop:'1px solid #f0f0f0',margin:'4px 0'}));   // visual separation between parent calendars
+          var sel=_cvfSel(g.id,calId);
+          var name=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
+          var par=mkRow(name,true,cr.color||'#ffffff'); par.$row.css({fontWeight:'600'});
+          $dd.append(par.$row);
+          if(!sr.length){ par.$cb.prop('disabled',true); return; }
+          var pods=(calId!=null)?(podsFor(g,calId)||[]):[];
+          function podOf(i){ var sid=sr[i]&&sr[i].schoolId; if(sid==null) return null; for(var p=0;p<pods.length;p++){ if((pods[p].schoolIds||[]).indexOf(sid)>=0) return pods[p]; } return null; }
+          var anyPod=sr.some(function(_r,i){ return !!podOf(i); });
+          var kids=[];
+          function refreshPar(){ var n=kids.filter(function(k){return k.prop('checked');}).length; par.$cb.prop('checked',n===kids.length).prop('indeterminate',n>0&&n<kids.length); }
+          function commit(){ var on={},all=true; kids.forEach(function(k,i2){ if(k.prop('checked')) on[String(i2)]=true; else all=false; }); _cvfSet(g.id,calId, all?null:on); applyNow(); }
+          var i=0;
+          while(i<sr.length){
+            var p0=podOf(i), j=i+1; while(j<sr.length&&podOf(j)===p0){ j++; }
+            var $run=$('<section class="cal-vf-pod-run sf-menu-pod-run">').css({display:'block',position:'relative'});
+            for(var k2=i;k2<j;k2++){(function(si){
+              var nm=(sr[si].school&&sr[si].school.trim())||sr[si].schoolAbbr||('School '+(si+1));
+              var row=mkRow(nm, !sel||!!sel[String(si)]);
+              row.$row.css({paddingLeft:anyPod?'70px':'30px'});
+              $run.append(row.$row); kids[si]=row.$cb;
+              row.$cb.on('change',function(){ refreshPar(); commit(); });
+            })(k2);}
+            if(p0){ var pc=_podBracketColor(p0.color);
+              $run.append($('<div class="sf-menu-pod-bracket">').attr('title',p0.name).css({position:'absolute',left:'30px',top:'2px',bottom:'2px',width:'36px',display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',overflow:'hidden'})
+                .append($('<span class="sf-menu-pod-name">').attr('title',p0.name).css({alignSelf:'center',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'24px',fontSize:'10px',fontWeight:'700',color:pc,lineHeight:'1.1',textAlign:'right'}).text(p0.name))
+                .append($('<div class="sf-menu-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:pc,flexShrink:'0'})));
+            }
+            $dd.append($run); i=j;
+          }
+          par.$cb.on('change',function(){ var v=$(this).prop('checked'); $(this).prop('indeterminate',false); kids.forEach(function(k){k.prop('checked',v);}); commit(); });
+          refreshPar();
+        });
+        var $ft=$('<div>').css({display:'flex',gap:'6px',padding:'6px 14px 2px'});
+        var $rst=$('<button type="button">').text('Reset').css({flex:'1',fontSize:'11px',padding:'4px 0',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'});
+        $rst.on('click',function(e){ e.stopPropagation(); scopeCals.forEach(function(sc){ _cvfSet(g.id,(sc.cr.calId!=null?sc.cr.calId:null),null); }); build(); applyNow(); });
+        $ft.append($rst); $dd.append($ft);
+      }
+      function pos(){ var r=$b[0].getBoundingClientRect(); $dd.css({top:(r.bottom+4)+'px',left:Math.max(8,Math.min(r.left,(window.innerWidth||1200)-260))+'px'}); }
+      var _outH=null;
+      function closeDD(){ $dd.hide(); if(_outH){ document.removeEventListener('mousedown',_outH,true); _outH=null; } }
+      $b.on('click',function(e){ e.stopPropagation();
+        if($dd.is(':visible')){ closeDD(); return; }
+        build(); pos(); $dd.show();
+        setTimeout(function(){ _outH=function(ev){ if(!$dd[0].contains(ev.target)&&!$b[0].contains(ev.target)) closeDD(); }; document.addEventListener('mousedown',_outH,true); },0);
+      });
+      // When a re-render removes this header button, take the body-mounted dropdown with it —
+      // otherwise every rebuild would leak one orphaned .cal-vf-dd into <body>.
+      $b.on('remove',function(){ closeDD(); $dd.remove(); });
+      badge();
+      return $b;
+    }
+
     function buildCalHeaderEl(rawName, firstDayStr, lastDayStr, idx, color){
       var name=(rawName&&rawName.trim())||('Calendar '+(idx+1));
       var $wrap=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'});
@@ -8130,6 +8212,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $hd=$('<div class="px-3 py-2 text-dark" style="font-size:12px;background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;display:flex;align-items:baseline;gap:0;flex-wrap:wrap;">');
     if(_validCalRows.length===1){
       $hd.append(buildCalHeaderEl(_validCalRows[0].name,_validCalRows[0].firstDay,_validCalRows[0].lastDay,0,_validCalRows[0].color));
+      $hd.append(_calVFBtn([{cr:_validCalRows[0]}]));
     } else {
       $hd.append($('<span>').css({fontWeight:'700',color:'#212529'}).text('Calendar'));
     }
@@ -8153,6 +8236,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(det.combinedView && _validCalRows.length>1){
       var $cvList=$('<div class="px-3 py-2">').css({background:'#fcfcfd',borderBottom:'1px solid #eef1f4',display:'flex',flexDirection:'column',gap:'3px',fontSize:'12px',alignItems:'flex-start'});
       _validCalRows.forEach(function(cr){ $cvList.append(buildCalHeaderEl(cr.name, cr.firstDay, cr.lastDay, _calRows.indexOf(cr), cr.color)); });
+      $cvList.append(_calVFBtn(_validCalRows.map(function(cr){ return {cr:cr}; })));
       $section.append($cvList);
     }
 
@@ -8744,6 +8828,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         _siteRows=siteRowsFor(g,_ccCalRow.calId);
         schoolIdxs=_siteRows.length?_siteRows.map(function(_r,_i){return _i;}):['_none_'];
       }
+      // Calendar school-view filter (viewing only): drop unselected schools from this hours pass.
+      var _cvfC=_cvfSel(g.id,_ccCalId);
+      if(_cvfC) schoolIdxs=schoolIdxs.filter(function(si){ return si==='_none_' || !!_cvfC[String(si)]; });
 
       // Staffing data for a school context — own slot (bySchool on) or shared aggregate slot.
       function _slotFor(si){
@@ -9122,6 +9209,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $subHdr=$('<div>').css({padding:'6px 14px',background:'#f0f4f8',fontSize:'11px',borderBottom:'1px solid #dee2e6',display:'flex',alignItems:'baseline',gap:'0',flexWrap:'wrap'});
         $subHdr.attr('data-cal-hdr-idx', String(origIdx));
         $subHdr.append(buildCalHeaderEl(calRow.name,calRow.firstDay,calRow.lastDay,origIdx,calRow.color));
+        $subHdr.append(_calVFBtn([{cr:calRow}]));
         $section.append($subHdr);
       }
 
@@ -10190,16 +10278,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _anySDApplied=false;
       if(_siteRows.length) _siteRows.forEach(function(sr,si){ if(getMarkerSdId(_tipCalId, dateKeyForTip,si)) _anySDApplied=true; });
 
-      // If saved per-school overrides give schools DIFFERENT effective times OR counts for this date, an
-      // aggregate single-row display would be wrong — force the per-school breakdown so each school shows its
-      // own values (a count-only override on one school must split it out of a shared group, just like a time).
+      // If saved per-school overrides give schools DIFFERENT effective TIMES for this date, an aggregate
+      // single-row display would be wrong — force the per-school breakdown. Count-only differences (including
+      // date-specific Count overrides) do NOT split the group: the combined row sums each school's effective
+      // count and carries the override indicator, so cnt is deliberately excluded from this signature.
       var _ovForceBySchool=false;
       if(_siteRows.length>1){
         for(var _fri=0;_fri<ROLES2.length && !_ovForceBySchool;_fri++){
           var _fsig=null;
           for(var _fsi=0;_fsi<_siteRows.length;_fsi++){
             var _fo=_rvCellOv(gObj.id,_tipCalId,dateKeyForTip,_fsi,ROLES2[_fri].key);
-            var _fsg=((_fo&&_fo.start!=null)?_fo.start:'\u0000')+'|'+((_fo&&_fo.end!=null)?_fo.end:'\u0000')+'|'+((_fo&&_fo.cnt!=null)?_fo.cnt:'\u0000');
+            var _fsg=((_fo&&_fo.start!=null)?_fo.start:'\u0000')+'|'+((_fo&&_fo.end!=null)?_fo.end:'\u0000');
             if(_fsig===null){ _fsig=_fsg; } else if(_fsg!==_fsig){ _ovForceBySchool=true; break; }
           }
         }
@@ -10207,10 +10296,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Break down by school (School + Special Day columns) when Separate-by-School is enabled
       // OR any Special Day is applied to a subset of schools on this date.
       var bySchool = _siteRows.length>1 && (_tipCo.bySchool || _anySDApplied || _ovForceBySchool);
+      // School-view filter: always break down per school while filtering, then skip unselected schools —
+      // their rows disappear and every subtotal/total built from the surviving rows follows automatically.
+      var _tipVF=_cvfSel(gObj.id,_tipCalId);
+      if(_tipVF && _siteRows.length>1) bySchool=true;
 
       if(bySchool){
         // Per-school: each school uses its OWN counts and its OWN resolved column.
         _siteRows.forEach(function(sRow,si){
+          if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
           var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
           var resolved=resolveSchoolKey(si);
           if(resolved.noHours){
@@ -10690,6 +10784,134 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Renders a breakdown value: plain text normally; when the value is a saved override, a subtle amber
     // highlight with the original Staffing Hours value beside it in small, light parentheses — "3 (2)".
     // The parenthetical clearly reads as the reference value, not the active one.
+    // ── Per-school, date-specific Staff/Coach Count popup ── opened from a combined (multi-school)
+    // Count cell in the pinned Calendar Hours Breakdown. Mirrors the Staffing Hours Edit Coach/Staff
+    // Count popup (pod bracket column, per-school rows, numeric validation, dirty detection, Save /
+    // Discard, Reset to Original Counts) but writes DATE-scoped calCellOverrides {cnt} per school:
+    // saving a value equal to the school's non-date-specific count removes that override entirely.
+    function _openCalCntPopup(r,$anchor,p){
+      $('.cal-day-cnt-popup').remove();
+      var calId=(r._calId!=null?r._calId:p.ctxCalId);
+      if(calId==null){ var _crs=((guideDetails[String(p.gid)]||{}).calendarRows)||[]; var _withId=_crs.filter(function(c2){return c2.calId!=null;}); if(_withId.length===1) calId=_withId[0].calId; }
+      var roles=((guideDetails[String(p.gid)]||{}).roles)||[];
+      var ro=null; for(var _ri=0;_ri<roles.length;_ri++){ if(roles[_ri].key===r.roleKey){ ro=roles[_ri]; break; } }
+      var isCoach=!!(ro&&ro.isCoach), roleName=(ro&&ro.name)||r.roleKey;
+      var dLbl=new Date(p.dateKey+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      var sr=(calId!=null)?(siteRowsFor(p.gObj,calId)||[]):(((guideDetails[String(p.gid)]||{}).siteRows)||[]);
+      var calRows=((guideDetails[String(p.gid)]||{}).calendarRows)||[];
+      var calName=''; for(var _cx=0;_cx<calRows.length;_cx++){ if(String(calRows[_cx].calId)===String(calId)){ calName=(calRows[_cx].name||'').trim(); break; } }
+      var siL=(r.siList||[]).slice().sort(function(x,y){return x-y;});   // Site Breakdown order
+      var base={}, open={}, vals={}, ovAny=false;
+      siL.forEach(function(si){
+        var b=(r.base&&r.base[si]&&parseInt(r.base[si].cnt,10))||0;
+        var ov=getCellOv(p.gid,calId,p.dateKey,si,r.roleKey);
+        var cur=(ov&&ov.cnt!=null)?parseInt(ov.cnt,10):b;
+        if(ov&&ov.cnt!=null) ovAny=true;
+        base[si]=b; open[si]=cur; vals[si]=String(cur);
+      });
+      var pods=(calId!=null)?(podsFor(p.gObj,calId)||[]):[];
+      function podOfSi(si){ var sid=sr[si]&&sr[si].schoolId; if(sid==null) return null; for(var _pi=0;_pi<pods.length;_pi++){ if((pods[_pi].schoolIds||[]).indexOf(sid)>=0) return pods[_pi]; } return null; }
+      var anyPod=siL.some(function(si){ return !!podOfSi(si); });
+      // The pinned Calendar Hours Breakdown sits at zIndex 999998 (its satellite xs-ui dialogs at
+      // 1000000+), so this popup must stack ABOVE it — read the breakdown's actual z and go higher,
+      // falling back to the known value if it can't be read. Clicks then land on the card itself,
+      // whose .xs-ui class makes the breakdown's outside-click handling ignore them.
+      var _bz=parseInt($('.cal-hours-breakdown').css('zIndex'),10); if(isNaN(_bz)) _bz=999998;
+      var $card=$('<div class="sh-cnt-popup cal-day-cnt-popup xs-ui">').css({position:'fixed',zIndex:String(_bz+4),background:'#fff',border:'1px solid #d0d7de',borderRadius:'8px',boxShadow:'0 10px 28px rgba(0,0,0,.2)',padding:'10px 12px 8px',minWidth:'250px'});
+      // Interactions inside the card must never leak to document-level close/unpin handlers.
+      $card.on('mousedown',function(e){ e.stopPropagation(); });
+      $card.append($('<div>').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'2px'})
+        .append($('<span class="cal-day-cnt-title">').css({fontSize:'11.5px',fontWeight:'700',color:'#212529'}).text((isCoach?'Edit Coach Count':'Edit Staff Count')+' \u2014 '+dLbl))
+        .append($('<span class="sh-cnt-x">').css({marginLeft:'auto',cursor:'pointer',color:'#6c757d',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).html('&times;').on('click',function(){ close(); })));
+      $card.append($('<div class="cal-day-cnt-sub">').css({fontSize:'10px',color:'#6c757d',marginBottom:'6px'}).text(roleName+(calName?(' \u00b7 '+calName):'')+' \u00b7 this date only'));
+      var $tbl=$('<table>').css({width:'100%',borderCollapse:'collapse',fontSize:'11.5px'});
+      var $hr=$('<tr>');
+      if(anyPod) $hr.append($('<th class="sh-cnt-pod-cell">').css({textAlign:'left',padding:'4px 4px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700',whiteSpace:'nowrap',width:'1px'}).text('Pod'));
+      $hr.append($('<th>').css({textAlign:'left',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text('School'),
+                 $('<th>').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text((isCoach?'Coach':'Staff')+' Count'));
+      $tbl.append($hr);
+      // Pod runs over the listed schools (same rowspan bracket layout as the Staffing Hours popup).
+      var _runPod={}, _runLen={};
+      (function(){ var i=0; while(i<siL.length){ var p0=podOfSi(siL[i]); if(!p0){ _runPod[i]=null; _runLen[i]=1; i++; continue; } var j=i+1; while(j<siL.length&&podOfSi(siL[j])===p0){ j++; } _runPod[i]=p0; _runLen[i]=j-i; i=j; } })();
+      function podBracketCell(pod,span){
+        var col=_podBracketColor(pod.color);
+        var $td2=$('<td class="sh-cnt-pod-cell sh-cnt-pod-bracket">').attr({rowspan:span,title:pod.name}).css({padding:'0',width:'1px',whiteSpace:'nowrap',position:'relative',verticalAlign:'middle',borderBottom:'1px solid #f1f3f5'});
+        $td2.append($('<div class="sh-cnt-pod-wrap">').css({position:'absolute',top:'0',bottom:'0',left:'0',right:'0',display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',padding:'0 3px',overflow:'hidden'})
+          .append($('<span class="sh-cnt-pod-name">').attr('title',pod.name).css({alignSelf:'center',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'64px',textAlign:'right',fontSize:'10px',fontWeight:'700',color:col,lineHeight:'1.1'}).text(pod.name))
+          .append($('<div class="sh-cnt-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:col,flexShrink:'0'})));
+        $td2.append($('<div class="sh-cnt-pod-sizer">').css({visibility:'hidden',display:'flex',alignItems:'center',gap:'3px',padding:'0 3px',height:'0',overflow:'hidden'})
+          .append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',maxWidth:'64px',fontSize:'10px',fontWeight:'700'}).text(pod.name))
+          .append($('<span>').css({width:'3px',flexShrink:'0'})));
+        return $td2;
+      }
+      var cellBySi={}, $totCell=null;
+      function dirty(){ return siL.some(function(si){ return vals[si]!==String(open[si]); }); }
+      function invalid(){ return siL.some(function(si){ return !/^\d+$/.test(vals[si]); }); }
+      function pendSum(){ var t=0; siL.forEach(function(si){ var v=parseInt(vals[si],10); if(!isNaN(v)) t+=v; }); return t; }
+      function paintCell(si){
+        var $c=cellBySi[si]; if(!$c) return; $c.empty();
+        if(!/^\d+$/.test(vals[si])){ $c.append($('<span>').css({background:'#fdecea',borderRadius:'3px',padding:'0 3px',color:'#b02a37',fontWeight:'600'}).attr('title','Invalid value').text(vals[si])); }
+        else $c.append($('<span class="sh-cnt-popup-val">').css({fontSize:'11px',fontWeight:'600'}).append(_tipOvVal(vals[si],String(vals[si])!==String(base[si]),base[si])));
+        if($totCell) $totCell.text(pendSum());
+        updBar();
+      }
+      siL.forEach(function(si,idx){
+        var $tr=$('<tr class="sh-cnt-popup-row">').attr('data-si',String(si));
+        if(anyPod&&_runLen.hasOwnProperty(idx)){ var _rp=_runPod[idx]; $tr.append(_rp?podBracketCell(_rp,_runLen[idx]):$('<td class="sh-cnt-pod-cell">').css({width:'1px',borderBottom:'1px solid #f1f3f5'})); }
+        var nm=(sr[si]&&sr[si].school&&sr[si].school.trim())||('School '+(si+1));
+        $tr.append($('<td>').css({padding:'4px 6px',borderBottom:'1px solid #f1f3f5',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'240px'}).text(nm));
+        var $cnt=$('<td>').attr('title','Click to edit').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',cursor:'pointer'});
+        cellBySi[si]=$cnt;
+        $cnt.on('click',function(){
+          if($cnt.find('input').length) return;
+          var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(vals[si]);
+          $cnt.empty().append($inp); $inp.trigger('focus');
+          $inp.on('click',function(e2){ e2.stopPropagation(); });
+          $inp.on('input',function(){ var f=String($inp.val()||'').replace(/\D+/g,''); if(String($inp.val())!==f) $inp.val(f); vals[si]=f; if($totCell)$totCell.text(pendSum()); updBar(); });
+          $inp.on('keydown',function(e2){ if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); } else if(e2.key==='Escape'){ e2.stopPropagation(); $inp.off('blur'); vals[si]=String(open[si]); paintCell(si); } });
+          $inp.on('blur',function(){ paintCell(si); });
+        });
+        $tr.append($cnt);
+        $tbl.append($tr);
+        paintCell(si);   // initial render of the effective value (with override styling when present)
+      });
+      var $trT=$('<tr class="sh-cnt-popup-total-row">');
+      if(anyPod) $trT.append($('<td class="sh-cnt-pod-cell">').css({width:'1px'}));
+      $trT.append($('<td>').css({padding:'5px 6px',fontWeight:'700',color:'#212529'}).text('Total'));
+      $totCell=$('<span class="sh-cnt-popup-total">').css({fontSize:'11px',fontWeight:'700',color:'#212529'}).text(pendSum());
+      $trT.append($('<td>').css({padding:'4px 5px',textAlign:'center'}).append($totCell));
+      $tbl.append($trT);
+      $card.append($tbl);
+      var $bar=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',marginTop:'7px'});
+      var $rstLnk=$('<span class="sh-cnt-popup-reset">').css({fontSize:'10px',color:'#0d6efd',cursor:'pointer',textDecoration:'underline',display:ovAny?'inline':'none'}).text('Reset to Original Counts');
+      $rstLnk.on('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); siL.forEach(function(si){ vals[si]=String(base[si]); paintCell(si); }); });
+      var $save=$('<button type="button" class="sh-cnt-popup-save">').css({marginLeft:'auto',fontSize:'10.5px',padding:'3px 12px',background:'#0d6efd',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontWeight:'600'}).text('Save');
+      var $disc=$('<button type="button" class="sh-cnt-popup-cancel">').css({fontSize:'10.5px',padding:'3px 10px',background:'none',color:'#6c757d',border:'1px solid #dee2e6',borderRadius:'5px',cursor:'pointer'}).text('Discard');
+      function updBar(){ if(!$save) return; var en=dirty()&&!invalid(); $save.prop('disabled',!en).css({opacity:en?'1':'0.45',cursor:en?'pointer':'default'}); }
+      // mousedown (not click) so the first press works while a count input still holds focus.
+      var _saved=false;   // double-fire guard: native dispatch + synthetic triggers must not save twice
+      $save.on('mousedown',function(e){ e.preventDefault(); e.stopPropagation();
+        if(_saved) return;
+        $card.find('input').each(function(){ $(this).trigger('blur'); });
+        if(!dirty()||invalid()) return;
+        _saved=true;
+        siL.forEach(function(si){ var v=parseInt(vals[si],10); setCellOv(p.gid,calId,p.dateKey,si,r.roleKey,{cnt:(v===base[si])?null:v}); });
+        close();
+        updateCalendarHours();
+        if(typeof refreshSummary==='function') refreshSummary(p.gObj);
+        if(p.repin) p.repin();
+      });
+      $disc.on('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); close(); });
+      $bar.append($rstLnk,$save,$disc); $card.append($bar);
+      updBar();
+      var _outH=function(ev){ if(!$card[0].contains(ev.target)) close(); };
+      function close(){ document.removeEventListener('mousedown',_outH,true); $card.remove(); }
+      $('body').append($card);
+      var rr=$anchor&&$anchor[0]?$anchor[0].getBoundingClientRect():{left:200,bottom:200};
+      $card.css({top:Math.max(8,Math.min(rr.bottom+6,(window.innerHeight||800)-260))+'px',left:Math.max(8,Math.min(rr.left-60,(window.innerWidth||1200)-280))+'px'});
+      setTimeout(function(){ document.addEventListener('mousedown',_outH,true); },0);
+    }
+
     function _tipOvVal(val,isOv,orig){
       var $w=$('<span>').css({whiteSpace:'nowrap'});
       if(isOv){
@@ -10722,6 +10944,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
         var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'});
         var editable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length && (field!=='cnt' || r.siList.length===1);   // Count is editable only when the row/group is a SINGLE school (siList length 1); a grouped multi-school Count stays read-only so one edit can't be split ambiguously across schools. Start/End are always editable.
+        // Combined multi-school Count: clickable treatment that opens the per-school, DATE-specific
+        // Edit Coach/Staff Count popup (each contributing school gets its own value for this date).
+        var cntGroupEditable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length>1 && field==='cnt';
+        if(cntGroupEditable){
+          $td.css({cursor:'pointer'}).attr('title','Click to edit each school for this date');
+          $td.on('mouseenter.tipedit',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
+          $td.on('mouseleave.tipedit',function(){ $td.css({background:'',boxShadow:''}); });
+          $td.on('click.tipedit',function(e){ e.stopPropagation();
+            var _ta=_tipShowArgs||{};
+            _openCalCntPopup(r,$td,{gid:((_ta.gObj||g).id),dateKey:((_ta.ctx&&_ta.ctx.dateKey)||(_ta.cellDate?isoDate(_ta.cellDate):null)),gObj:(_ta.gObj||g),ctxCalId:((_ta.ctx&&_ta.ctx.calId!=null)?_ta.ctx.calId:null),repin:_repinRebuild});
+          });
+        }
         function paint(){
           $td.empty();
           var ed=_tipEdits[_tipEditKey(r,field)];
@@ -11183,16 +11417,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _anySDApplied=false;
       if(_siteRows.length) _siteRows.forEach(function(sr,si){ if(getMarkerSdId(_tipCalId, dateKeyForTip,si)) _anySDApplied=true; });
 
-      // If saved per-school overrides give schools DIFFERENT effective times OR counts for this date, an
-      // aggregate single-row display would be wrong — force the per-school breakdown so each school shows its
-      // own values (a count-only override on one school must split it out of a shared group, just like a time).
+      // If saved per-school overrides give schools DIFFERENT effective TIMES for this date, an aggregate
+      // single-row display would be wrong — force the per-school breakdown. Count-only differences (including
+      // date-specific Count overrides) do NOT split the group: the combined row sums each school's effective
+      // count and carries the override indicator, so cnt is deliberately excluded from this signature.
       var _ovForceBySchool=false;
       if(_siteRows.length>1){
         for(var _fri=0;_fri<ROLES2.length && !_ovForceBySchool;_fri++){
           var _fsig=null;
           for(var _fsi=0;_fsi<_siteRows.length;_fsi++){
             var _fo=_rvCellOv(gObj.id,_tipCalId,dateKeyForTip,_fsi,ROLES2[_fri].key);
-            var _fsg=((_fo&&_fo.start!=null)?_fo.start:'\u0000')+'|'+((_fo&&_fo.end!=null)?_fo.end:'\u0000')+'|'+((_fo&&_fo.cnt!=null)?_fo.cnt:'\u0000');
+            var _fsg=((_fo&&_fo.start!=null)?_fo.start:'\u0000')+'|'+((_fo&&_fo.end!=null)?_fo.end:'\u0000');
             if(_fsig===null){ _fsig=_fsg; } else if(_fsg!==_fsig){ _ovForceBySchool=true; break; }
           }
         }
@@ -11200,10 +11435,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Break down by school (School + Special Day columns) when Separate-by-School is enabled
       // OR any Special Day is applied to a subset of schools on this date.
       var bySchool = _siteRows.length>1 && (_tipCo.bySchool || _anySDApplied || _ovForceBySchool);
+      // School-view filter: always break down per school while filtering, then skip unselected schools —
+      // their rows disappear and every subtotal/total built from the surviving rows follows automatically.
+      var _tipVF=_cvfSel(gObj.id,_tipCalId);
+      if(_tipVF && _siteRows.length>1) bySchool=true;
 
       if(bySchool){
         // Per-school: each school uses its OWN counts and its OWN resolved column.
         _siteRows.forEach(function(sRow,si){
+          if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
           var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
           var resolved=resolveSchoolKey(si);
           if(resolved.noHours){
