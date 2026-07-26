@@ -9740,6 +9740,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // ── Click-to-pin: keep the breakdown popup open until the user clicks outside it (or presses Esc) ──
     function _calTipOutside(e){
       if(!_tipPinned) return;
+      // A click handler inside a satellite popup may repaint its own cell (empty()+input), detaching the
+      // clicked value span before this document-level handler runs. A detached target's closest() finds
+      // nothing, so every protection below would silently fail. Origin unknowable → never treat as outside.
+      if(e.target && e.target.nodeType===1 && !document.contains(e.target)) return;
       if(document.querySelector('.xs-editor')) return; // Extra Shift editor open → modal for close-gestures: only its own X/Discard/Save (confirm-if-dirty) may dismiss, so a stray post-dropdown-selection click can never blow away unsaved work
       if($(e.target).closest('.xs-ui').length) return; // Extra Shift editor / its dialogs — part of the popup's editing surface, never "outside"
       if($(e.target).closest('.tp-dd').length) return; // time-picker dropdown (body portal; may already be detached after selection) — part of editing, not "outside"
@@ -10819,8 +10823,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // whose .xs-ui class makes the breakdown's outside-click handling ignore them.
       var _bz=parseInt($('.cal-hours-breakdown').css('zIndex'),10); if(isNaN(_bz)) _bz=999998;
       var $card=$('<div class="sh-cnt-popup cal-day-cnt-popup xs-ui">').css({position:'fixed',zIndex:String(_bz+4),background:'#fff',border:'1px solid #d0d7de',borderRadius:'8px',boxShadow:'0 10px 28px rgba(0,0,0,.2)',padding:'10px 12px 8px',minWidth:'250px'});
-      // Interactions inside the card must never leak to document-level close/unpin handlers.
-      $card.on('mousedown',function(e){ e.stopPropagation(); });
+      // Interactions inside the card must never leak to document-level close/unpin handlers
+      // (real clicks fire mousedown AND click; stop them all at the card boundary).
+      $card.on('mousedown click pointerdown',function(e){ e.stopPropagation(); });
       $card.append($('<div>').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'2px'})
         .append($('<span class="cal-day-cnt-title">').css({fontSize:'11.5px',fontWeight:'700',color:'#212529'}).text((isCoach?'Edit Coach Count':'Edit Staff Count')+' \u2014 '+dLbl))
         .append($('<span class="sh-cnt-x">').css({marginLeft:'auto',cursor:'pointer',color:'#6c757d',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).html('&times;').on('click',function(){ close(); })));
@@ -10863,7 +10868,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($('<td>').css({padding:'4px 6px',borderBottom:'1px solid #f1f3f5',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'240px'}).text(nm));
         var $cnt=$('<td>').attr('title','Click to edit').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',cursor:'pointer'});
         cellBySi[si]=$cnt;
-        $cnt.on('click',function(){
+        $cnt.on('click',function(e0){
+          e0.stopPropagation();   // the repaint below detaches e0.target — keep the click away from outside-closers
           if($cnt.find('input').length) return;
           var $inp=$('<input type="text">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(vals[si]);
           $cnt.empty().append($inp); $inp.trigger('focus');
@@ -10906,7 +10912,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $bar.append($rstLnk,$save,$disc); $card.append($bar);
       updBar();
       var _outH=function(ev){ if(!$card[0].contains(ev.target)) close(); };
-      function close(){ document.removeEventListener('mousedown',_outH,true); $card.remove(); }
+      var _closed=false;
+      function close(){ if(_closed) return; _closed=true; document.removeEventListener('mousedown',_outH,true); $card.remove(); }
+      $card.on('remove',function(){ if(!_closed){ _closed=true; document.removeEventListener('mousedown',_outH,true); } });
       $('body').append($card);
       var rr=$anchor&&$anchor[0]?$anchor[0].getBoundingClientRect():{left:200,bottom:200};
       $card.css({top:Math.max(8,Math.min(rr.bottom+6,(window.innerHeight||800)-260))+'px',left:Math.max(8,Math.min(rr.left-60,(window.innerWidth||1200)-280))+'px'});
