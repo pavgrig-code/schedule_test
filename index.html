@@ -1078,6 +1078,7 @@ $(function(){
   let sProg='',sCoach='',sSchool='',sDays=[],sDs='',sDe='',sColor=0,sStaffType='Coach';
   var staffFilter='';
   var viewMode='day';
+  var shiftDayLayout='timeline';   // Shift Schedule Day-view layout: 'timeline' (roles down, time across) | 'grid' (time down, roles across)
   var draggingId=null; // track which block is being dragged
   var _dragOrigDow=undefined; // day-of-week of the chip being dragged
   var pageMode='schedule'; // 'schedule' or 'availability'
@@ -1616,6 +1617,8 @@ $(function(){
       params.set('date',   viewDateStr());
       if(staffFilter)     params.set('search',      staffFilter);
     }
+    // Shift Schedule Day-view layout rides along only when it differs from the default.
+    if(pageMode==='schedule' && viewMode==='day' && shiftDayLayout!=='timeline') params.set('layout', shiftDayLayout);
     return window.location.pathname + '?' + params.toString();
   }
 
@@ -1709,6 +1712,7 @@ $(function(){
         if(_sd && /^\d{4}-\d{2}-\d{2}$/.test(_sd)){ var _dp=_sd.split('-'); _ssY=parseInt(_dp[0],10); _ssM=parseInt(_dp[1],10)-1; _ssScrollDate=_sd; }
       }
     } else if(sec==='schedule'||sec==='site_schedule'||sec==='shift_schedule'){   // legacy values accepted; render() re-writes the URL as shift_schedule
+      var _lay=params.get('layout'); if(_lay==='grid'||_lay==='timeline') shiftDayLayout=_lay;
       pageMode='schedule';
       // Restore guide + Calendars/Schools filters from the URL
       try{ var _sgid=params.get('planning_guide'); selectedGuideId=_sgid||null; }catch(e){ selectedGuideId=null; }
@@ -1743,6 +1747,7 @@ $(function(){
     $('#btn-availability').toggleClass('active',pageMode==='availability');
     $('#btn-staff-schedule').toggleClass('active',pageMode==='staff_schedule');
     $('.view-toggle,.date-nav').toggle(pageMode!=='people'&&pageMode!=='planning'&&pageMode!=='staff_schedule'&&pageMode!=='workspace');
+    $('#shift-layout-toggle').toggle(pageMode==='schedule'&&viewMode==='day');
     // Filter bar: mirror setPageMode's rule on (re)load — panel-based modes never show the top filter bar.
     // Without this, booting directly into Planning/People/Staff Schedule left an empty filter strip visible
     // until the first mode switch. Schedule mode keeps hiding it via updateSchedFilterVisibility below.
@@ -4364,6 +4369,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(schedFilterSchool!=='')   p.set('school',  schedFilterSchool);
       if(schedFilterCalendar!=='') p.set('calendar',schedFilterCalendar);
       p.set('view', viewMode);
+      if(viewMode==='day' && shiftDayLayout!=='timeline') p.set('layout', shiftDayLayout);   // Day-view layout, only when non-default
       p.set('day',  viewDateStr());
       var url=window.location.pathname+'?'+p.toString();
       if(replace) history.replaceState({},'',url); else history.pushState({},'',url);
@@ -4899,6 +4905,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // controls (Schedule + Availability modes). In Schedule mode they're relocated into the details
   // panel header; this moves the actual DOM nodes back to the toolbar (preserving their handlers)
   // for every other mode, and is called before the panel is emptied so they're never destroyed.
+  // ── Shift Schedule Day-view layout toggle (Timeline | Grid) ── mounted once right after the
+  // Today badge; visible only in Schedule mode Day view. Switching re-renders in place (no reload)
+  // and the choice persists across day navigation (module state + a layout URL param when non-default).
+  function ensureShiftLayoutToggle(){
+    if($('#shift-layout-toggle').length) return;
+    function ic(kind){
+      return kind==='timeline'
+        ? '<svg width="15" height="15" style="width:15px;height:15px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="4" x2="11" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="9" y2="12"/></svg>'
+        : '<svg width="15" height="15" style="width:15px;height:15px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="2" x2="4" y2="14"/><line x1="8" y1="2" x2="8" y2="14"/><line x1="12" y1="2" x2="12" y2="14"/><line x1="2" y1="5" x2="14" y2="5"/></svg>';
+    }
+    var $wrap=$('<span id="shift-layout-toggle" role="group" aria-label="Day view layout">').css({display:'inline-flex',alignItems:'center',marginLeft:'10px',border:'1px solid #dee2e6',borderRadius:'6px',overflow:'hidden',verticalAlign:'middle',background:'#fff'});
+    ['timeline','grid'].forEach(function(k,i){
+      var $b=$('<button type="button" class="shift-layout-btn">').attr({'data-layout':k,'aria-pressed':'false','aria-label':(k==='timeline'?'Timeline':'Grid'),title:(k==='timeline'?'Timeline \u2014 roles down the side, time across':'Grid \u2014 time down the side, roles across')})
+        .css({display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'4px 8px',border:'none',borderLeft:i?'1px solid #dee2e6':'none',background:'none',color:'#6c757d',cursor:'pointer',lineHeight:'1'})
+        .html(ic(k));   // icon-only (15x15); the name lives in aria-label + title
+      $b.on('click',function(){
+        if(shiftDayLayout===k) return;
+        shiftDayLayout=k;
+        _syncShiftLayoutBtns();
+        render(true);   // immediate in-place re-render (the schedule URL sync picks up the layout param)
+      });
+      $wrap.append($b);
+    });
+    $('#today-badge').after($wrap);
+    _syncShiftLayoutBtns();
+  }
+  function _syncShiftLayoutBtns(){
+    $('#shift-layout-toggle .shift-layout-btn').each(function(){
+      var on=$(this).attr('data-layout')===shiftDayLayout;
+      $(this).attr('aria-pressed',on?'true':'false').css({background:on?'#e7f1ff':'none',color:on?'#0d6efd':'#6c757d'});
+    });
+  }
+
   function _restoreSchedControlsToToolbar(){
     var $tb=$('.toolbar'); if(!$tb.length) return;
     var $vt=$('.view-toggle'), $dn=$('.date-nav');
@@ -4910,6 +4949,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Tear down any portalled calendar-filter menu before rebuilding
     var prev=$('#filter-calendar-dd').data('cleanup'); if(typeof prev==='function') prev();
     _restoreSchedControlsToToolbar(); // move borrowed controls out before empty() so they aren't destroyed
+    ensureShiftLayoutToggle();
+    $('#shift-layout-toggle').toggle(viewMode==='day');   // Day view only; Week/Month hide it
+    _syncShiftLayoutBtns();
     var $panel=$('#schedule-panel').empty();
     if(!g){
       // No guide selected → instructional state only; hide the borrowed Day/Week/Month + date-nav
@@ -5048,7 +5090,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(!cnt) return;
         var _raw=calcH(d.start,d.end);
         var h=adjForBillable(_raw,(origIdx!=null?calRows[origIdx]:null)); if(!h||h<=0) return;
-        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, status:billableStatus(_raw,(origIdx!=null?calRows[origIdx]:null))});
+        var _rawH=calcH(d.start,d.end);
+        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h,
+          brkMins:(_rawH!=null&&h!=null&&(_rawH-h)>1/120)?Math.round((_rawH-h)*60):0,
+          status:billableStatus(_raw,(origIdx!=null?calRows[origIdx]:null))});
       });
       return {noHours:false, sd:sd, blocks:out};
     }
@@ -5213,7 +5258,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         } else if(!datesInRange.length){
           $mx.append($('<div>').css({padding:'16px 12px',fontSize:'11.5px',color:'var(--tx2)'}).text('This calendar has no days in the selected '+viewMode+'.'));
         } else if(viewMode==='day'){
-          $mx.append(buildDayGrid(si, origIdx, datesInRange[0], insts, sch.name, cal.name));
+          $mx.append((shiftDayLayout==='grid'?buildDayGridVertical:buildDayGrid)(si, origIdx, datesInRange[0], insts, sch.name, cal.name));
         } else {
           $mx.append(buildPeriodTable(si, origIdx, datesInRange, insts, sch.name, cal.name));
         }
@@ -5303,6 +5348,123 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $_nowOv=$('<div>').css({position:'absolute',left:LBLW+'px',top:'36px',bottom:'0',width:TW+'px',pointerEvents:'none',zIndex:'3'});
         $_nowOv.append($('<div class="now-line">').css({left:_nx+'px',top:'0',bottom:'0'}).append('<div class="now-dot">'));
         $outer.append($_nowOv);
+      }
+      $scrollWrap.append($outer);
+      return $scrollWrap;
+    }
+
+    // ── DAY view, GRID layout ── the same day transposed: role instances across the top, time down
+    // the side. The axis spans only this day's actual shifts (earliest start → latest end, whole
+    // hours) and re-derives every render, so it follows shift and override changes automatically.
+    // Blocks are the same .site-sched-block elements (same shiftKey, assignment row, registry,
+    // details click, calendar-color styling); Total Hours + meal-break minutes move to a dedicated
+    // third line so narrow columns stay readable — height grows instead of width.
+    function buildDayGridVertical(si, origIdx, dateObj, insts, schoolName, calendarName){
+      var dayRes=resolveDay(si, origIdx, dateObj);
+      var byRole={}; dayRes.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
+      var _xsB=xsBlocksFor(origIdx, isoD(dateObj), schoolName), _xsInsts=[];
+      _xsB.forEach(function(xb){ byRole[xb.xsKey]=xb; for(var _n=1;_n<=xb.count;_n++) _xsInsts.push({roleKey:xb.xsKey, roleLabel:xb.roleLabel, num:_n}); });
+      insts=_interleaveXs(insts, _xsInsts);
+      var mn=null,mx=null;
+      insts.forEach(function(inst){ var b=byRole[inst.roleKey]; if(!b||inst.num>b.count) return; var ds=decH(b.start),de=decH(b.end); if(ds==null||de==null||de<=ds) return; if(mn==null||ds<mn)mn=ds; if(mx==null||de>mx)mx=de; });
+      if(mn==null){ mn=8; mx=17; }
+      var GSH=Math.floor(mn), GEH=Math.ceil(mx), GN=Math.max(GEH-GSH,1);
+      var HH=64, COLW=170, TIMEW=64, HDRH=72;
+      // Pass 1 — resolve every role instance's shift (if any) and pre-create its BLANK block, so the
+      // sticky header can host the live assignment row while the block itself stays a purely
+      // time-positioned placeholder (kept clickable; to be divided into sessions later).
+      var items=insts.map(function(inst,ci){
+        var isXs=inst.roleKey.indexOf('xs:')===0;
+        var it={inst:inst, ci:ci, isXs:isXs, firstOfRole:(ci>0 && insts[ci-1].roleKey !== inst.roleKey), b:null, ds:null, de:null, shiftKey:null, $el:null};
+        var b=byRole[inst.roleKey];
+        if(b && inst.num<=b.count){
+          var ds=decH(b.start), de=decH(b.end);
+          if(ds!=null&&de!=null&&de>ds){
+            it.b=b; it.ds=ds; it.de=de;
+            it.shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(dateObj)+'|'+inst.roleKey+'|'+inst.num;
+            var shiftKey=it.shiftKey;
+            var y=(ds-GSH)*HH, bh=Math.max((de-ds)*HH-4, 12);
+            it.$el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">')
+              .css({left:'4px',right:'4px',width:'auto',top:y+'px',height:bh+'px',cursor:'default',pointerEvents:'none'})
+              .attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
+            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+          }
+        }
+        return it;
+      });
+      // Scoped header styles (injected once): the Assign Staff label and the assigned name render at
+      // 12px (both inherit from the row — neither carries an inline font-size), and the remove × is
+      // made visible here — the base .shift-x rule keeps it at opacity 0 until a .sched-block hover,
+      // which can never happen inside a header.
+      if(!document.getElementById('grid-hdr-style')){
+        var _ghs=document.createElement('style'); _ghs.id='grid-hdr-style';
+        _ghs.textContent='.grid-hdr-assign{font-size:12px;} .grid-hdr-assign .shift-x{opacity:.5;} .grid-hdr-assign:hover .shift-x,.grid-hdr-assign .shift-x:hover{opacity:1;}';
+        document.head.appendChild(_ghs);
+      }
+      var $scrollWrap=$('<div>').css({overflow:'auto',width:'100%',maxHeight:'640px',position:'relative'});
+      var $outer=$('<div>').css({position:'relative',width:(TIMEW+COLW*insts.length)+'px'});
+      // Sticky header row — carries the shift information that used to live inside the blocks:
+      // role, the actionable Assign Staff row, the time range, and Total Hours + status badge.
+      var $hdrRow=$('<div>').css({display:'flex',height:HDRH+'px',position:'sticky',top:'0',zIndex:'6',background:'var(--bg2)',borderBottom:'1px solid var(--bd2)'});
+      $hdrRow.append($('<div>').css({position:'sticky',left:'0',zIndex:'7',flexShrink:'0',width:TIMEW+'px',background:'var(--bg2)',borderRight:'1px solid var(--bd2)'}));
+      items.forEach(function(it){
+        var inst=it.inst, ci=it.ci, isXs=it.isXs;
+        var $hc=$('<div>').css({width:COLW+'px',flexShrink:'0',boxSizing:'border-box',display:'flex',alignItems:'stretch',padding:'4px 6px 4px 4px',borderLeft:ci===0?'none':(it.firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)'),background:isXs?'#fff8e6':'transparent',overflow:'hidden'});
+        var $in=$('<div>').css({flex:'1 1 auto',minWidth:'0',display:'flex',flexDirection:'column',justifyContent:'center',gap:'2px'});
+        var $roleLine=$('<div>').css({fontSize:'10px',fontWeight:'600',color:'#6c757d',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',inst.roleLabel+' #'+inst.num).text(inst.roleLabel+' #'+inst.num);
+        if(isXs) $roleLine.append($('<span>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',textTransform:'uppercase',letterSpacing:'.04em',marginLeft:'4px'}).text('Extra Shift'));
+        $in.append($roleLine);
+        if(it.$el){
+          var $aRow=$('<div class="block-assign-row grid-hdr-assign">');
+          renderShiftAssign($aRow, it.$el, it.shiftKey, 'Assign Staff', true);
+          $in.append($aRow);
+          _shiftRegistry.push({shiftKey:it.shiftKey, dateStr:isoD(dateObj), start:it.ds, end:it.de, $host:$aRow});
+          var $tRow=$('<div class="block-time-row">').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',fmtT(it.ds)+' \u2013 '+fmtT(it.de));
+          $tRow.append($('<span class="block-time">').text(fmtT(it.ds)+' \u2013 '+fmtT(it.de)));
+          $in.append($tRow);
+          var $hRow=$('<div class="block-hours-row">').css({display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',overflow:'hidden'}).attr('title',fmtHrs(it.b.hrsEach)+(it.b.status?(' '+it.b.status.text):''));
+          $hRow.append($('<span class="block-time" style="font-weight:700;">').text(fmtHrs(it.b.hrsEach)));
+          if(it.b.status) $hRow.append($('<span class="block-status" style="font-weight:800;">').css({fontSize:'9px',color:it.b.status.color}).text(it.b.status.text));
+          $in.append($hRow);
+        }
+        if(it.$el){
+          // The header (not the blank block) is the click target for Shift Details. Interactions inside
+          // the assignment row (Assign Staff, staff search, the remove ×) never open the popup.
+          (function(sk){
+            $hc.css('cursor','pointer').on('click',function(e){
+              if($(e.target).closest('.block-assign-row').length) return;
+              openShiftDetails(sk);
+            });
+          })(it.shiftKey);
+        }
+        $hc.append($in);
+        $hdrRow.append($hc);
+      });
+      $outer.append($hdrRow);
+      var $body=$('<div>').css({display:'flex',position:'relative'});
+      var $tg=$('<div>').css({position:'sticky',left:'0',zIndex:'4',flexShrink:'0',width:TIMEW+'px',background:'var(--bg2)',borderRight:'1px solid var(--bd2)'});
+      for(var th=GSH;th<GEH;th++) $tg.append($('<div>').css({height:HH+'px',boxSizing:'border-box',borderTop:th===GSH?'none':'1px solid var(--bd2)',display:'flex',alignItems:'flex-start',justifyContent:'flex-end',padding:'2px 6px 0 0',fontSize:'9.5px',fontWeight:'700',color:'#495057'}).text(hlbl(th)));
+      $body.append($tg);
+      items.forEach(function(it){
+        var ci=it.ci;
+        var $col=$('<div>').css({width:COLW+'px',flexShrink:'0',boxSizing:'border-box',position:'relative',height:(GN*HH)+'px',borderLeft:ci===0?'none':(it.firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)'),background:it.isXs?'#fffdf4':'transparent'});
+        for(var gh=GSH+1;gh<GEH;gh++) $col.append($('<div>').css({position:'absolute',left:'0',right:'0',top:((gh-GSH)*HH)+'px',borderTop:'1px solid var(--bd2)',opacity:'.6',pointerEvents:'none'}));
+        if(it.$el) $col.append(it.$el);
+        $body.append($col);
+      });
+      $outer.append($body);
+      if(isTodayDate(dateObj)){
+        // Horizontal current-time line built from plain divs — the .now-line/.now-dot classes are
+        // sized for the timeline's VERTICAL line (width:2px, left offsets) and skewed this one.
+        // Anchored at the time-gutter edge (exactly where the axis labels sit) and spanning to the
+        // last role column via right:0 on the grid-wide overlay.
+        var _nowH=new Date().getHours()+new Date().getMinutes()/60;
+        if(_nowH>=GSH && _nowH<=GEH){
+          var _ny=HDRH+(_nowH-GSH)*HH;
+          var $_nowLine=$('<div class="grid-now-line">').css({position:'absolute',left:TIMEW+'px',right:'0',top:(_ny-1)+'px',height:'2px',background:'var(--red)',zIndex:'3',pointerEvents:'none'});
+          $_nowLine.append($('<div>').css({position:'absolute',left:'-4px',top:'-3px',width:'8px',height:'8px',borderRadius:'50%',background:'var(--red)'}));
+          $outer.append($_nowLine);
+        }
       }
       $scrollWrap.append($outer);
       return $scrollWrap;
