@@ -4905,6 +4905,466 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // controls (Schedule + Availability modes). In Schedule mode they're relocated into the details
   // panel header; this moves the actual DOM nodes back to the toolbar (preserving their handlers)
   // for every other mode, and is called before the panel is emptied so they're never destroyed.
+  // ── Sessions (Shift Schedule Grid layout) ──────────────────────────────────────
+  // A session subdivides the blank Grid shift placeholders: it belongs to one school/calendar row,
+  // covers one or more simultaneous role instances (shifts), recurs on chosen weekdays within a
+  // date range, and renders as colored blocks over the placeholders. Stored on guideDetails[gid]
+  // (.sessions + .sessionTypes) so Export/Import round-trips it with everything else.
+  var SESSION_TYPE_DEFAULTS=[
+    {name:'Homework Lab', color:'#5e35b1'},
+    {name:'STEM',         color:'#00695c'},
+    {name:'Arts',         color:'#ad1457'},
+    {name:'Sports',       color:'#1565c0'},
+    {name:'Snack/Supper', color:'#e65100'},
+    {name:'Check-in',     color:'#546e7a'},
+    {name:'Sign-out',     color:'#37474f'}
+  ];
+  var SESSION_CUSTOM_COLOR='#5f6b76';
+  // Same preset palette as the Calendar color picker (the session-block text color adapts
+  // per swatch via _sessContrast, so light presets stay readable too).
+  var SESSION_COLORS=[
+    '#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688',
+    '#4caf50','#ffeb3b','#ffc107','#ff9800','#ff5722','#795548','#9e9e9e','#607d8b'
+  ];
+  var _schedResolveDay=null;   // set by the schedule renderer; used for occurrence validation
+  function _sessUid(){ return 'ss_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function _sessDet(gid){ var k=String(gid); if(!guideDetails[k]) guideDetails[k]={}; return guideDetails[k]; }
+  function getSessions(gid){ var det=guideDetails[String(gid)]; return (det&&det.sessions)||[]; }
+  function _sessSave(gid,sess){
+    var det=_sessDet(gid); if(!det.sessions) det.sessions=[];
+    var i; for(i=0;i<det.sessions.length;i++){ if(det.sessions[i].id===sess.id){ det.sessions[i]=sess; return; } }
+    det.sessions.push(sess);
+  }
+  function _sessTypesFor(gid){
+    var det=guideDetails[String(gid)]||{}; var extra=det.sessionTypes||[]; var out=SESSION_TYPE_DEFAULTS.slice();
+    extra.forEach(function(t){ if(!t||!t.name) return;
+      var dup=out.some(function(d){ return d.name.toLowerCase()===String(t.name).toLowerCase(); });
+      if(!dup) out.push({name:t.name, color:t.color||SESSION_CUSTOM_COLOR});
+    });
+    return out;
+  }
+  function _sessTypeColor(gid,name){
+    var ts=_sessTypesFor(gid), i;
+    for(i=0;i<ts.length;i++){ if(ts[i].name.toLowerCase()===String(name||'').toLowerCase()) return ts[i].color; }
+    return SESSION_CUSTOM_COLOR;
+  }
+  function _sessRememberType(gid,name,color){
+    if(!name) return;
+    var isDef=SESSION_TYPE_DEFAULTS.some(function(d){ return d.name.toLowerCase()===name.toLowerCase(); });
+    if(isDef) return;
+    var det=_sessDet(gid); if(!det.sessionTypes) det.sessionTypes=[];
+    var i; for(i=0;i<det.sessionTypes.length;i++){ if(det.sessionTypes[i].name.toLowerCase()===name.toLowerCase()){ det.sessionTypes[i].color=color; return; } }
+    det.sessionTypes.push({name:name,color:color});
+  }
+  function _sessDefDur(type){
+    var t=String(type||'').toLowerCase();
+    if(t==='check-in') return 20;
+    if(t==='snack/supper') return 25;
+    if(t==='sign-out') return 30;
+    return 45;
+  }
+  function _sessContrast(hex){
+    var m=/^#?([0-9a-f]{6})$/i.exec(String(hex||'')); if(!m) return '#212529';
+    var n=parseInt(m[1],16), r=(n>>16)&255, gg=(n>>8)&255, b=n&255;
+    return (0.299*r+0.587*gg+0.114*b)>150 ? '#212529' : '#ffffff';
+  }
+  function sessOccursOn(sess, iso, dow){
+    return sess.days.indexOf(dow)>=0 && iso>=sess.startDate && iso<=sess.endDate;
+  }
+  function _sessMemberOf(sess, roleKey, num){
+    return sess.shifts.some(function(sh){ return sh.roleKey===roleKey && sh.num===num; });
+  }
+  function _sessOnDate(sess, iso, dow){
+    // New model: one saved occurrence date per session. Older recurring records (days + date
+    // range) keep rendering through the legacy rule until edited or copied.
+    if(sess && sess.date) return sess.date===iso;
+    return sessOccursOn(sess, iso, dow);
+  }
+  // opts: {mode:'add'|'edit', gid, guideName, si, origIdx, calRow, dateIso, dow, dayInsts, clicked, startDec, sess}
+  function openSessionDialog(opts){
+    $('#sess-modal').remove();
+    $('#sess-confirm-card').remove();
+    $('#sess-color-pop').remove();
+    var editing = opts.mode==='edit', sess = opts.sess||null;
+
+    var st={
+      shifts: editing ? sess.shifts.slice() : [{roleKey:opts.clicked.roleKey, num:opts.clicked.num}],
+      type: editing ? sess.type : '',
+      color: editing ? sess.color : SESSION_CUSTOM_COLOR,
+      colorTouched: editing,
+      start: editing ? sess.start : opts.startDec,
+      end: editing ? sess.end : null,
+      endTouched: editing,
+      occIso: editing ? (sess.date||opts.dateIso) : opts.dateIso,
+      notes: editing ? (sess.notes||'') : ''
+    };
+    function instFor(sh){ var i; for(i=0;i<opts.dayInsts.length;i++){ var d=opts.dayInsts[i]; if(d.roleKey===sh.roleKey&&d.num===sh.num) return d; } return null; }
+    function sharedRange(){
+      var s=null,e=null;
+      st.shifts.forEach(function(sh){ var d=instFor(sh); if(!d) return; if(s==null||d.ds>s)s=d.ds; if(e==null||d.de<e)e=d.de; });
+      return {s:(s==null?0:s), e:(e==null?24:e)};
+    }
+    function recalcEnd(){
+      if(st.endTouched||st.start==null) return;
+      var r=sharedRange();
+      st.end=Math.min(st.start+_sessDefDur(st.type)/60, r.e);
+      $('#sess-time-end').val(fmtT(st.end));
+    }
+    if(!editing){ recalcEnd(); if(st.end==null) st.end=st.start+0.75; }
+    // A floating card like the app's other popups — NO darkening backdrop. The box class is
+    // .sched-modal (the real styled modal box; the bare .modal class has no CSS rule at all,
+    // which is why the previous overlay-based dialog rendered as an invisible box).
+    var $md=$('<div class="sched-modal" id="sess-modal">').css({position:'fixed',left:'50%',top:'7vh',transform:'translateX(-50%)',width:'300px',maxWidth:'94vw',maxHeight:'86vh',zIndex:'1000005'});
+    var $hd=$('<div class="modal-header">');
+    var _hdD=new Date(st.occIso+'T00:00:00');
+    var _DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], _MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var $hdL=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',minWidth:'0'});
+    $hdL.append($('<span class="modal-header-title">').text(editing?'Edit Session':'Add Session'));
+    $hdL.append($('<span>').css({width:'1px',height:'13px',background:'var(--bd2,#d4dae0)',flexShrink:'0'}));
+    $hdL.append($('<span id="sess-occ-date">').css({fontSize:'11.5px',fontWeight:'600',color:'#6c757d',whiteSpace:'nowrap'})
+      .text(_DN[_hdD.getDay()]+', '+_MN[_hdD.getMonth()]+' '+_hdD.getDate()+', '+_hdD.getFullYear()));
+    $hd.append($hdL);
+    $hd.append($('<button class="modal-close" id="sess-modal-close">').html('&#215;'));
+    $md.append($hd);
+    // Compact context row: the calendar day (with its color circle) and the school.
+    var $ctx=$('<div id="sess-ctx">').css({display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap',padding:'7px 12px 0',fontSize:'11px',color:'#495057',lineHeight:'14px'});
+    $ctx.append($('<span id="sess-ctx-cal-dot">').css({width:'9px',height:'9px',borderRadius:'50%',background:(opts.calRow&&opts.calRow.color)||'#cfd6df',border:'1px solid rgba(0,0,0,.15)',flexShrink:'0'}));
+    $ctx.append($('<span id="sess-ctx-cal">').css({fontWeight:'700'}).text((opts.calRow&&opts.calRow.name)||''));
+    if(opts.schoolName){
+      $ctx.append($('<span>').css({color:'#adb5bd'}).text('·'));
+      $ctx.append($('<span id="sess-ctx-school">').css({minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(opts.schoolName));
+    }
+    $md.append($ctx);
+    var $bd=$('<div class="modal-body">');
+    // Compact spacing (injected once): tight, CONSISTENT gaps between every section instead of the
+    // default field margins; keeps the Notes area small and the whole card free of blank stretches.
+    if(!document.getElementById('sess-modal-style')){
+      var _sms=document.createElement('style'); _sms.id='sess-modal-style';
+      _sms.textContent='#sess-modal .modal-body{padding:10px 12px;} #sess-modal .field{margin-bottom:8px;} #sess-modal label{margin-bottom:2px;display:block;} #sess-modal .section-div{margin:8px 0;} #sess-modal .modal-footer{padding:8px 12px;} #sess-modal .wysiwyg-body{min-height:54px;}';
+      document.head.appendChild(_sms);
+    }
+    // ─ Shifts ─
+    var $shF=$('<div class="field">'); $shF.append($('<label>').text('Shifts'));
+    var $shList=$('<div id="sess-shift-list">').css({display:'flex',flexDirection:'column',gap:'3px'});
+    $shF.append($shList);
+    var $addWrap=$('<div id="sess-add-wrap">').css({marginTop:'5px',position:'relative'});
+    var $addIn=$('<input type="text" class="std-input" id="sess-add-shift" placeholder="Add Shift" autocomplete="off">');
+    var $addList=$('<div id="sess-add-list">').css({display:'none',position:'absolute',left:'0',right:'0',top:'100%',zIndex:'41',background:'#fff',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'6px',boxShadow:'0 6px 18px rgba(20,30,40,.12)',maxHeight:'170px',overflow:'auto'});
+    $addWrap.append($addIn).append($addList);
+    $shF.append($addWrap);
+    $bd.append($shF).append($('<hr class="section-div"/>'));
+    function shiftRowHtml(d,inc){
+      var nm=(function(){ var sid=scheduleAssignments[d.shiftKey]; if(sid==null) return null; var i=_staffIdxById(sid); return i>=0?STAFF[i].n:null; })();
+      var base=instFor(opts.clicked)||d;
+      var timeTxt=(d.ds!==base.ds||d.de!==base.de)?(fmtT(d.ds)+' – '+fmtT(d.de)):'';
+      return {label:d.roleLabel+' #'+d.num, time:timeTxt, staff:nm, included:inc};
+    }
+    function renderShifts(){
+      $shList.empty();
+      st.shifts.forEach(function(sh){
+        var d=instFor(sh); if(!d) return;
+        var r=shiftRowHtml(d,true);
+        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 8px',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'5px',background:'#fbfcfe',fontSize:'11.5px'});
+        $row.append($('<span>').css({fontWeight:'700',color:'#343a40'}).text(r.label));
+        if(r.time) $row.append($('<span>').css({color:'#6c757d'}).text(r.time));
+        if(r.staff) $row.append($('<span>').css({color:'#0a4ea8',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0',flex:'0 1 auto'}).attr('title',r.staff).text(r.staff));
+        var $x=$('<span class="sess-shift-x">').css({marginLeft:'auto',cursor:st.shifts.length>1?'pointer':'not-allowed',fontWeight:'700',color:st.shifts.length>1?'#6c757d':'#ced4da',padding:'0 3px'}).attr('title',st.shifts.length>1?'Remove shift from session':'At least one shift must remain').html('&#215;');
+        if(st.shifts.length>1){
+          $x.on('click',function(){
+            st.shifts=st.shifts.filter(function(q){ return !(q.roleKey===sh.roleKey&&q.num===sh.num); });
+            var r2=sharedRange();
+            if(st.start<r2.s){ st.start=r2.s; $('#sess-time-start').val(fmtT(st.start)); }
+            if(st.end>r2.e){ st.end=r2.e; $('#sess-time-end').val(fmtT(st.end)); }
+            renderShifts(); renderAddList();
+          });
+        }
+        $row.append($x);
+        $shList.append($row);
+      });
+      if(typeof updateAddVis==='function') updateAddVis();
+    }
+    function eligibleAdds(){
+      return opts.dayInsts.filter(function(d){
+        if(st.shifts.some(function(q){ return q.roleKey===d.roleKey&&q.num===d.num; })) return false;
+        return d.ds < st.end && d.de > st.start;   // overlaps the proposed session time
+      });
+    }
+    function _shiftSessOverlaps(d){
+      // Existing sessions already occupying this shift within the proposed session window.
+      return getSessions(opts.gid).filter(function(o){
+        if(o.id===(sess&&sess.id)) return false;
+        if(o.si!==opts.si||o.origIdx!==opts.origIdx) return false;
+        if(!_sessMemberOf(o,d.roleKey,d.num)) return false;
+        if(!_sessOnDate(o,opts.dateIso,opts.dow)) return false;
+        return st.start!=null && st.end!=null && o.start<st.end && o.end>st.start;
+      });
+    }
+    function renderAddList(){
+      $addList.empty();
+      var q=String($addIn.val()||'').trim().toLowerCase();
+      var el=eligibleAdds().filter(function(d){
+        if(!q) return true;
+        var r=shiftRowHtml(d,false);
+        var hay=(r.label+' '+fmtT(d.ds)+' – '+fmtT(d.de)+' '+(r.staff||'')).toLowerCase();
+        return hay.indexOf(q)>=0;
+      });
+      if(!el.length){
+        $addList.append($('<div>').css({padding:'6px 9px',fontSize:'11px',color:'#6c757d'}).text(q?'No eligible shifts match the search.':'No other simultaneous shifts overlap this session.'));
+        return;
+      }
+      el.forEach(function(d,ri){
+        var r=shiftRowHtml(d,false);
+        var $row=$('<div class="sess-add-row">').css({padding:'4px 9px',fontSize:'11.5px',cursor:'pointer',borderTop:ri?'1px solid var(--bd2,#eef1f4)':'none'});
+        var $l1=$('<div>').css({display:'flex',alignItems:'center',gap:'6px'});
+        $l1.append($('<span>').css({fontWeight:'700',color:'#343a40'}).text(r.label));
+        $l1.append($('<span>').css({color:'#6c757d'}).text(fmtT(d.ds)+' – '+fmtT(d.de)));
+        if(r.staff) $l1.append($('<span>').css({color:'#0a4ea8',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0'}).text(r.staff));
+        $row.append($l1);
+        var ovl=_shiftSessOverlaps(d);
+        if(ovl.length){
+          var $l2=$('<div>').css({fontSize:'10px',color:'#b02a37',marginTop:'1px'});
+          $l2.text('Has: '+ovl.map(function(o){ return o.type+' '+fmtT(o.start)+' – '+fmtT(o.end); }).join(', '));
+          $row.append($l2);
+        }
+        $row.on('mouseenter',function(){$(this).css('background','#f3f8ff');}).on('mouseleave',function(){$(this).css('background','');});
+        $row.on('mousedown',function(e){
+          e.preventDefault();
+          st.shifts.push({roleKey:d.roleKey,num:d.num});
+          $addIn.val('');
+          renderShifts();
+          // Close and release: the dropdown only reopens when the user explicitly refocuses.
+          $addList.hide();
+          if($addIn[0]&&$addIn[0].blur) $addIn[0].blur();
+        });
+        $addList.append($row);
+      });
+    }
+    function updateAddVis(){
+      var any=eligibleAdds().length>0;
+      $addWrap.toggle(any);
+      if(!any) $addList.hide();
+    }
+    $addIn.on('focus input',function(){ renderAddList(); $addList.show(); });
+    $addIn.on('blur',function(){ setTimeout(function(){ $addList.hide(); },140); });
+    // ─ Color machinery ─ circular swatch selector (Calendar-style dark palette); the trigger
+    // circle mounts inside the Type row below, the swatch grid pops beneath it.
+    var $clCirc=$('<div id="sess-color-circle">').attr('data-color',st.color).css({width:'15px',height:'15px',marginBottom:'3px',background:st.color,border:'1px solid rgb(180,180,180)',borderRadius:'50%',flexShrink:'0'});
+    var $clHit=$('<button type="button" id="sess-color-hit" title="Session color">').css({background:'transparent',border:'none',padding:'3px 4px',margin:'0',cursor:'pointer',display:'inline-flex',alignItems:'center',lineHeight:'0'});
+    $clHit.append($clCirc);
+    var $clPop=$('<div id="sess-color-pop">').css({display:'none',position:'fixed',zIndex:'1000012',padding:'8px',border:'1px solid #dee2e6',borderRadius:'8px',background:'#fff',boxShadow:'0 4px 16px rgba(0,0,0,.12)'});
+    $(document.body).append($clPop);
+    function setSessColor(c,touched){
+      st.color=c; if(touched) st.colorTouched=true;
+      $clCirc.css('background',c).attr('data-color',c);
+      renderColorGrid();
+    }
+    function renderColorGrid(){
+      $clPop.empty();
+      var $grid=$('<div>').css({display:'grid',gridTemplateColumns:'repeat(8,22px)',gap:'5px'});
+      SESSION_COLORS.forEach(function(cc){
+        var isSel=st.color===cc;
+        var $opt=$('<div class="sess-color-opt">').attr('data-c',cc).css({width:'22px',height:'22px',background:cc,border:isSel?'1.5px solid #bbb':'1px solid rgb(210,210,210)',borderRadius:'50%',cursor:'pointer',boxSizing:'border-box'});
+        if(isSel) $opt.css('box-shadow','inset 0 0 0 2px rgba(255,255,255,0.55)');
+        $opt.on('mouseenter',function(){ if(st.color!==cc) $(this).css({border:'1.5px solid #999'}); });
+        $opt.on('mouseleave',function(){ if(st.color!==cc) $(this).css({border:'1px solid rgb(210,210,210)'}); });
+        $opt.on('click',function(e){ e.stopPropagation(); setSessColor(cc,true); $clPop.hide(); });
+        $grid.append($opt);
+      });
+      $clPop.append($grid);
+    }
+    $clHit.on('click',function(e){
+      e.stopPropagation();
+      renderColorGrid();
+      var r=$clCirc[0].getBoundingClientRect();
+      $clPop.css({top:((r.bottom||0)+6)+'px',left:(r.left||12)+'px'});
+      $clPop.toggle();
+    });
+    // ─ Type + Color row ─ Type stays flexible (most of the row); the circular swatch sits beside
+    // it, vertically centred; wraps without overlap on narrow screens. Same dark Calendar-style
+    // palette as before.
+    var $tyF=$('<div class="field">');
+    var $tyLblRow=$('<div>').css({display:'flex',alignItems:'center',gap:'4px'});
+    $tyLblRow.append($('<label>').css({marginBottom:'0',display:'inline-block'}).text('Type')).append($clHit);
+    var $tyWrap=$('<div>').css({position:'relative'});
+    var $tyIn=$('<input type="text" class="std-input" id="sess-type-input" placeholder="Search or create a type…" autocomplete="off">');
+    if(st.type) $tyIn.val(st.type);
+    var $tyDd=$('<div id="sess-type-dd">').css({display:'none',position:'absolute',left:'0',right:'0',top:'100%',zIndex:'40',background:'#fff',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'6px',boxShadow:'0 6px 18px rgba(20,30,40,.12)',maxHeight:'180px',overflow:'auto'});
+    $tyWrap.append($tyIn).append($tyDd);
+    $tyF.append($tyLblRow).append($tyWrap);
+    $bd.append($tyF);
+    function pickType(name,color){
+      st.type=name; $tyIn.val(name);
+      if(!st.colorTouched){ setSessColor(color,false); }
+      recalcEnd();
+      $tyDd.hide();
+    }
+    function renderTypeDd(){
+      var q=String($tyIn.val()||'').trim().toLowerCase();
+      $tyDd.empty();
+      var ts=_sessTypesFor(opts.gid).filter(function(t){ return !q || t.name.toLowerCase().indexOf(q)>=0; });
+      ts.forEach(function(t){
+        var $r=$('<div class="sess-type-row">').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 10px',fontSize:'12px',cursor:'pointer'});
+        $r.append($('<span>').css({width:'11px',height:'11px',borderRadius:'3px',background:t.color,flexShrink:'0',border:'1px solid rgba(0,0,0,.15)'}));
+        $r.append($('<span>').text(t.name));
+        $r.on('mouseenter',function(){$(this).css('background','#f3f8ff');}).on('mouseleave',function(){$(this).css('background','');});
+        $r.on('mousedown',function(e){ e.preventDefault(); pickType(t.name,t.color); });
+        $tyDd.append($r);
+      });
+      var exact=ts.some(function(t){ return t.name.toLowerCase()===q; });
+      if(q && !exact){
+        var $c=$('<div class="sess-type-create">').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 10px',fontSize:'12px',cursor:'pointer',borderTop:ts.length?'1px solid var(--bd2,#eef1f4)':'none',color:'#0d6efd',fontWeight:'600'});
+        $c.text('Create "'+$tyIn.val().trim()+'"');
+        $c.on('mousedown',function(e){ e.preventDefault(); pickType($tyIn.val().trim(), SESSION_CUSTOM_COLOR); });
+        $tyDd.append($c);
+      }
+      $tyDd.toggle(!!$tyDd.children().length);
+    }
+    $tyIn.on('focus input',renderTypeDd);
+    $tyIn.on('blur',function(){ setTimeout(function(){ $tyDd.hide(); },140); st.type=String($tyIn.val()||'').trim(); });
+    // ─ Times row ─ Start and End time side by side; each field carries its own validation slot
+    // so errors appear beneath the field they concern. (Single-occurrence sessions: no dates,
+    // no weekday recurrence.)
+    var $tdF=$('<div class="field">');
+    var $tdRow=$('<div>').css({display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'flex-start'});
+    function _tdCell(lbl,$inp,errId){
+      var $w=$('<div>').css({flex:'1 1 100px',minWidth:'96px'});
+      $w.append($('<label>').text(lbl)).append($inp);
+      $w.append($('<div class="sess-ferr" id="'+errId+'">').css({fontSize:'10px',color:'var(--red)',minHeight:'12px',lineHeight:'12px'}));
+      return $w;
+    }
+    $tdRow.append(_tdCell('Start time', $('<input type="text" class="std-input" id="sess-time-start" placeholder="3:00 PM">').val(fmtT(st.start)), 'sess-err-ts'));
+    $tdRow.append(_tdCell('End time', $('<input type="text" class="std-input" id="sess-time-end" placeholder="3:45 PM">').val(st.end!=null?fmtT(st.end):''), 'sess-err-te'));
+    $tdF.append($tdRow);
+    $bd.append($tdF);
+    $bd.on('change','#sess-time-start',function(){ var v=parseT($(this).val()); if(v!=null){ st.start=v; recalcEnd(); updateAddVis(); } });
+    $bd.on('change','#sess-time-end',function(){ var v=parseT($(this).val()); if(v!=null){ st.end=v; st.endTouched=true; updateAddVis(); } });
+
+
+    // ─ Notes ─
+    var $ntF=$('<div class="field">');
+    $ntF.append($('<label>').text('Notes'));
+    var $ww=$('<div class="wysiwyg-wrap">');
+    $ww.append($('<div class="wysiwyg-toolbar">')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>'));
+    var $nt=$('<div class="wysiwyg-body" id="sess-notes" contenteditable="true" data-placeholder="Add notes…">').html(st.notes);
+    $ww.append($nt); $ntF.append($ww); $bd.append($ntF);
+    $ww.on('click','.wysiwyg-btn',function(e){ e.preventDefault(); $nt.focus(); try{ document.execCommand($(this).attr('data-cmd'),false,null); }catch(_e){} });
+    var $err=$('<div id="sess-error">').css({fontSize:'11px',color:'var(--red)',minHeight:'13px',lineHeight:'13px'});
+    $bd.append($err);
+    $md.append($bd);
+    // ─ Footer ─
+    var $ft=$('<div class="modal-footer">');
+    var $cancel=$('<button type="button" id="sess-cancel">').css({fontSize:'12px',fontWeight:'600',padding:'5px 14px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',color:'#495057',cursor:'pointer'}).text('Cancel');
+    var $save=$('<button type="button" id="sess-save">').css({fontSize:'12px',fontWeight:'700',padding:'5px 16px',border:'none',borderRadius:'6px',background:'#0d6efd',color:'#fff',cursor:'pointer',marginLeft:'8px'}).text(editing?'Save':'Create');
+    $ft.append($cancel).append($save);
+    $md.append($ft);
+    $(document.body).append($md);
+    renderShifts();
+    var _outMd=function(ev){
+      if(!$md[0].isConnected){ document.removeEventListener('mousedown',_outMd,true); return; }
+      if(ev.target && ev.target.nodeType===1 && !document.contains(ev.target)) return;   // detached mid-gesture
+      if($md[0].contains(ev.target)) return;
+      if(ev.target.closest && (ev.target.closest('#sess-confirm-card')||ev.target.closest('#sess-color-pop'))) return;
+      if($clPop.is(':visible')){ $clPop.hide(); return; }
+      guardedClose();
+    };
+    document.addEventListener('mousedown',_outMd,true);
+    function close(){ document.removeEventListener('mousedown',_outMd,true); $clPop.remove(); $md.remove(); }
+    function snapshot(){
+      return JSON.stringify({ sh:st.shifts, ty:String($tyIn.val()||'').trim(),
+        s:$('#sess-time-start').val(), e:$('#sess-time-end').val(),
+        c:st.color, n:$nt.html() });
+    }
+    var _base=snapshot();
+    // The x (and a click outside the modal) protect unsaved work with a three-way confirmation.
+    // Cancel stays an explicit, unguarded discard.
+    function guardedClose(){
+      if(snapshot()===_base){ close(); return; }
+      openConfirm();
+    }
+    function openConfirm(){
+      $('#sess-confirm-card').remove();
+      var $cd=$('<div id="sess-confirm-card">').css({position:'fixed',left:'50%',top:'22vh',transform:'translateX(-50%)',zIndex:'1000010',background:'#fff',border:'1px solid var(--bd,#d4dae0)',borderRadius:'10px',boxShadow:'0 14px 40px rgba(20,30,40,.28)',padding:'16px 18px',width:'330px',maxWidth:'92vw'});
+      $cd.append($('<div>').css({fontSize:'13.5px',fontWeight:'700',color:'#212529',marginBottom:'5px'}).text('Unsaved changes'));
+      $cd.append($('<div>').css({fontSize:'12px',color:'#495057',marginBottom:'13px'}).text(editing?'This session has unsaved edits. What would you like to do?':'This session has not been created yet. What would you like to do?'));
+      var $btns=$('<div>').css({display:'flex',gap:'7px',justifyContent:'flex-end',flexWrap:'wrap'});
+      var $bDiscard=$('<button type="button" id="sess-cf-discard">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',color:'#b02a37',cursor:'pointer'}).text('Discard');
+      var $bCont=$('<button type="button" id="sess-cf-continue">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',color:'#495057',cursor:'pointer'}).text('Continue Editing');
+      var $bGo=$('<button type="button" id="sess-cf-save">').css({fontSize:'12px',fontWeight:'700',padding:'5px 14px',border:'none',borderRadius:'6px',background:'#0d6efd',color:'#fff',cursor:'pointer'}).text(editing?'Update':'Create Session');
+      $btns.append($bDiscard).append($bCont).append($bGo);
+      $cd.append($btns); $(document.body).append($cd);
+      $bDiscard.on('click',function(){ $cd.remove(); close(); });
+      $bCont.on('click',function(){ $cd.remove(); });
+      $bGo.on('click',function(){ $cd.remove(); doSave(); });
+    }
+    $cancel.on('click',close);
+    $('#sess-modal-close').on('click',guardedClose);
+    function validate(){
+      st.type=String($tyIn.val()||'').trim();
+      var s=parseT($('#sess-time-start').val()), e=parseT($('#sess-time-end').val());
+      if(!st.type) return {m:'Enter or select a session Type.', f:null};
+      if(s==null) return {m:'Enter a valid Start time.', f:'ts'};
+      if(e==null) return {m:'Enter a valid End time.', f:'te'};
+      st.start=s; st.end=e;
+      if(e<=s) return {m:'End time must be after Start time.', f:'te'};
+      if(!st.shifts.length) return {m:'Select at least one shift.', f:null};
+      var r=sharedRange();
+      if(s<r.s-1e-9||e>r.e+1e-9) return {m:'The session must stay within the shared shift range ('+fmtT(r.s)+' – '+fmtT(r.e)+').', f:'te'};
+      // Single occurrence: validate against the one displayed schedule date only.
+      var rd=_schedResolveDay?_schedResolveDay(opts.si,opts.origIdx,new Date(st.occIso+'T00:00:00')):null;
+      if(!rd || rd.noHours) return {m:'No schedule hours on '+st.occIso+'.', f:null};
+      var k; for(k=0;k<st.shifts.length;k++){
+        var sh=st.shifts[k], b=null, j;
+        for(j=0;j<rd.blocks.length;j++){ if(rd.blocks[j].roleKey===sh.roleKey){ b=rd.blocks[j]; break; } }
+        if(!b || sh.num>b.count) return {m:'A selected shift does not exist on '+st.occIso+'.', f:null};
+        var dsv=_decHH(b.start), dev=_decHH(b.end);
+        if(dsv==null||dev==null||st.start<dsv-1e-9||st.end>dev+1e-9) return {m:'The session must stay within every selected shift on '+st.occIso+'.', f:'te'};
+      }
+      var others=getSessions(opts.gid).filter(function(x){ return x.id!==(sess&&sess.id) && x.si===opts.si && x.origIdx===opts.origIdx; });
+      var c; for(c=0;c<others.length;c++){
+        var o=others[c];
+        if(!_sessOnDate(o,st.occIso,opts.dow)) continue;
+        var shares=st.shifts.some(function(sh2){ return _sessMemberOf(o,sh2.roleKey,sh2.num); });
+        if(shares && st.start<o.end && st.end>o.start){
+          return {m:'Overlaps "'+o.type+'" ('+fmtT(o.start)+' – '+fmtT(o.end)+') — remove the conflict or change the time.', f:null};
+        }
+      }
+      return null;
+    }
+    function doSave(){
+      var v=validate();
+      $md.find('.sess-ferr').text(''); $err.text('');
+      if(v){
+        var $t=v.f?$md.find('#sess-err-'+v.f):null;
+        if($t&&$t.length){ $t.text(v.m); } else { $err.text(v.m); }
+        return false;
+      }
+      var rec={
+        id: editing?sess.id:_sessUid(),
+        si:opts.si, origIdx:opts.origIdx,
+        calId:(opts.calRow&&opts.calRow.calId)!=null?opts.calRow.calId:null,
+        shifts:st.shifts.slice(),
+        type:st.type, color:st.color,
+        start:st.start, end:st.end,
+        date:st.occIso,
+        notes:$nt.html()
+      };
+      _sessRememberType(opts.gid, st.type, st.color);
+      _sessSave(opts.gid, rec);
+      close();
+      render(true);
+      return true;
+    }
+    $save.on('click',doSave);
+  }
+  function _decHH(hhmm){ if(hhmm==null) return null; if(typeof hhmm==='number') return hhmm; var p=String(hhmm).split(':'); if(p.length<2) return null; var h=parseInt(p[0],10), m=parseInt(p[1],10); if(isNaN(h)||isNaN(m)) return null; return h+m/60; }
+  function fmtT2(v){ return typeof v==='number'?fmtT(v):String(v||''); }
+
   // ── Shift Schedule Day-view layout toggle (Timeline | Grid) ── mounted once right after the
   // Today badge; visible only in Schedule mode Day view. Switching re-renders in place (no reload)
   // and the choice persists across day navigation (module state + a layout URL param when non-default).
@@ -5360,6 +5820,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // details click, calendar-color styling); Total Hours + meal-break minutes move to a dedicated
     // third line so narrow columns stay readable — height grows instead of width.
     function buildDayGridVertical(si, origIdx, dateObj, insts, schoolName, calendarName){
+      _schedResolveDay=resolveDay;   // occurrence validation for the Sessions dialog
       var dayRes=resolveDay(si, origIdx, dateObj);
       var byRole={}; dayRes.blocks.forEach(function(b){ byRole[b.roleKey]=b; });
       var _xsB=xsBlocksFor(origIdx, isoD(dateObj), schoolName), _xsInsts=[];
@@ -5385,7 +5846,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var shiftKey=it.shiftKey;
             var y=(ds-GSH)*HH, bh=Math.max((de-ds)*HH-4, 12);
             it.$el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">')
-              .css({left:'4px',right:'4px',width:'auto',top:y+'px',height:bh+'px',cursor:'default',pointerEvents:'none'})
+              .css({left:'4px',right:'4px',width:'auto',top:y+'px',height:bh+'px',cursor:'pointer'})
               .attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
             _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
           }
@@ -5401,8 +5862,174 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         _ghs.textContent='.grid-hdr-assign{font-size:12px;} .grid-hdr-assign .shift-x{opacity:.5;} .grid-hdr-assign:hover .shift-x,.grid-hdr-assign .shift-x:hover{opacity:1;}';
         document.head.appendChild(_ghs);
       }
+      var dayInsts=items.filter(function(it){ return !!it.$el; }).map(function(it){
+        return {roleKey:it.inst.roleKey, num:it.inst.num, roleLabel:it.inst.roleLabel, ds:it.ds, de:it.de, shiftKey:it.shiftKey};
+      });
       var $scrollWrap=$('<div>').css({overflow:'auto',width:'100%',maxHeight:'640px',position:'relative'});
       var $outer=$('<div>').css({position:'relative',width:(TIMEW+COLW*insts.length)+'px'});
+      // Cursor time indicator: a chip on the time axis + a dashed guide line, snapped to 15 minutes.
+      // Positioned from getBoundingClientRect on every move, so scrolling/resizing cannot desync it.
+      var $tcChip=$('<div class="grid-time-cursor">').css({display:'none',position:'absolute',left:'2px',width:(TIMEW-6)+'px',textAlign:'right',padding:'1px 4px',boxSizing:'border-box',fontSize:'9.5px',fontWeight:'700',color:'#0d6efd',background:'#e7f1ff',border:'1px solid #9ec5fe',borderRadius:'4px',zIndex:'5',pointerEvents:'none'});
+      var $tcLine=$('<div class="grid-time-cursor-line">').css({display:'none',position:'absolute',left:TIMEW+'px',right:'0',height:'0',borderTop:'1px dashed #0d6efd',opacity:'.9',zIndex:'26',pointerEvents:'none'});
+      $outer.append($tcChip).append($tcLine);
+      function _snapAt(clientY, dsClamp, deClamp){
+        if(clientY==null||isNaN(clientY)) return dsClamp;
+        var rect=$outer[0].getBoundingClientRect();
+        var t=GSH+(clientY-rect.top-HDRH)/HH;
+        var snap=Math.round(t*4)/4;
+        if(snap<dsClamp) snap=dsClamp;
+        if(snap>deClamp) snap=deClamp;
+        return snap;
+      }
+      function _tcShow(snap,colEl){
+        var yy=HDRH+(snap-GSH)*HH;
+        $tcChip.css({top:(yy-9)+'px',display:'block'}).text(fmtT(snap));
+        var w=null;
+        if(colEl){
+          var orr=$outer[0].getBoundingClientRect(), crr=colEl.getBoundingClientRect();
+          if(crr.width>0) w=Math.max(0,(crr.right-orr.left)-TIMEW);
+        }
+        if(w!=null) $tcLine.css({top:yy+'px',left:TIMEW+'px',right:'auto',width:w+'px',display:'block'});
+        else $tcLine.css({top:yy+'px',left:TIMEW+'px',right:'0',width:'auto',display:'block'});
+      }
+      function _tcHide(){ $tcChip.hide(); $tcLine.hide(); }
+      var _colHits=[];
+      // ── Session drag / resize ── move (vertical always; horizontal for single-role sessions),
+      // resize (top/bottom always; left/right across role columns for single-role sessions).
+      // Geometry comes from live column rects; conflicts validate against SAVED session data at
+      // drag time and again at drop, so stale visuals can never produce an overlapping save.
+      var _sessDragConsumed=false;
+      function _instFor(rk,num){ var i; for(i=0;i<_colHits.length;i++){ var t=_colHits[i].it; if(t.inst.roleKey===rk&&t.inst.num===num) return _colHits[i]; } return null; }
+      function _colIdxAtX(x){
+        var i; for(i=0;i<_colHits.length;i++){ var r=_colHits[i].colEl.getBoundingClientRect(); if(r.width>0&&x>=r.left&&x<=r.right) return i; }
+        return -1;
+      }
+      function _sessConflict(exceptId,rk,num,sS,sE){
+        return getSessions(g.id).some(function(o){
+          if(o.id===exceptId) return false;
+          if(o.si!==si||o.origIdx!==origIdx) return false;
+          if(!_sessOnDate(o,isoD(dateObj),dateObj.getDay())) return false;
+          if(!_sessMemberOf(o,rk,num)) return false;
+          return o.start<sE && o.end>sS;
+        });
+      }
+      function _coversOk(ch,sS,sE){ return ch && ch.it.ds<=sS+1e-9 && ch.it.de>=sE-1e-9; }
+      function _wireSessDrag($sb, ssn){
+        var single = ssn.shifts.length===1;
+        var $rt=$('<div class="sess-rz sess-rz-t">').css({position:'absolute',left:'6px',right:'6px',top:'-2px',height:'7px',cursor:'ns-resize',zIndex:'2'});
+        var $rb=$('<div class="sess-rz sess-rz-b">').css({position:'absolute',left:'6px',right:'6px',bottom:'-2px',height:'7px',cursor:'ns-resize',zIndex:'2'});
+        $sb.append($rt).append($rb);
+        if(single){
+          var $rl=$('<div class="sess-rz sess-rz-l">').css({position:'absolute',left:'-2px',top:'6px',bottom:'6px',width:'7px',cursor:'ew-resize',zIndex:'2'});
+          var $rr=$('<div class="sess-rz sess-rz-r">').css({position:'absolute',right:'-2px',top:'6px',bottom:'6px',width:'7px',cursor:'ew-resize',zIndex:'2'});
+          $sb.append($rl).append($rr);
+        }
+        function begin(mode,e0){
+          e0.preventDefault(); e0.stopPropagation();
+          var sx=e0.clientX, sy=e0.clientY, moved=false;
+          var oS=ssn.start, oE=ssn.end, dur=oE-oS;
+          var anchor=_instFor(ssn.shifts[0].roleKey, ssn.shifts[0].num);
+          var anchorIdx=anchor?_colHits.indexOf(anchor):-1;
+          var prop={s:oS,e:oE,shifts:ssn.shifts.slice(),valid:true};
+          var $pv=null;
+          function sharedOf(shs){
+            var a=null,b=null;
+            shs.forEach(function(sh){ var ch=_instFor(sh.roleKey,sh.num); if(!ch) return;
+              if(a==null||ch.it.ds>a)a=ch.it.ds; if(b==null||ch.it.de<b)b=ch.it.de; });
+            return {a:(a==null?GSH:a), b:(b==null?GEH:b)};
+          }
+          function validate(){
+            if(prop.e-prop.s<0.25-1e-9) return false;
+            var i; for(i=0;i<prop.shifts.length;i++){
+              var sh=prop.shifts[i], ch=_instFor(sh.roleKey,sh.num);
+              if(!_coversOk(ch,prop.s,prop.e)) return false;
+              if(_sessConflict(ssn.id,sh.roleKey,sh.num,prop.s,prop.e)) return false;
+            }
+            return prop.shifts.length>0;
+          }
+          function paint(){
+            if(!$pv){
+              $pv=$('<div class="sess-drag-preview">').css({position:'absolute',zIndex:'30',pointerEvents:'none',borderRadius:'4px',padding:'2px 5px',boxSizing:'border-box',fontSize:'9.5px',fontWeight:'700',overflow:'hidden',whiteSpace:'nowrap'});
+              $outer.append($pv);
+            }
+            var idxs=prop.shifts.map(function(sh){ var ch=_instFor(sh.roleKey,sh.num); return ch?_colHits.indexOf(ch):-1; }).filter(function(x){return x>=0;});
+            var lo=Math.min.apply(null,idxs), hi=Math.max.apply(null,idxs);
+            var orr=$outer[0].getBoundingClientRect();
+            var lr=_colHits[lo]?_colHits[lo].colEl.getBoundingClientRect():null;
+            var rr2=_colHits[hi]?_colHits[hi].colEl.getBoundingClientRect():null;
+            var left=(lr&&lr.width>0)?(lr.left-orr.left+8):(TIMEW+lo*COLW+8);
+            var right=(rr2&&rr2.width>0)?(rr2.right-orr.left-8):(TIMEW+(hi+1)*COLW-8);
+            var ok=prop.valid;
+            $pv.css({left:left+'px',width:Math.max(right-left,40)+'px',
+              top:(HDRH+(prop.s-GSH)*HH)+'px',height:Math.max((prop.e-prop.s)*HH-2,13)+'px',
+              background: ok? ssn.color : 'rgba(220,53,69,.18)',
+              color: ok? _sessContrast(ssn.color) : '#b02a37',
+              border: ok? '1.5px dashed rgba(255,255,255,.85)' : '1.5px dashed #dc3545',
+              opacity: ok? '.9' : '1'});
+            $pv.text(fmtT(prop.s)+' \u2013 '+fmtT(prop.e));
+            $sb.css('opacity','.25');
+          }
+          function onMove(e){
+            var dx=e.clientX-sx, dy=e.clientY-sy;
+            if(!moved && Math.abs(dx)<4 && Math.abs(dy)<4) return;
+            moved=true; _sessDragConsumed=true;
+            var dT=Math.round((dy/HH)*4)/4;
+            if(mode==='move'){
+              var r=sharedOf(prop.shifts);
+              prop.s=Math.min(Math.max(oS+dT, r.a), r.b-dur); prop.e=prop.s+dur;
+              if(single){
+                var ci=_colIdxAtX(e.clientX);
+                if(ci>=0){ var t=_colHits[ci].it; prop.shifts=[{roleKey:t.inst.roleKey,num:t.inst.num}]; }
+              }
+            } else if(mode==='rt'){
+              prop.s=Math.min(oS+dT, prop.e-0.25);
+            } else if(mode==='rb'){
+              prop.e=Math.max(oE+dT, prop.s+0.25);
+            } else if(mode==='rl'||mode==='rr'){
+              var ci2=_colIdxAtX(e.clientX);
+              if(ci2>=0 && anchorIdx>=0){
+                var lo2=Math.min(anchorIdx,ci2), hi2=Math.max(anchorIdx,ci2);
+                // extend outward from the anchor, stopping at the first invalid column: the session
+                // may never pass through an obstructed role to reach one farther away.
+                var span=[anchorIdx], k;
+                if(mode==='rr'){ for(k=anchorIdx+1;k<=hi2;k++){ var c1=_colHits[k]; if(_coversOk(c1,prop.s,prop.e)&&!_sessConflict(ssn.id,c1.it.inst.roleKey,c1.it.inst.num,prop.s,prop.e)) span.push(k); else break; } }
+                else { for(k=anchorIdx-1;k>=lo2;k--){ var c2=_colHits[k]; if(_coversOk(c2,prop.s,prop.e)&&!_sessConflict(ssn.id,c2.it.inst.roleKey,c2.it.inst.num,prop.s,prop.e)) span.unshift(k); else break; } }
+                prop.shifts=span.map(function(ix){ var t2=_colHits[ix].it; return {roleKey:t2.inst.roleKey,num:t2.inst.num}; });
+              }
+            }
+            prop.valid=validate();
+            paint();
+          }
+          function onUp(){
+            document.removeEventListener('mousemove',onMove,true);
+            document.removeEventListener('mouseup',onUp,true);
+            if($pv) $pv.remove();
+            $sb.css('opacity','');
+            if(!moved){ _sessDragConsumed=false; return; }
+            // Revalidate against saved data immediately before writing.
+            prop.valid=validate();
+            if(prop.valid && (prop.s!==oS||prop.e!==oE||JSON.stringify(prop.shifts)!==JSON.stringify(ssn.shifts))){
+              var rec=JSON.parse(JSON.stringify(ssn));
+              rec.start=prop.s; rec.end=prop.e; rec.shifts=prop.shifts;
+              if(!rec.date) rec.date=isoD(dateObj);   // legacy records settle on this occurrence
+              _sessSave(g.id, rec);
+            }
+            render(true);
+          }
+          document.addEventListener('mousemove',onMove,true);
+          document.addEventListener('mouseup',onUp,true);
+        }
+        $rt.on('mousedown',function(e){ begin('rt',e); });
+        $rb.on('mousedown',function(e){ begin('rb',e); });
+        if(single){
+          $sb.find('.sess-rz-l').on('mousedown',function(e){ begin('rl',e); });
+          $sb.find('.sess-rz-r').on('mousedown',function(e){ begin('rr',e); });
+        }
+        $sb.on('mousedown',function(e){
+          if($(e.target).hasClass('sess-rz')) return;
+          begin('move',e);
+        });
+      }
       // Sticky header row — carries the shift information that used to live inside the blocks:
       // role, the actionable Assign Staff row, the time range, and Total Hours + status badge.
       var $hdrRow=$('<div>').css({display:'flex',height:HDRH+'px',position:'sticky',top:'0',zIndex:'6',background:'var(--bg2)',borderBottom:'1px solid var(--bd2)'});
@@ -5449,10 +6076,129 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var ci=it.ci;
         var $col=$('<div>').css({width:COLW+'px',flexShrink:'0',boxSizing:'border-box',position:'relative',height:(GN*HH)+'px',borderLeft:ci===0?'none':(it.firstOfRole?'2px solid #cdd4dc':'1px solid var(--bd2)'),background:it.isXs?'#fffdf4':'transparent'});
         for(var gh=GSH+1;gh<GEH;gh++) $col.append($('<div>').css({position:'absolute',left:'0',right:'0',top:((gh-GSH)*HH)+'px',borderTop:'1px solid var(--bd2)',opacity:'.6',pointerEvents:'none'}));
-        if(it.$el) $col.append(it.$el);
+        if(it.$el){
+          (function(it2,$c){
+            var snapMax=Math.max(it2.ds, it2.de-0.25);
+            function overBlockTime(e){
+              // Geometric containment: is the cursor within this shift's time range? Synthetic events
+              // without coordinates (tests, keyboard-driven clicks) fall back to element containment.
+              if(e.clientY==null||isNaN(e.clientY)) return !!$(e.target).closest('.site-sched-block').length;
+              var r=$outer[0].getBoundingClientRect();
+              var t=GSH+(e.clientY-r.top-HDRH)/HH;
+              return t>=it2.ds-0.02 && t<=it2.de+0.02;
+            }
+            // Bound on the COLUMN, not the block element: real-browser hit testing then cannot lose
+            // the interaction to whatever paints over the block (hover chrome, assignment restyling,
+            // future session chrome). Session blocks stop their own events, so Edit stays intact.
+            $c.on('mousemove',function(e){
+              if($(e.target).closest('.sess-block').length){ _tcHide(); return; }
+              if(!overBlockTime(e)){ _tcHide(); return; }
+              _tcShow(_snapAt(e.clientY, it2.ds, snapMax), $c[0]);
+            });
+            $c.on('mouseleave',_tcHide);
+            $c.on('click',function(e){
+              if(e.originalEvent && e.originalEvent.__pgSessHandled) return;   // capture path already opened
+              if($(e.target).closest('.sess-block').length) return;
+              if(!overBlockTime(e)) return;
+              var snap=_snapAt(e.clientY, it2.ds, snapMax);
+              _tcHide();
+              openSessionDialog({ mode:'add', gid:g.id, guideName:g.name, si:si, origIdx:origIdx,
+                calRow:calRows[origIdx]||{}, schoolName:schoolName, dateIso:isoD(dateObj), dow:dateObj.getDay(),
+                dayInsts:dayInsts, clicked:{roleKey:it2.inst.roleKey, num:it2.inst.num}, startDec:snap });
+            });
+            $c.css('cursor','pointer');
+            _colHits.push({colEl:$c[0], it:it2});
+          })(it,$col);
+          $col.append(it.$el);
+          // Session blocks: colored overlays over the blank placeholder, one per session covering
+          // this role instance on this date. Clicks open Edit (never fall through to Add).
+          getSessions(g.id).forEach(function(ssn){
+            if(ssn.si!==si || ssn.origIdx!==origIdx) return;
+            if(!_sessMemberOf(ssn, it.inst.roleKey, it.inst.num)) return;
+            if(!_sessOnDate(ssn, isoD(dateObj), dateObj.getDay())) return;
+            if(ssn.start<it.ds-1e-9 || ssn.end>it.de+1e-9) return;   // outside this date's shift window
+            var sy=(ssn.start-GSH)*HH, shh=Math.max((ssn.end-ssn.start)*HH-2, 13);
+            var $sb=$('<div class="sess-block">')
+              .css({position:'absolute',left:'8px',right:'8px',top:sy+'px',height:shh+'px',zIndex:'25',
+                background:ssn.color,border:'1px solid rgba(0,0,0,.18)',borderRadius:'4px',
+                padding:'1px 5px',boxSizing:'border-box',overflow:'hidden',cursor:'pointer',
+                fontSize:'9.5px',fontWeight:'700',color:_sessContrast(ssn.color),
+                whiteSpace:'nowrap',textOverflow:'ellipsis',boxShadow:'0 1px 2px rgba(20,30,40,.12)'})
+              .attr('title', ssn.type+'  \u00b7  '+fmtT(ssn.start)+' \u2013 '+fmtT(ssn.end))
+              .text(ssn.type);
+            $sb.on('mousemove',function(e){ e.stopPropagation(); _tcHide(); });
+            _wireSessDrag($sb, ssn);
+            $sb.on('click',function(e){
+              e.stopPropagation();
+              if(_sessDragConsumed){ _sessDragConsumed=false; return; }
+              if($(e.target).hasClass('sess-rz')) return;
+              openSessionDialog({ mode:'edit', gid:g.id, guideName:g.name, si:si, origIdx:origIdx,
+                calRow:calRows[origIdx]||{}, schoolName:schoolName, dateIso:isoD(dateObj), dow:dateObj.getDay(),
+                dayInsts:dayInsts, clicked:{roleKey:it.inst.roleKey, num:it.inst.num}, sess:ssn });
+            });
+            $col.append($sb);
+          });
+        }
         $body.append($col);
       });
       $outer.append($body);
+      // ── Document-capture fallback ── capture at the document is the FIRST code any click runs
+      // in the page, so no in-page handler, overlay, extension chrome, or hit-test quirk can keep
+      // an Add Session click from arriving. Hits are resolved geometrically against the live column
+      // rects; the bubbling column handler stays as backup and dedupes via a flag on the native
+      // event. Self-cleaning on disconnect (same pattern as the calendar multi-select listeners).
+      function _hitAt(e){
+        if(e.clientX==null||e.clientY==null||isNaN(e.clientX)||isNaN(e.clientY)) return null;
+        var i;
+        for(i=0;i<_colHits.length;i++){
+          var r=_colHits[i].colEl.getBoundingClientRect();
+          if(r.width===0&&r.height===0) continue;
+          if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){
+            var it2=_colHits[i].it;
+            var t=GSH+(e.clientY-$outer[0].getBoundingClientRect().top-HDRH)/HH;
+            if(t>=it2.ds-0.02&&t<=it2.de+0.02) return _colHits[i];
+            return null;
+          }
+        }
+        return null;
+      }
+      function _overSessUi(e){
+        var t=e.target;
+        return !!(t&&t.closest&&(t.closest('.sess-block')||t.closest('#sess-modal')||t.closest('#sess-confirm-card')));
+      }
+      var _capClick=function(e){
+        if(!$scrollWrap[0].isConnected){
+          document.removeEventListener('click',_capClick,true);
+          document.removeEventListener('mousemove',_capMove,true);
+          return;
+        }
+        if(e.button!=null&&e.button!==0) return;
+        if(document.getElementById('sess-modal')) return;   // dialog open — it owns clicks
+        if(_overSessUi(e)) return;                                  // session blocks open Edit themselves
+        var h=_hitAt(e); if(!h) return;
+        e.__pgSessHandled=true;                                     // dedupe for the bubbling backup
+        var snapMax=Math.max(h.it.ds, h.it.de-0.25);
+        var snap=_snapAt(e.clientY, h.it.ds, snapMax);
+        _tcHide();
+        openSessionDialog({ mode:'add', gid:g.id, guideName:g.name, si:si, origIdx:origIdx,
+          calRow:calRows[origIdx]||{}, schoolName:schoolName, dateIso:isoD(dateObj), dow:dateObj.getDay(),
+          dayInsts:dayInsts, clicked:{roleKey:h.it.inst.roleKey, num:h.it.inst.num}, startDec:snap });
+      };
+      var _capMove=function(e){
+        if(!$scrollWrap[0].isConnected){
+          document.removeEventListener('click',_capClick,true);
+          document.removeEventListener('mousemove',_capMove,true);
+          return;
+        }
+        var wr=$scrollWrap[0].getBoundingClientRect();
+        if(e.clientX==null||e.clientX<wr.left||e.clientX>wr.right||e.clientY<wr.top||e.clientY>wr.bottom) return;
+        if(document.getElementById('sess-modal')||_overSessUi(e)){ _tcHide(); return; }
+        var h=_hitAt(e);
+        if(h){ _tcShow(_snapAt(e.clientY, h.it.ds, Math.max(h.it.ds, h.it.de-0.25)), h.colEl); }
+        else _tcHide();
+      };
+      document.addEventListener('click',_capClick,true);
+      document.addEventListener('mousemove',_capMove,true);
       if(isTodayDate(dateObj)){
         // Horizontal current-time line built from plain divs — the .now-line/.now-dot classes are
         // sized for the timeline's VERTICAL line (width:2px, left offsets) and skewed this one.
@@ -5461,7 +6207,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var _nowH=new Date().getHours()+new Date().getMinutes()/60;
         if(_nowH>=GSH && _nowH<=GEH){
           var _ny=HDRH+(_nowH-GSH)*HH;
-          var $_nowLine=$('<div class="grid-now-line">').css({position:'absolute',left:TIMEW+'px',right:'0',top:(_ny-1)+'px',height:'2px',background:'var(--red)',zIndex:'3',pointerEvents:'none'});
+          var $_nowLine=$('<div class="grid-now-line">').css({position:'absolute',left:TIMEW+'px',right:'0',top:(_ny-1)+'px',height:'2px',background:'var(--red)',zIndex:'26',pointerEvents:'none'});
           $_nowLine.append($('<div>').css({position:'absolute',left:'-4px',top:'-3px',width:'8px',height:'8px',borderRadius:'50%',background:'var(--red)'}));
           $outer.append($_nowLine);
         }
