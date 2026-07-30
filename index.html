@@ -3779,6 +3779,9 @@ $(function(){
     import:'<svg data-icon="import" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M7.5 11.2V6.4M5.7 8.2l1.8-1.8 1.8 1.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     workspace:'<svg data-icon="workspace" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.6 1.9l4.5 4.5-1.6 1.6-1-.3-2.4 2.4.3 3-1 1-2.5-2.5-3 3-.7-.7 3-3L2.7 8.4l1-1 3 .3 2.4-2.4-.3-1 .8-.4z" fill="#7e57c2"/></svg>',
     duplicate:'<svg data-icon="duplicate" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.4" y="5.4" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><rect x="2.5" y="2.5" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/></svg>',
+    copy:'<svg data-icon="copy" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.6" y="5.6" width="7.9" height="7.9" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><path d="M10.4 2.7H4.1a1.4 1.4 0 0 0-1.4 1.4v6.3" stroke="#5f6368" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    paste:'<svg data-icon="paste" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3.2" y="3.4" width="9.6" height="10.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><rect x="5.6" y="1.9" width="4.8" height="2.9" rx="0.9" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><path d="M5.5 8h5M5.5 10.4h3.4" stroke="#5f6368" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    replace:'<svg data-icon="replace" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 5.6h8.6l-2.2-2.2M13 10.4H4.4l2.2 2.2" stroke="#5f6368" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     tiles:'<svg data-icon="tiles" width="16" height="16" viewBox="0 0 16 16" fill="#2563eb"><rect x="2" y="2" width="5" height="5" rx="1.1"/><rect x="9" y="2" width="5" height="5" rx="1.1"/><rect x="2" y="9" width="5" height="5" rx="1.1"/><rect x="9" y="9" width="5" height="5" rx="1.1"/></svg>',
     list:'<svg data-icon="list" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="4" r="1.2" fill="#5f6368"/><circle cx="3" cy="8" r="1.2" fill="#5f6368"/><circle cx="3" cy="12" r="1.2" fill="#5f6368"/><path d="M6 4h8M6 8h8M6 12h8" stroke="#5f6368" stroke-width="1.3" stroke-linecap="round"/></svg>',
     front:'<svg data-icon="front" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.7l5.3 2.9L8 7.5 2.7 4.6 8 1.7z" fill="#fff" stroke="#5f6368" stroke-width="1.1" stroke-linejoin="round"/><path d="M8 13V7.5M6 9.5l2-2 2 2" stroke="#5f6368" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -4702,9 +4705,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // ---- overlay + modal shell (reuses the app's shared modal chrome) ----
     var $ov = $('<div class="modal-overlay">').css({zIndex:'100050'});
-    var $modal = $('<div class="sched-modal">');
+    var $modal = $('<div class="sched-modal" id="shiftdet-modal">');
+    if(!document.getElementById('shiftdet-style')){
+      var _sds=document.createElement('style'); _sds.id='shiftdet-style';
+      _sds.textContent='#shiftdet-modal .modal-body{padding:12px 12px;} #shiftdet-modal .field{margin-bottom:13px;} #shiftdet-modal label{margin-bottom:2px;} #shiftdet-modal .modal-footer{padding:8px 12px;} #shiftdet-modal .section-div{margin:8px 0;} #shiftdet-modal .wysiwyg-body{min-height:54px;}';
+      document.head.appendChild(_sds);
+    }
     var $header = $('<div class="modal-header">');
-    $header.append($('<span class="modal-header-title">').text('Shift Details'));
+    (function(){
+      var $hl=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',minWidth:'0'});
+      $hl.append($('<span class="modal-header-title">').text('Shift Details'));
+      if(det.dateStr){
+        var dD=new Date(det.dateStr+'T00:00:00');
+        var DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        $hl.append($('<span>').css({width:'1px',height:'13px',background:'var(--bd2,#d4dae0)',flexShrink:'0'}));
+        $hl.append($('<span id="shiftdet-date">').css({fontSize:'11.5px',fontWeight:'600',color:'#6c757d',whiteSpace:'nowrap'})
+          .text(DN[dD.getDay()]+', '+MN[dD.getMonth()]+' '+dD.getDate()+', '+dD.getFullYear()));
+      }
+      $header.append($hl);
+    })();
     var $x = $('<button type="button" class="modal-close" title="Close">').html('&#215;');
     $header.append($x);
     $modal.append($header);
@@ -4735,26 +4754,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $roleField=$('<div class="field">');
     $roleField.append($('<label>').text('Role'));
     $roleField.append($('<div>').css({fontSize:'13px',fontWeight:'600',color:'#212529'}).text(det.roleLabel+' #'+det.num));
-    $body.append($roleField);
+
 
     // ---- Assigned staff (interactive: click to assign / change / remove) ----
     var $staffField=$('<div class="field">');
     $staffField.append($('<label>').text('Assigned staff'));
     var $staffArea=$('<div>');
     $staffField.append($staffArea);
-    $body.append($staffField);
+
 
     // ---- read-only: Start–End, Total hours, Meal break ----
     function _fmtBreak(){ if(det.billable) return 'None'; return (det.mealMins>0)?(det.mealMins+' min'):'None'; }
     function roCell(lbl,val){ var $c=$('<div>'); $c.append($('<label>').text(lbl)); $c.append($('<div>').css({fontSize:'13px',color:'#212529',padding:'2px 0'}).text(val)); return $c; }
-    var $ro=$('<div class="field two-col">');
-    $ro.append(roCell('Start \u2013 End', fmtT(det.start)+' \u2013 '+fmtT(det.end)));
-    $ro.append(roCell('Total hours', fmtHrs(det.hrsEach)||'\u2014'));
+    var $ro=$('<div class="field">').css({display:'flex',gap:'14px',alignItems:'flex-start',flexWrap:'wrap',marginTop:'13px',marginBottom:'13px'});
+    var _mealVal=(!det.billable && det.mealMins>0) ? (det.mealMins+' min') : null;
+    $ro.append(roCell('Start \u2013 End', fmtT(det.start)+' \u2013 '+fmtT(det.end)).css({flex:'1 1 auto',whiteSpace:'nowrap'}));
+    if(_mealVal) $ro.append(roCell('Meal break', _mealVal).css({flex:'0 0 auto',whiteSpace:'nowrap'}));
+    $ro.append(roCell('Total', fmtHrs(det.hrsEach)||'\u2014').css({flex:'0 0 auto',whiteSpace:'nowrap'}));
     $body.append($ro);
-    var $ro2=$('<div class="field">');
-    $ro2.append($('<label>').text('Meal break'));
-    $ro2.append($('<div>').css({fontSize:'13px',color:'#212529',padding:'2px 0'}).text(_fmtBreak()));
-    $body.append($ro2);
+    // Role + Assigned staff share one row; the staff area flexes wider and clips long names.
+    var $rsRow=$('<div class="field">').css({display:'flex',gap:'14px',alignItems:'flex-start'});
+    $roleField.css({flex:'0 0 auto',marginBottom:'0'});
+    $staffField.css({flex:'1 1 auto',minWidth:'0',marginBottom:'0'});
+    $rsRow.append($roleField).append($staffField);
+    $body.append($rsRow);
 
     // ---- Notes (same WYSIWYG component as the + Availability Description) ----
     var $notesField=$('<div class="field">').css({marginTop:'2px'});
@@ -4807,7 +4830,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $staffArea.append($warn);
         }
       } else {
-        var $assign=$('<div>').css({cursor:'pointer',border:'1px dashed #c9cfd6',borderRadius:'7px',padding:'8px 10px',background:'#faf6ef',color:'#9d8a66',fontSize:'12.5px',fontWeight:'600'}).text('Unassigned \u2014 click to assign staff');
+        var $assign=$('<div>').css({cursor:'pointer',border:'1px dashed #c9cfd6',borderRadius:'7px',padding:'8px 10px',background:'#faf6ef',color:'#9d8a66',fontSize:'12.5px',fontWeight:'600'}).text('Click to assign staff');
         $assign.on('click',openPicker);
         $staffArea.append($assign);
       }
@@ -4819,7 +4842,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $staffArea.empty();
       var $inp=$('<input type="text" autocomplete="off" placeholder="Search staff\u2026" class="std-input">').css({fontSize:'13px'});
       $staffArea.append($inp);
-      var $list=$('<div>').css({marginTop:'6px',maxHeight:'190px',overflowY:'auto',border:'1px solid #e9ecef',borderRadius:'7px'});
+      $staffArea.css({position:'relative'});
+      // Viewport-fixed so neither the modal body's scroll clipping nor the window's bottom
+      // edge can swallow the results; sized and placed from the input's live rect.
+      var $list=$('<div id="shiftdet-staff-dd">').css({position:'fixed',zIndex:'100060',background:'#fff',boxShadow:'0 6px 18px rgba(20,30,40,.18)',maxHeight:'190px',overflowY:'auto',border:'1px solid #e9ecef',borderRadius:'7px'});
+      function placeList(){
+        var ir=$inp[0].getBoundingClientRect();
+        var vw3=window.innerWidth||1024, vh3=window.innerHeight||768;
+        var w3=Math.max(ir.width,220), l3=Math.min(Math.max(ir.left,8), Math.max(vw3-w3-8,8));
+        var t3=ir.bottom+4;
+        var mh=Math.max(Math.min(190, vh3-t3-10), 90);
+        if(t3+mh>vh3-8 && ir.top-4-190>8){ t3=ir.top-4-190; mh=190; }
+        $list.css({left:l3+'px',top:t3+'px',width:w3+'px',maxHeight:mh+'px'});
+      }
       $staffArea.append($list);
       function refresh(){
         var q=$inp.val().trim().toLowerCase(); $list.empty();
@@ -4846,7 +4881,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $list.append($r);
         });
       }
-      $inp.on('input',refresh);
+      $inp.on('input',function(){ placeList(); refresh(); });
+      $inp.on('focus click',function(){ placeList(); refresh(); });
+      placeList();
       $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); renderStaffArea(); } });
       refresh(); $inp.focus();
     }
@@ -4929,7 +4966,83 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   var _schedResolveDay=null;   // set by the schedule renderer; used for occurrence validation
   function _sessUid(){ return 'ss_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function _sessDet(gid){ var k=String(gid); if(!guideDetails[k]) guideDetails[k]={}; return guideDetails[k]; }
-  function getSessions(gid){ var det=guideDetails[String(gid)]; return (det&&det.sessions)||[]; }
+  function getSessions(gid){
+    var det=guideDetails[String(gid)];
+    var arr=(det&&det.sessions)||[];
+    // One-shift model: split any legacy multi-shift session into independent single-shift
+    // sessions (idempotent, lossless — every shift keeps a full copy of the session data).
+    var i, changed=false, out=[];
+    for(i=0;i<arr.length;i++){
+      var s0=arr[i];
+      if(s0&&s0.shifts&&s0.shifts.length>1){
+        changed=true;
+        s0.shifts.forEach(function(sh,ix){
+          var c=JSON.parse(JSON.stringify(s0));
+          c.shifts=[{roleKey:sh.roleKey,num:sh.num}];
+          if(ix>0) c.id=String(s0.id)+'_m'+ix;
+          out.push(c);
+        });
+      } else out.push(s0);
+    }
+    if(changed&&det) det.sessions=out;
+    return out;
+  }
+  // Application-level session clipboard (duration, type, color, notes). Module-scoped, so it
+  // survives navigation across days, schools and calendars; cleared naturally on page refresh.
+  var _sessClipboard=null;
+  // Multi-session selection: one active selection, scoped to a single school grid + displayed
+  // date (key 'si|origIdx|iso'). Module-scoped so it survives re-renders.
+  var _sessSel={key:null, ids:[]};
+  function _sessSelClear(){ _sessSel={key:null, ids:[]}; }
+  // Predefined activity groups (non-selectable headings; selectable items).
+  var SESSION_ACTIVITY_GROUPS=[
+    {name:'STEM',   items:['Science Experiments','Engineering','Coding','Math','LEGO']},
+    {name:'Arts',   items:['Drawing & Painting','Arts & Crafts','Music & Rhythm','Drama & Theater']},
+    {name:'Sports', items:['Team Sports','Fitness Activities','Relay Races','Ball Games','Yoga']}
+  ];
+  // Activities apply to every Type except these (compared case- and space-insensitively).
+  function _sessActEligible(type){
+    var t=String(type||'').trim().toLowerCase();
+    return ['check-in','sign-out','snack/supper','homework lab'].indexOf(t)<0;
+  }
+  function _sessActFindPredef(name){
+    var t=String(name||'').trim().toLowerCase(), out=null;
+    SESSION_ACTIVITY_GROUPS.forEach(function(g2){ g2.items.forEach(function(it2){ if(it2.toLowerCase()===t) out=it2; }); });
+    return out;
+  }
+  function _sessDelete(gid,id){
+    var det=guideDetails[String(gid)];
+    if(!det||!det.sessions) return;
+    det.sessions=det.sessions.filter(function(x){ return x.id!==id; });
+  }
+  function openSessDeleteConfirm(sessGid, sessRec, done, anchorEl){
+    $('#sess-del-confirm').remove();
+    var $c=$('<div class="sched-modal" id="sess-del-confirm">').css({position:'fixed',left:'50%',top:'16vh',transform:'translateX(-50%)',width:'280px',maxWidth:'92vw',zIndex:'1000010',padding:'14px 16px'});
+    $c.append($('<div>').css({fontWeight:'700',fontSize:'13px',marginBottom:'6px'}).text('Delete this session?'));
+    var when=fmtT(sessRec.start)+' – '+fmtT(sessRec.end)+(sessRec.date?(' · '+sessRec.date):'');
+    $c.append($('<div>').css({fontSize:'11.5px',color:'#495057',marginBottom:'12px',lineHeight:'15px'}).text('“'+(sessRec.type||'Session')+'” · '+when+' will be permanently removed.'));
+    var $row=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px'});
+    var $ca=$('<button type="button" id="sess-del-cancel">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',color:'#495057',cursor:'pointer'}).text('Cancel');
+    var $ok=$('<button type="button" id="sess-del-go">').css({fontSize:'12px',fontWeight:'700',padding:'5px 14px',border:'none',borderRadius:'6px',background:'var(--red,#dc3545)',color:'#fff',cursor:'pointer'}).text('Delete Session');
+    $ca.on('click',function(){ $c.remove(); });
+    $ok.on('click',function(){ _sessDelete(sessGid,sessRec.id); $c.remove(); if(typeof done==='function') done(); });
+    $row.append($ca).append($ok);
+    $c.append($row);
+    $(document.body).append($c);
+    // When invoked from a control (the Edit popup's Delete button), sit right next to it
+    // instead of stacking centred on top of the popup.
+    if(anchorEl&&anchorEl.getBoundingClientRect){
+      var ar=anchorEl.getBoundingClientRect();
+      if(ar.width>0||ar.height>0){
+        var cw=$c[0].offsetWidth||280, chh=$c[0].offsetHeight||110;
+        var vw2=window.innerWidth||1024, vh2=window.innerHeight||768;
+        var lx=Math.min(Math.max(ar.left,8), vw2-cw-8);
+        var ty=ar.top-chh-8;
+        if(ty<8) ty=Math.min(ar.bottom+8, vh2-chh-8);
+        $c.css({left:lx+'px',top:ty+'px',transform:'none'});
+      }
+    }
+  }
   function _sessSave(gid,sess){
     var det=_sessDet(gid); if(!det.sessions) det.sessions=[];
     var i; for(i=0;i<det.sessions.length;i++){ if(det.sessions[i].id===sess.id){ det.sessions[i]=sess; return; } }
@@ -4996,6 +5109,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       end: editing ? sess.end : null,
       endTouched: editing,
       occIso: editing ? (sess.date||opts.dateIso) : opts.dateIso,
+      acts: editing ? ((sess.activities&&sess.activities.slice())||[]) : [],
       notes: editing ? (sess.notes||'') : ''
     };
     function instFor(sh){ var i; for(i=0;i<opts.dayInsts.length;i++){ var d=opts.dayInsts[i]; if(d.roleKey===sh.roleKey&&d.num===sh.num) return d; } return null; }
@@ -5044,14 +5158,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       document.head.appendChild(_sms);
     }
     // ─ Shifts ─
-    var $shF=$('<div class="field">'); $shF.append($('<label>').text('Shifts'));
+    var $shF=$('<div class="field">'); $shF.append($('<label>').text('Shift'));
     var $shList=$('<div id="sess-shift-list">').css({display:'flex',flexDirection:'column',gap:'3px'});
     $shF.append($shList);
-    var $addWrap=$('<div id="sess-add-wrap">').css({marginTop:'5px',position:'relative'});
-    var $addIn=$('<input type="text" class="std-input" id="sess-add-shift" placeholder="Add Shift" autocomplete="off">');
-    var $addList=$('<div id="sess-add-list">').css({display:'none',position:'absolute',left:'0',right:'0',top:'100%',zIndex:'41',background:'#fff',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'6px',boxShadow:'0 6px 18px rgba(20,30,40,.12)',maxHeight:'170px',overflow:'auto'});
-    $addWrap.append($addIn).append($addList);
-    $shF.append($addWrap);
+
     $bd.append($shF).append($('<hr class="section-div"/>'));
     function shiftRowHtml(d,inc){
       var nm=(function(){ var sid=scheduleAssignments[d.shiftKey]; if(sid==null) return null; var i=_staffIdxById(sid); return i>=0?STAFF[i].n:null; })();
@@ -5060,92 +5170,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return {label:d.roleLabel+' #'+d.num, time:timeTxt, staff:nm, included:inc};
     }
     function renderShifts(){
+      // One shift per session: exactly one read-only shift editor row, no add/remove controls.
       $shList.empty();
-      st.shifts.forEach(function(sh){
-        var d=instFor(sh); if(!d) return;
-        var r=shiftRowHtml(d,true);
-        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 8px',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'5px',background:'#fbfcfe',fontSize:'11.5px'});
-        $row.append($('<span>').css({fontWeight:'700',color:'#343a40'}).text(r.label));
-        if(r.time) $row.append($('<span>').css({color:'#6c757d'}).text(r.time));
-        if(r.staff) $row.append($('<span>').css({color:'#0a4ea8',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0',flex:'0 1 auto'}).attr('title',r.staff).text(r.staff));
-        var $x=$('<span class="sess-shift-x">').css({marginLeft:'auto',cursor:st.shifts.length>1?'pointer':'not-allowed',fontWeight:'700',color:st.shifts.length>1?'#6c757d':'#ced4da',padding:'0 3px'}).attr('title',st.shifts.length>1?'Remove shift from session':'At least one shift must remain').html('&#215;');
-        if(st.shifts.length>1){
-          $x.on('click',function(){
-            st.shifts=st.shifts.filter(function(q){ return !(q.roleKey===sh.roleKey&&q.num===sh.num); });
-            var r2=sharedRange();
-            if(st.start<r2.s){ st.start=r2.s; $('#sess-time-start').val(fmtT(st.start)); }
-            if(st.end>r2.e){ st.end=r2.e; $('#sess-time-end').val(fmtT(st.end)); }
-            renderShifts(); renderAddList();
-          });
-        }
-        $row.append($x);
-        $shList.append($row);
-      });
-      if(typeof updateAddVis==='function') updateAddVis();
+      var sh=st.shifts[0]; if(!sh) return;
+      var d=instFor(sh); if(!d) return;
+      var r=shiftRowHtml(d,true);
+      var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 8px',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'5px',background:'#fbfcfe',fontSize:'11.5px'});
+      $row.append($('<span>').css({fontWeight:'700',color:'#343a40'}).text(r.label));
+      if(r.time) $row.append($('<span>').css({color:'#6c757d'}).text(r.time));
+      if(r.staff) $row.append($('<span>').css({color:'#0a4ea8',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0',flex:'0 1 auto'}).attr('title',r.staff).text(r.staff));
+      $shList.append($row);
     }
-    function eligibleAdds(){
-      return opts.dayInsts.filter(function(d){
-        if(st.shifts.some(function(q){ return q.roleKey===d.roleKey&&q.num===d.num; })) return false;
-        return d.ds < st.end && d.de > st.start;   // overlaps the proposed session time
-      });
-    }
-    function _shiftSessOverlaps(d){
-      // Existing sessions already occupying this shift within the proposed session window.
-      return getSessions(opts.gid).filter(function(o){
-        if(o.id===(sess&&sess.id)) return false;
-        if(o.si!==opts.si||o.origIdx!==opts.origIdx) return false;
-        if(!_sessMemberOf(o,d.roleKey,d.num)) return false;
-        if(!_sessOnDate(o,opts.dateIso,opts.dow)) return false;
-        return st.start!=null && st.end!=null && o.start<st.end && o.end>st.start;
-      });
-    }
-    function renderAddList(){
-      $addList.empty();
-      var q=String($addIn.val()||'').trim().toLowerCase();
-      var el=eligibleAdds().filter(function(d){
-        if(!q) return true;
-        var r=shiftRowHtml(d,false);
-        var hay=(r.label+' '+fmtT(d.ds)+' – '+fmtT(d.de)+' '+(r.staff||'')).toLowerCase();
-        return hay.indexOf(q)>=0;
-      });
-      if(!el.length){
-        $addList.append($('<div>').css({padding:'6px 9px',fontSize:'11px',color:'#6c757d'}).text(q?'No eligible shifts match the search.':'No other simultaneous shifts overlap this session.'));
-        return;
-      }
-      el.forEach(function(d,ri){
-        var r=shiftRowHtml(d,false);
-        var $row=$('<div class="sess-add-row">').css({padding:'4px 9px',fontSize:'11.5px',cursor:'pointer',borderTop:ri?'1px solid var(--bd2,#eef1f4)':'none'});
-        var $l1=$('<div>').css({display:'flex',alignItems:'center',gap:'6px'});
-        $l1.append($('<span>').css({fontWeight:'700',color:'#343a40'}).text(r.label));
-        $l1.append($('<span>').css({color:'#6c757d'}).text(fmtT(d.ds)+' – '+fmtT(d.de)));
-        if(r.staff) $l1.append($('<span>').css({color:'#0a4ea8',fontWeight:'600',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0'}).text(r.staff));
-        $row.append($l1);
-        var ovl=_shiftSessOverlaps(d);
-        if(ovl.length){
-          var $l2=$('<div>').css({fontSize:'10px',color:'#b02a37',marginTop:'1px'});
-          $l2.text('Has: '+ovl.map(function(o){ return o.type+' '+fmtT(o.start)+' – '+fmtT(o.end); }).join(', '));
-          $row.append($l2);
-        }
-        $row.on('mouseenter',function(){$(this).css('background','#f3f8ff');}).on('mouseleave',function(){$(this).css('background','');});
-        $row.on('mousedown',function(e){
-          e.preventDefault();
-          st.shifts.push({roleKey:d.roleKey,num:d.num});
-          $addIn.val('');
-          renderShifts();
-          // Close and release: the dropdown only reopens when the user explicitly refocuses.
-          $addList.hide();
-          if($addIn[0]&&$addIn[0].blur) $addIn[0].blur();
-        });
-        $addList.append($row);
-      });
-    }
-    function updateAddVis(){
-      var any=eligibleAdds().length>0;
-      $addWrap.toggle(any);
-      if(!any) $addList.hide();
-    }
-    $addIn.on('focus input',function(){ renderAddList(); $addList.show(); });
-    $addIn.on('blur',function(){ setTimeout(function(){ $addList.hide(); },140); });
+    // (Add Shift machinery removed — one shift per session; horizontal stretch clones instead.)
     // ─ Color machinery ─ circular swatch selector (Calendar-style dark palette); the trigger
     // circle mounts inside the Type row below, the swatch grid pops beneath it.
     var $clCirc=$('<div id="sess-color-circle">').attr('data-color',st.color).css({width:'15px',height:'15px',marginBottom:'3px',background:st.color,border:'1px solid rgb(180,180,180)',borderRadius:'50%',flexShrink:'0'});
@@ -5197,6 +5233,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!st.colorTouched){ setSessColor(color,false); }
       recalcEnd();
       $tyDd.hide();
+      if(typeof updateActVis==='function') updateActVis();
     }
     function renderTypeDd(){
       var q=String($tyIn.val()||'').trim().toLowerCase();
@@ -5219,8 +5256,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       $tyDd.toggle(!!$tyDd.children().length);
     }
-    $tyIn.on('focus input',renderTypeDd);
-    $tyIn.on('blur',function(){ setTimeout(function(){ $tyDd.hide(); },140); st.type=String($tyIn.val()||'').trim(); });
+    $tyIn.on('focus input',function(){ renderTypeDd(); if(typeof updateActVis==='function') updateActVis(); });
+    $tyIn.on('blur',function(){ setTimeout(function(){ $tyDd.hide(); },140); st.type=String($tyIn.val()||'').trim(); if(typeof updateActVis==='function') updateActVis(); });
     // ─ Times row ─ Start and End time side by side; each field carries its own validation slot
     // so errors appear beneath the field they concern. (Single-occurrence sessions: no dates,
     // no weekday recurrence.)
@@ -5236,8 +5273,90 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tdRow.append(_tdCell('End time', $('<input type="text" class="std-input" id="sess-time-end" placeholder="3:45 PM">').val(st.end!=null?fmtT(st.end):''), 'sess-err-te'));
     $tdF.append($tdRow);
     $bd.append($tdF);
-    $bd.on('change','#sess-time-start',function(){ var v=parseT($(this).val()); if(v!=null){ st.start=v; recalcEnd(); updateAddVis(); } });
-    $bd.on('change','#sess-time-end',function(){ var v=parseT($(this).val()); if(v!=null){ st.end=v; st.endTouched=true; updateAddVis(); } });
+    // ── Activities ── searchable multi-select with grouped predefined values + custom entries.
+    // Shown only for eligible Types; pending selections live in st.acts until Create / Update.
+    var $acF=$('<div class="field" id="sess-act-field">');
+    $acF.append($('<label>').text('Activities'));
+    var $acWrap=$('<div>').css({position:'relative'});
+    var $acIn=$('<input type="text" class="std-input" id="sess-act-input" placeholder="Search or add an activity\u2026" autocomplete="off">');
+    var $acDd=$('<div id="sess-act-list">').css({display:'none',position:'absolute',left:'0',right:'0',top:'100%',zIndex:'41',background:'#fff',border:'1px solid var(--bd2,#dee2e6)',borderRadius:'6px',boxShadow:'0 6px 18px rgba(20,30,40,.12)',maxHeight:'190px',overflow:'auto'});
+    $acWrap.append($acIn).append($acDd);
+    $acWrap.css({marginTop:'6px'});
+    var $acSel=$('<div id="sess-act-sel">').css({marginTop:'2px'});
+    $acF.append($acSel).append($acWrap);
+    $bd.append($acF);
+    var _acHi=-1;   // keyboard highlight over SELECTABLE rows only
+    function _actSelectedCi(n){ var t=String(n).trim().toLowerCase(); return st.acts.some(function(a){ return a.toLowerCase()===t; }); }
+    function addAct(name){
+      var n=String(name||'').trim();
+      if(!n) return;
+      var canon=_sessActFindPredef(n)||n;
+      if(_actSelectedCi(canon)) return;
+      st.acts.push(canon);
+      $acIn.val('');
+      renderActSel();
+      $acDd.hide(); _acHi=-1;
+      if($acIn[0]&&$acIn[0].blur) $acIn[0].blur();
+    }
+    function renderActSel(){
+      $acSel.empty();
+      st.acts.forEach(function(a){
+        var $r=$('<div class="sess-act-row">').css({display:'flex',alignItems:'center',gap:'6px',padding:'2px 8px',border:'1px solid var(--bd2,#e4e8ee)',borderRadius:'5px',background:'#f2f3f5',fontSize:'11.5px',marginTop:'3px'});
+        $r.append($('<span>').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'600'}).text(a));
+        var $x=$('<span class="sess-act-x">').css({cursor:'pointer',fontWeight:'700',color:'#6c757d',padding:'0 3px',flexShrink:'0'}).attr('title','Remove '+a).html('&#215;');
+        $x.on('click',function(){ st.acts=st.acts.filter(function(q){ return q!==a; }); renderActSel(); });
+        $r.append($x);
+        $acSel.append($r);
+      });
+    }
+    function renderActDd(){
+      $acDd.empty(); _acHi=-1;
+      var q=String($acIn.val()||'').trim().toLowerCase();
+      var rows=[], exact=false;
+      SESSION_ACTIVITY_GROUPS.forEach(function(gr){
+        var hits=gr.items.filter(function(it2){
+          if(_actSelectedCi(it2)) return false;
+          if(!q) return true;
+          return it2.toLowerCase().indexOf(q)>=0 || gr.name.toLowerCase().indexOf(q)>=0;
+        });
+        gr.items.forEach(function(it2){ if(it2.toLowerCase()===q) exact=true; });
+        if(!hits.length) return;
+        $acDd.append($('<div class="sess-act-hdr">').css({padding:'4px 9px 2px',fontSize:'9.5px',fontWeight:'700',letterSpacing:'.4px',textTransform:'uppercase',color:'#8a939e'}).text(gr.name));
+        hits.forEach(function(it2){
+          var $o=$('<div class="sess-act-opt">').css({padding:'3px 9px 3px 14px',fontSize:'11.5px',cursor:'pointer'}).text(it2);
+          $o.on('mouseenter',function(){$(this).css('background','#f3f8ff');}).on('mouseleave',function(){$(this).css('background','');});
+          $o.on('mousedown',function(e){ e.preventDefault(); addAct(it2); });
+          $acDd.append($o); rows.push($o);
+        });
+      });
+      if(q && !exact && !_actSelectedCi(q)){
+        var $u=$('<div class="sess-act-opt sess-act-use">').css({padding:'4px 9px',fontSize:'11.5px',cursor:'pointer',borderTop:rows.length?'1px solid var(--bd2,#eef1f4)':'none',color:'#0a4ea8',fontWeight:'600'}).text('Use \u201c'+String($acIn.val()).trim()+'\u201d');
+        $u.on('mouseenter',function(){$(this).css('background','#f3f8ff');}).on('mouseleave',function(){$(this).css('background','');});
+        $u.on('mousedown',function(e){ e.preventDefault(); addAct($acIn.val()); });
+        $acDd.append($u); rows.push($u);
+      }
+      if(!rows.length){ $acDd.append($('<div>').css({padding:'6px 9px',fontSize:'11px',color:'#6c757d'}).text(q?'No matching activities.':'All predefined activities are selected.')); }
+      $acDd.data('rows',rows);
+    }
+    function _acPaint(){ var rows=$acDd.data('rows')||[]; rows.forEach(function($o,i){ $o.css('background', i===_acHi?'#e7f1ff':''); }); }
+    $acIn.on('focus input',function(){ renderActDd(); $acDd.show(); });
+    $acIn.on('blur',function(){ setTimeout(function(){ $acDd.hide(); _acHi=-1; },140); });
+    $acIn.on('keydown',function(e){
+      var rows=$acDd.data('rows')||[];
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(rows.length){ _acHi=(_acHi+1)%rows.length; _acPaint(); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(rows.length){ _acHi=(_acHi-1+rows.length)%rows.length; _acPaint(); } }
+      else if(e.key==='Enter'){ e.preventDefault(); if(_acHi>=0&&rows[_acHi]) rows[_acHi].trigger('mousedown'); }
+      else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); $acDd.hide(); _acHi=-1; }
+    });
+    function updateActVis(){
+      var ok=_sessActEligible($tyIn.val());
+      $acF.toggle(ok);
+      if(!ok){ $acDd.hide(); }
+    }
+    renderActSel();
+    updateActVis();
+    $bd.on('change','#sess-time-start',function(){ var v=parseT($(this).val()); if(v!=null){ st.start=v; recalcEnd(); } });
+    $bd.on('change','#sess-time-end',function(){ var v=parseT($(this).val()); if(v!=null){ st.end=v; st.endTouched=true; } });
 
 
     // ─ Notes ─
@@ -5259,6 +5378,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $md.append($bd);
     // ─ Footer ─
     var $ft=$('<div class="modal-footer">');
+    if(editing){
+      var $del=$('<button type="button" id="sess-delete">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--red,#dc3545)',borderRadius:'6px',background:'#fff',color:'var(--red,#dc3545)',cursor:'pointer',marginRight:'auto'}).text('Delete');
+      $del.on('click',function(){
+        openSessDeleteConfirm(opts.gid, sess, function(){ close(); render(true); }, $del[0]);
+      });
+      $ft.append($del);
+    }
     var $cancel=$('<button type="button" id="sess-cancel">').css({fontSize:'12px',fontWeight:'600',padding:'5px 14px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',color:'#495057',cursor:'pointer'}).text('Cancel');
     var $save=$('<button type="button" id="sess-save">').css({fontSize:'12px',fontWeight:'700',padding:'5px 16px',border:'none',borderRadius:'6px',background:'#0d6efd',color:'#fff',cursor:'pointer',marginLeft:'8px'}).text(editing?'Save':'Create');
     $ft.append($cancel).append($save);
@@ -5269,16 +5395,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!$md[0].isConnected){ document.removeEventListener('mousedown',_outMd,true); return; }
       if(ev.target && ev.target.nodeType===1 && !document.contains(ev.target)) return;   // detached mid-gesture
       if($md[0].contains(ev.target)) return;
-      if(ev.target.closest && (ev.target.closest('#sess-confirm-card')||ev.target.closest('#sess-color-pop'))) return;
+      if(ev.target.closest && (ev.target.closest('#sess-confirm-card')||ev.target.closest('#sess-color-pop')||ev.target.closest('#sess-del-confirm'))) return;
       if($clPop.is(':visible')){ $clPop.hide(); return; }
       guardedClose();
     };
     document.addEventListener('mousedown',_outMd,true);
-    function close(){ document.removeEventListener('mousedown',_outMd,true); $clPop.remove(); $md.remove(); }
+    function close(){ document.removeEventListener('mousedown',_outMd,true); $clPop.remove(); $('#sess-del-confirm').remove(); $md.remove(); }
     function snapshot(){
       return JSON.stringify({ sh:st.shifts, ty:String($tyIn.val()||'').trim(),
         s:$('#sess-time-start').val(), e:$('#sess-time-end').val(),
-        c:st.color, n:$nt.html() });
+        c:st.color, a:st.acts.slice(), n:$nt.html() });
     }
     var _base=snapshot();
     // The x (and a click outside the modal) protect unsaved work with a three-way confirmation.
@@ -5352,6 +5478,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         type:st.type, color:st.color,
         start:st.start, end:st.end,
         date:st.occIso,
+        activities: _sessActEligible($tyIn.val()) ? st.acts.slice() : [],
         notes:$nt.html()
       };
       _sessRememberType(opts.gid, st.type, st.color);
@@ -5914,6 +6041,324 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         });
       }
       function _coversOk(ch,sS,sE){ return ch && ch.it.ds<=sS+1e-9 && ch.it.de>=sE-1e-9; }
+      // ── Multi-session selection (same school grid + same displayed date only) ──
+      function _gridKey(){ return si+'|'+origIdx+'|'+isoD(dateObj); }
+      function _selHere(id){ return _sessSel.key===_gridKey() && _sessSel.ids.indexOf(id)>=0; }
+      function _selCount(){ return _sessSel.key===_gridKey() ? _sessSel.ids.length : 0; }
+      function _selMembers(){
+        if(_sessSel.key!==_gridKey()) return [];
+        return getSessions(g.id).filter(function(o){
+          return _sessSel.ids.indexOf(o.id)>=0 && o.si===si && o.origIdx===origIdx &&
+                 _sessOnDate(o, isoD(dateObj), dateObj.getDay());
+        });
+      }
+      function _colIdxOf(ssn2){ var ch=_instFor(ssn2.shifts[0].roleKey, ssn2.shifts[0].num); return ch?_colHits.indexOf(ch):-1; }
+      function _roleLblOf(ci){ var ch=_colHits[ci]; return ch?(ch.it.inst.roleLabel+' #'+ch.it.inst.num):'?'; }
+      // Conflict check that ignores EVERY selected session (their current spots are not obstacles
+      // while the group moves) and reports the blockers it finds.
+      function _sessBlockersEx(selSet, rk, num, sS, sE){
+        var out=[];
+        getSessions(g.id).forEach(function(o){
+          if(selSet[o.id]) return;
+          if(o.si!==si||o.origIdx!==origIdx) return;
+          if(!_sessOnDate(o,isoD(dateObj),dateObj.getDay())) return;
+          if(!_sessMemberOf(o,rk,num)) return;
+          if(o.start<sE && o.end>sS) out.push('\u201c'+(o.type||'Session')+'\u201d '+fmtT(o.start)+' \u2013 '+fmtT(o.end));
+        });
+        return out;
+      }
+      // Group drag: the whole selection moves as one rigid arrangement — uniform time delta
+      // (15-min snaps) and uniform column delta; valid only when EVERY member lands cleanly,
+      // and saved atomically (all or none).
+      function _beginGroupDrag(e0, anchorSsn){
+        e0.preventDefault(); e0.stopPropagation();
+        var sx=e0.clientX, sy=e0.clientY, moved=false;
+        var members=_selMembers();
+        var selSet={}; members.forEach(function(o){ selSet[o.id]=1; });
+        var meta=members.map(function(o){ return {o:o, ci:_colIdxOf(o)}; }).filter(function(m){ return m.ci>=0; });
+        var am=null; meta.forEach(function(m){ if(m.o.id===anchorSsn.id) am=m; });
+        if(!am || meta.length<2) return;
+        var prop={dT:0,dC:0,valid:true,blockers:[]};
+        var $pvs=[];
+        function validate(){
+          prop.blockers=[];
+          var ok=true;
+          meta.forEach(function(m){
+            var ci2=m.ci+prop.dC, st=m.o.start+prop.dT, en=m.o.end+prop.dT;
+            if(ci2<0||ci2>=_colHits.length){ ok=false; prop.blockers.push('\u201c'+(m.o.type||'Session')+'\u201d: no role column at that offset'); return; }
+            var ch=_colHits[ci2];
+            if(!(ch.it.ds<=st+1e-9 && ch.it.de>=en-1e-9)){ ok=false; prop.blockers.push('\u201c'+(m.o.type||'Session')+'\u201d: outside '+_roleLblOf(ci2)+' hours ('+fmtT(ch.it.ds)+' \u2013 '+fmtT(ch.it.de)+')'); return; }
+            var bl=_sessBlockersEx(selSet, ch.it.inst.roleKey, ch.it.inst.num, st, en);
+            if(bl.length){ ok=false; bl.forEach(function(b){ prop.blockers.push(b+' on '+_roleLblOf(ci2)); }); }
+          });
+          return ok && meta.length>0;
+        }
+        function paint(){
+          if(!$pvs.length){
+            meta.forEach(function(){ var $p=$('<div class="sess-drag-preview">').css({position:'absolute',zIndex:'30',pointerEvents:'none',borderRadius:'4px',padding:'1px 4px',boxSizing:'border-box',overflow:'hidden',fontSize:'9px',fontWeight:'700',whiteSpace:'nowrap',textOverflow:'ellipsis'}); $outer.append($p); $pvs.push($p); });
+          }
+          var orr=$outer[0].getBoundingClientRect();
+          meta.forEach(function(m,ix){
+            var ci2=Math.min(Math.max(m.ci+prop.dC,0),_colHits.length-1);
+            var cr=_colHits[ci2]?_colHits[ci2].colEl.getBoundingClientRect():null;
+            var left=(cr&&cr.width>0)?(cr.left-orr.left+8):(TIMEW+ci2*COLW+8);
+            var right=(cr&&cr.width>0)?(cr.right-orr.left-8):(TIMEW+(ci2+1)*COLW-8);
+            var st=m.o.start+prop.dT, en=m.o.end+prop.dT, ok=prop.valid;
+            $pvs[ix].css({left:left+'px',width:Math.max(right-left,40)+'px',
+              top:(HDRH+(st-GSH)*HH)+'px',height:Math.max((en-st)*HH-2,13)+'px',
+              background: ok? m.o.color : 'rgba(220,53,69,.18)',
+              color: ok? _sessContrast(m.o.color) : '#b02a37',
+              border: ok? '1.5px dashed rgba(255,255,255,.85)' : '1.5px dashed #dc3545',
+              opacity: ok? '.9' : '1'}).text(fmtT(st)+' \u2013 '+fmtT(en));
+          });
+        }
+        function onMove(e){
+          var dx=e.clientX-sx, dy=e.clientY-sy;
+          if(!moved && Math.abs(dx)<4 && Math.abs(dy)<4) return;
+          moved=true; _sessDragConsumed=true;
+          prop.dT=Math.round((dy/HH)*4)/4;
+          var ciNow=_colIdxAtX(e.clientX);
+          if(ciNow>=0) prop.dC=ciNow-am.ci;
+          prop.valid=validate();
+          paint();
+        }
+        function onUp(){
+          document.removeEventListener('mousemove',onMove,true);
+          document.removeEventListener('mouseup',onUp,true);
+          $pvs.forEach(function($p){ $p.remove(); });
+          if(!moved){ _sessDragConsumed=false; return; }
+          prop.valid=validate();
+          if(prop.valid && (prop.dT!==0||prop.dC!==0)){
+            meta.forEach(function(m){
+              var ch=_colHits[m.ci+prop.dC];
+              var rec=JSON.parse(JSON.stringify(m.o));
+              rec.start=m.o.start+prop.dT; rec.end=m.o.end+prop.dT;
+              rec.shifts=[{roleKey:ch.it.inst.roleKey, num:ch.it.inst.num}];
+              if(!rec.date) rec.date=isoD(dateObj);
+              _sessSave(g.id, rec);
+            });
+          } else if(!prop.valid){
+            var msg=prop.blockers.slice(0,3).join('\n')+(prop.blockers.length>3?('\n+'+(prop.blockers.length-3)+' more'):'');
+            _sessToast('The group cannot move there:\n'+msg, sx, sy);
+          }
+          render(true);   // selection ids unchanged \u2014 the moved group stays selected
+        }
+        document.addEventListener('mousemove',onMove,true);
+        document.addEventListener('mouseup',onUp,true);
+      }
+      // Multi-selection context menu: Copy (N) Sessions / divider / Delete (N) Sessions.
+      function _sessMultiCtxMenu(e){
+        var members=_selMembers(); var n=members.length;
+        var mm=_sessMenuShell(e);
+        mm.item('copy','Copy ('+n+') Sessions',false,function(){
+          var t0=null, c0=null;
+          var meta=members.map(function(o){ return {o:o, ci:_colIdxOf(o)}; }).filter(function(m){ return m.ci>=0; });
+          meta.forEach(function(m){ if(t0==null||m.o.start<t0) t0=m.o.start; if(c0==null||m.ci<c0) c0=m.ci; });
+          _sessClipboard={ multi:true, n:meta.length, items:meta.map(function(m){
+            return { dur:(m.o.end-m.o.start), type:m.o.type, color:m.o.color, notes:m.o.notes||'',
+                     activities:(m.o.activities||[]).slice(), dt:(m.o.start-t0), dc:(m.ci-c0) };
+          }) };
+        });
+        mm.divider();
+        mm.item('trash','Delete ('+n+') Sessions',true,function(mr){
+          _sessGroupDelConfirm(members, {getBoundingClientRect:function(){ return mr; }});
+        });
+        mm.place();
+      }
+      // Group delete confirmation \u2014 same card id as the single confirm so the overlay gate,
+      // outside-click and Escape handling all apply unchanged.
+      function _sessGroupDelConfirm(members, anchorEl){
+        $('#sess-del-confirm').remove();
+        var n=members.length;
+        var $c=$('<div class="sched-modal" id="sess-del-confirm">').css({position:'fixed',left:'50%',top:'16vh',transform:'translateX(-50%)',width:'280px',maxWidth:'92vw',zIndex:'1000010',padding:'14px 16px',boxShadow:'0 10px 30px rgba(20,30,40,.25)'});
+        $c.append($('<div>').css({fontWeight:'700',fontSize:'13px',marginBottom:'6px'}).text('Delete ('+n+') Sessions?'));
+        $c.append($('<div>').css({fontSize:'11.5px',color:'#495057',marginBottom:'12px',lineHeight:'15px'}).text('All '+n+' selected sessions on this day will be removed.'));
+        var $row=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px'});
+        var $ca=$('<button type="button" id="sess-del-cancel">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',cursor:'pointer',color:'#343a40'}).text('Cancel');
+        var $ok=$('<button type="button" id="sess-del-go">').css({fontSize:'12px',fontWeight:'700',padding:'5px 14px',border:'none',borderRadius:'6px',background:'var(--red,#dc3545)',color:'#fff',cursor:'pointer'}).text('Delete ('+n+') Sessions');
+        $ca.on('click',function(){ $c.remove(); });
+        $ok.on('click',function(){
+          var det=_sessDet(g.id)||{}; var kill={}; members.forEach(function(o){ kill[o.id]=1; });
+          if(det.sessions) det.sessions=det.sessions.filter(function(x){ return !kill[x.id]; });
+          _sessSelClear();
+          $c.remove();
+          render(true);
+        });
+        $row.append($ca).append($ok);
+        $c.append($row);
+        $(document.body).append($c);
+        if(anchorEl&&anchorEl.getBoundingClientRect){
+          var ar=anchorEl.getBoundingClientRect();
+          if(ar.width>0||ar.height>0){
+            var cw=$c[0].offsetWidth||280, chh=$c[0].offsetHeight||110;
+            var vw2=window.innerWidth||1024, vh2=window.innerHeight||768;
+            var lx=Math.min(Math.max(ar.left,8), vw2-cw-8);
+            var ty=ar.top-chh-8;
+            if(ty<8) ty=Math.min(ar.bottom+8, vh2-chh-8);
+            $c.css({left:lx+'px',top:ty+'px',transform:'none'});
+          }
+        }
+      }
+      // Evaluate a full group paste at a destination position BEFORE the menu opens: enabled
+      // only when the complete arrangement maps validly; otherwise the obstacles are listed.
+      function _evalGroupPaste(h, e){
+        var cb=_sessClipboard;
+        var idx=_colHits.indexOf(h);
+        var snapMax=Math.max(h.it.ds, h.it.de-0.25);
+        var s0=_snapAt(e.clientY, h.it.ds, snapMax);
+        var recs=[], obstacles=[];
+        cb.items.forEach(function(it3){
+          var ci=idx+it3.dc, st=s0+it3.dt, en=st+it3.dur;
+          if(ci<0||ci>=_colHits.length){ obstacles.push('\u201c'+(it3.type||'Session')+'\u201d: no role column at offset +'+it3.dc); return; }
+          var ch=_colHits[ci];
+          if(!(ch.it.ds<=st+1e-9 && ch.it.de>=en-1e-9)){ obstacles.push('\u201c'+(it3.type||'Session')+'\u201d '+fmtT(st)+' \u2013 '+fmtT(en)+': outside '+_roleLblOf(ci)+' hours'); return; }
+          var bl=_sessBlockersEx({}, ch.it.inst.roleKey, ch.it.inst.num, st, en);
+          if(bl.length){ bl.forEach(function(b){ obstacles.push(b+' on '+_roleLblOf(ci)); }); return; }
+          recs.push({ id:'ss_p'+Date.now().toString(36)+'_'+Math.floor(Math.random()*1e5)+'_'+recs.length,
+            si:si, origIdx:origIdx, calId:(calRows[origIdx]||{}).calId,
+            shifts:[{roleKey:ch.it.inst.roleKey, num:ch.it.inst.num}],
+            type:it3.type, color:it3.color, start:st, end:en,
+            date:isoD(dateObj), notes:it3.notes, activities:(it3.activities||[]).slice() });
+        });
+        return { ok:obstacles.length===0, recs:recs, obstacles:obstacles };
+      }
+      function _sessMenuShell(e){
+        $('.sess-ctx-menu').remove();
+        var $m=_wsStyleMenuEl($('<div class="ws-menu sess-ctx-menu">'));
+        function closeMenu(){ $m.remove(); $(document).off('.sessctx'); }
+        function place(){
+          $('body').append($m);
+          $m.css({position:'fixed',left:'-9999px',top:'0px',visibility:'hidden',zIndex:1000007});
+          var mw=$m[0].offsetWidth||160, mh=$m[0].offsetHeight||40;
+          var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+          var left=e.clientX||0, top=e.clientY||0;
+          if(left+mw>vw-4) left=Math.max(4,vw-mw-4);
+          if(top+mh>vh-4) top=Math.max(4,vh-mh-4);
+          $m.css({left:left+'px',top:top+'px',visibility:'visible'});
+          setTimeout(function(){
+            $(document).on('mousedown.sessctx',function(ev){ if(!$m[0].contains(ev.target)) closeMenu(); });
+            $(document).on('keydown.sessctx',function(ev){ if(ev.key==='Escape') closeMenu(); });
+          },0);
+        }
+        function item(iconName,label,danger,fn,fullTitle,disabled){
+          var $it=$('<div class="ws-menu-item'+(danger?' danger':'')+(disabled?' disabled':'')+'">').css({fontSize:'12.5px',color:disabled?'#9aa2ab':(danger?'#dc3545':'#343a40'),padding:'6px 12px',borderRadius:'5px',cursor:disabled?'default':'pointer',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap',opacity:disabled?'.75':'1'});
+          if(fullTitle) $it.attr('title',fullTitle);
+          if(!disabled){
+            $it.on('mouseenter',function(){ $(this).css('background',danger?'#f8d7da':'#eef3f9'); }).on('mouseleave',function(){ $(this).css('background','transparent'); });
+          }
+          $it.append($('<span class="ws-menu-icon">').html(_pgIcon(iconName)).css({display:'inline-flex',width:'16px',justifyContent:'center',opacity:disabled?'.6':'1'}));
+          $it.append(document.createTextNode(label));
+          $it.on('click',function(ev){ ev.stopPropagation(); if(disabled) return; var mr=$m[0].getBoundingClientRect(); closeMenu(); fn(mr); });
+          $m.append($it);
+          return $it;
+        }
+        function note(text){ $m.append($('<div class="ws-menu-note">').css({padding:'2px 12px 5px 36px',fontSize:'10.5px',lineHeight:'14px',color:'#842029',maxWidth:'270px',whiteSpace:'normal'}).text(text)); }
+        function divider(){ $m.append($('<div class="ws-menu-div">').css({height:'1px',background:'#e9ecef',margin:'4px 2px'})); }
+        return {$m:$m, item:item, divider:divider, note:note, place:place, close:closeMenu};
+      }
+      function _sessToast(msg,x,y){
+        $('#sess-paste-msg').remove();
+        var vw=window.innerWidth||1024;
+        var $t=$('<div id="sess-paste-msg">').css({position:'fixed',left:Math.min(Math.max((x||20),8),vw-280)+'px',top:Math.max((y||20)-10,8)+'px',zIndex:'1000012',maxWidth:'260px',background:'#fff',border:'1px solid var(--red,#dc3545)',borderRadius:'7px',boxShadow:'0 6px 18px rgba(20,30,40,.18)',padding:'8px 11px',fontSize:'11.5px',color:'#842029',lineHeight:'15px'}).text(msg);
+        $(document.body).append($t);
+        setTimeout(function(){ $t.fadeOut?$t.fadeOut(180,function(){$t.remove();}):$t.remove(); },2600);
+      }
+      // Action label carrying the session's Type/name: normal capitalization, no quotes,
+      // ellipsis past 24 chars (full label in the tooltip), generic fallback for empty names.
+      function _sessActLbl(prefix, name, fallback){
+        var n=String(name||'').trim();
+        if(!n) return {label:fallback, title:null};
+        if(n.length>24) return {label:prefix+n.slice(0,24)+'\u2026', title:prefix+n};
+        return {label:prefix+n, title:null};
+      }
+      function _sessCtxMenu(e, ssn, colIt){
+        if(_selCount()>1){
+          if(_selHere(ssn.id)) return _sessMultiCtxMenu(e);
+          _sessSel={key:_gridKey(), ids:[ssn.id]};   // outside the selection: collapse to this one
+          render(true);
+        }
+        var mm=_sessMenuShell(e);
+        var _cpL=_sessActLbl('Copy ', ssn.type, 'Copy Session');
+        // Copy — duration, type, color, notes into the app-level clipboard.
+        mm.item('copy',_cpL.label,false,function(){
+          _sessClipboard={dur:(ssn.end-ssn.start), type:ssn.type, color:ssn.color, notes:ssn.notes||'', activities:(ssn.activities||[]).slice()};
+        },_cpL.title);
+        if(_sessClipboard){
+          // Replace: atomic — validate the copied duration from the target's start first; the
+          // target is only overwritten (same id, one _sessSave) after validation passes.
+          var _rpL=_sessActLbl('Replace with ', _sessClipboard.type, 'Replace with Copied Session');
+          mm.item('replace',_rpL.label,false,function(){
+            var cb=_sessClipboard;
+            var ns=ssn.start, ne=ns+cb.dur;
+            if(colIt && (ns<colIt.ds-1e-9 || ne>colIt.de+1e-9)){
+              _sessToast('The copied session ('+fmtHrs(cb.dur)+'h) does not fit within this shift from '+fmtT(ns)+'.', e.clientX, e.clientY);
+              return;
+            }
+            if(_sessConflict(ssn.id, ssn.shifts[0].roleKey, ssn.shifts[0].num, ns, ne)){
+              _sessToast('Replacing would overlap another session on this role \u2014 nothing was changed.', e.clientX, e.clientY);
+              return;
+            }
+            var rec=JSON.parse(JSON.stringify(ssn));
+            rec.end=ne; rec.type=cb.type; rec.color=cb.color; rec.notes=cb.notes;
+            rec.activities=(cb.activities||[]).slice();
+            if(!rec.date) rec.date=isoD(dateObj);
+            _sessSave(g.id, rec);
+            render(true);
+          },_rpL.title);
+        }
+        mm.divider();
+        mm.item('trash','Delete',true,function(mr){
+          var anchor={getBoundingClientRect:function(){ return mr; }};
+          openSessDeleteConfirm(g.id, ssn, function(){ render(true); }, anchor);
+        });
+        mm.place();
+      }
+      function _sessPasteMenu(e, h){
+        var mm=_sessMenuShell(e);
+        if(_sessClipboard&&_sessClipboard.multi){
+          var ev2=_evalGroupPaste(h, e);
+          mm.item('paste','Paste ('+_sessClipboard.n+') Sessions',false,function(){
+            ev2.recs.forEach(function(rec){ _sessSave(g.id, rec); });
+            render(true);
+          },null,!ev2.ok);
+          if(!ev2.ok){ ev2.obstacles.slice(0,4).forEach(function(o){ mm.note(o); }); if(ev2.obstacles.length>4) mm.note('+'+(ev2.obstacles.length-4)+' more'); }
+          mm.place();
+          return;
+        }
+        var _psL=_sessActLbl('Paste ', _sessClipboard&&_sessClipboard.type, 'Paste Session');
+        mm.item('paste',_psL.label,false,function(){
+          var cb=_sessClipboard; if(!cb) return;
+          var snapMax=Math.max(h.it.ds, h.it.de-0.25);
+          var s0=_snapAt(e.clientY, h.it.ds, snapMax);
+          var e0=s0+cb.dur;
+          if(e0>h.it.de+1e-9){
+            _sessToast('The copied session ('+fmtHrs(cb.dur)+'h) does not fit here \u2014 it would run past the shift\u2019s '+fmtT(h.it.de)+' end.', e.clientX, e.clientY);
+            return;
+          }
+          if(_sessConflict(null, h.it.inst.roleKey, h.it.inst.num, s0, e0)){
+            _sessToast('Pasting here would overlap another session on this role \u2014 pick a free slot.', e.clientX, e.clientY);
+            return;
+          }
+          var rec={ id:'ss_p'+Date.now().toString(36)+'_'+Math.floor(Math.random()*1e4),
+            si:si, origIdx:origIdx, calId:(calRows[origIdx]||{}).calId,
+            shifts:[{roleKey:h.it.inst.roleKey, num:h.it.inst.num}],
+            type:cb.type, color:cb.color, start:s0, end:e0,
+            date:isoD(dateObj), notes:cb.notes, activities:(cb.activities||[]).slice() };
+          _sessSave(g.id, rec);
+          render(true);
+        },_psL.title);
+        mm.place();
+      }
+      var _capCtx=function(e){
+        if(!$scrollWrap[0].isConnected){ document.removeEventListener('contextmenu',_capCtx,true); return; }
+        if(!_sessClipboard) return;                                  // nothing to paste
+        if(_sessUiBlocked()) return;
+        if(_overSessUi(e)) return;                                   // session blocks run their own menu
+        var h=_hitAt(e); if(!h) return;
+        e.preventDefault(); e.stopPropagation();
+        _sessPasteMenu(e, h);
+      };
+      document.addEventListener('contextmenu',_capCtx,true);
       function _wireSessDrag($sb, ssn){
         var single = ssn.shifts.length===1;
         var $rt=$('<div class="sess-rz sess-rz-t">').css({position:'absolute',left:'6px',right:'6px',top:'-2px',height:'7px',cursor:'ns-resize',zIndex:'2'});
@@ -5925,6 +6370,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $sb.append($rl).append($rr);
         }
         function begin(mode,e0){
+          if(e0.ctrlKey||e0.metaKey) return;   // selection gesture, not a drag
+          if(mode==='move' && _selCount()>1 && _selHere(ssn.id)) return _beginGroupDrag(e0, ssn);
           e0.preventDefault(); e0.stopPropagation();
           var sx=e0.clientX, sy=e0.clientY, moved=false;
           var oS=ssn.start, oE=ssn.end, dur=oE-oS;
@@ -6008,7 +6455,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(!moved){ _sessDragConsumed=false; return; }
             // Revalidate against saved data immediately before writing.
             prop.valid=validate();
-            if(prop.valid && (prop.s!==oS||prop.e!==oE||JSON.stringify(prop.shifts)!==JSON.stringify(ssn.shifts))){
+            if(prop.valid && (mode==='rl'||mode==='rr')){
+              // Horizontal stretch: the original session and shift stay untouched; every ADDITIONAL
+              // covered role gets an independent cloned session (same date, times, type, color,
+              // notes and metadata) — one per role, none for roles shed before release.
+              var a0=ssn.shifts[0], ci3=0;
+              prop.shifts.forEach(function(sh3){
+                if(sh3.roleKey===a0.roleKey&&sh3.num===a0.num) return;
+                var cl=JSON.parse(JSON.stringify(ssn));
+                cl.id=String(ssn.id)+'_c'+(Date.now()%1e7)+'_'+(ci3++);
+                cl.shifts=[{roleKey:sh3.roleKey,num:sh3.num}];
+                cl.start=prop.s; cl.end=prop.e;
+                if(!cl.date) cl.date=isoD(dateObj);
+                _sessSave(g.id, cl);
+              });
+              if(!ssn.date){ var r0=JSON.parse(JSON.stringify(ssn)); r0.date=isoD(dateObj); _sessSave(g.id, r0); }
+            } else if(prop.valid && (prop.s!==oS||prop.e!==oE||JSON.stringify(prop.shifts)!==JSON.stringify(ssn.shifts))){
               var rec=JSON.parse(JSON.stringify(ssn));
               rec.start=prop.s; rec.end=prop.e; rec.shifts=prop.shifts;
               if(!rec.date) rec.date=isoD(dateObj);   // legacy records settle on this occurrence
@@ -6121,17 +6583,54 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $sb=$('<div class="sess-block">')
               .css({position:'absolute',left:'8px',right:'8px',top:sy+'px',height:shh+'px',zIndex:'25',
                 background:ssn.color,border:'1px solid rgba(0,0,0,.18)',borderRadius:'4px',
-                padding:'1px 5px',boxSizing:'border-box',overflow:'hidden',cursor:'pointer',
+                padding:'1px 5px 3px',boxSizing:'border-box',overflow:'hidden',cursor:'pointer',
                 fontSize:'9.5px',fontWeight:'700',color:_sessContrast(ssn.color),
-                whiteSpace:'nowrap',textOverflow:'ellipsis',boxShadow:'0 1px 2px rgba(20,30,40,.12)'})
-              .attr('title', ssn.type+'  \u00b7  '+fmtT(ssn.start)+' \u2013 '+fmtT(ssn.end))
-              .text(ssn.type);
+                boxShadow:'0 1px 2px rgba(20,30,40,.12)'})
+              .attr('title', ssn.type+'  \u00b7  '+fmtT(ssn.start)+' \u2013 '+fmtT(ssn.end)
+                +((ssn.activities&&ssn.activities.length)?('\nActivities: '+ssn.activities.join(', ')):'')
+                +(String(ssn.notes||'').replace(/<[^>]*>/g,' ').trim()?('\nNotes: '+String(ssn.notes||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/\s+/g,' ').trim()):''));
+            $sb.append($('<div class="sess-name">').css({fontWeight:'700',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(ssn.type));
+            // Content priority: name, then Activities (secondary but stronger than Notes), then
+            // Notes — height-aware: Activities take the lines they need from the space under the
+            // name; Notes clip first, getting only what remains; neither renders without room for
+            // one readable ~10px line.
+            var _sbActs=(ssn.activities&&ssn.activities.length)?ssn.activities.join(', '):'';
+            var _sbNote=String(ssn.notes||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/\s+/g,' ').trim();
+            var _nAvail=Math.floor((shh-4-13-1)/10);      // whole ~10px lines under the name (3px bottom clearance)
+            if(_sbActs && _nAvail>=1){
+              var _aLines=Math.min(Math.max(Math.ceil(_sbActs.length/26),1), _nAvail);
+              $sb.append($('<div class="sess-acts">').css({fontSize:'8.5px',fontWeight:'600',fontStyle:'normal',lineHeight:'1.15',marginTop:'1px',opacity:'.96',overflow:'hidden',whiteSpace:'normal',wordBreak:'break-word',maxHeight:(_aLines*10)+'px',display:'-webkit-box',WebkitBoxOrient:'vertical',WebkitLineClamp:String(_aLines)}).text(_sbActs));
+              _nAvail-=_aLines;
+            }
+            if(_sbNote && _nAvail>=1){
+              $sb.append($('<div class="sess-note">').css({fontSize:'8.5px',fontWeight:'400',fontStyle:'italic',lineHeight:'1.15',marginTop:'1px',opacity:'.92',overflow:'hidden',whiteSpace:'normal',wordBreak:'break-word',maxHeight:(_nAvail*10)+'px',display:'-webkit-box',WebkitBoxOrient:'vertical',WebkitLineClamp:String(_nAvail)}).text(_sbNote));
+            }
             $sb.on('mousemove',function(e){ e.stopPropagation(); _tcHide(); });
+            if(_selHere(ssn.id)){
+              // Consistent selection highlight that stays visible over any session color and
+              // leaves the block's own color and text untouched.
+              $sb.addClass('sess-selected').css({outline:'2px solid #0d6efd',outlineOffset:'1px',
+                boxShadow:'0 0 0 3px rgba(13,110,253,.30), 0 1px 2px rgba(20,30,40,.12)'});
+            }
             _wireSessDrag($sb, ssn);
+            $sb.on('contextmenu',function(e){ e.preventDefault(); e.stopPropagation(); _sessCtxMenu(e, ssn, it); });
             $sb.on('click',function(e){
               e.stopPropagation();
               if(_sessDragConsumed){ _sessDragConsumed=false; return; }
               if($(e.target).hasClass('sess-rz')) return;
+              if(e.ctrlKey||e.metaKey){
+                // Ctrl / Cmd click builds the selection and never opens Edit. A click in a
+                // different grid or date starts a fresh selection with this session.
+                var k=_gridKey();
+                if(_sessSel.key!==k){ _sessSel={key:k, ids:[ssn.id]}; }
+                else {
+                  var ix=_sessSel.ids.indexOf(ssn.id);
+                  if(ix>=0) _sessSel.ids.splice(ix,1); else _sessSel.ids.push(ssn.id);
+                }
+                render(true);
+                return;
+              }
+              if(_selCount()>1){ _sessSel={key:_gridKey(), ids:[ssn.id]}; render(true); }
               openSessionDialog({ mode:'edit', gid:g.id, guideName:g.name, si:si, origIdx:origIdx,
                 calRow:calRows[origIdx]||{}, schoolName:schoolName, dateIso:isoD(dateObj), dow:dateObj.getDay(),
                 dayInsts:dayInsts, clicked:{roleKey:it.inst.roleKey, num:it.inst.num}, sess:ssn });
@@ -6164,19 +6663,27 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       function _overSessUi(e){
         var t=e.target;
-        return !!(t&&t.closest&&(t.closest('.sess-block')||t.closest('#sess-modal')||t.closest('#sess-confirm-card')));
+        return !!(t&&t.closest&&(t.closest('.sess-block')||t.closest('#sess-modal')||t.closest('#sess-confirm-card')||t.closest('.sess-ctx-menu')||t.closest('#sess-del-confirm')||t.closest('#shiftdet-modal')||t.closest('.modal-overlay')||t.closest('.xs-ui')));
+      }
+      // True while any overlay dialog (Shift Details etc.) is open — the grid's geometric
+      // fallbacks stand down entirely so clicks inside the window can never reach the matrix.
+      function _sessUiBlocked(){
+        return !!(document.getElementById('sess-modal')||document.getElementById('sess-del-confirm')||document.getElementById('shiftdet-modal')||document.querySelector('.modal-overlay.open'));
       }
       var _capClick=function(e){
         if(!$scrollWrap[0].isConnected){
           document.removeEventListener('click',_capClick,true);
           document.removeEventListener('mousemove',_capMove,true);
+          document.removeEventListener('contextmenu',_capCtx,true);
           return;
         }
         if(e.button!=null&&e.button!==0) return;
-        if(document.getElementById('sess-modal')) return;   // dialog open — it owns clicks
+        if(_sessUiBlocked()) return;                                // an overlay dialog owns all clicks
         if(_overSessUi(e)) return;                                  // session blocks open Edit themselves
         var h=_hitAt(e); if(!h) return;
         e.__pgSessHandled=true;                                     // dedupe for the bubbling backup
+        if(e.ctrlKey||e.metaKey){ if(_sessSel.ids.length){ _sessSelClear(); render(true); } return; }
+        if(_sessSel.ids.length){ _sessSelClear(); render(true); }
         var snapMax=Math.max(h.it.ds, h.it.de-0.25);
         var snap=_snapAt(e.clientY, h.it.ds, snapMax);
         _tcHide();
@@ -6185,6 +6692,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           dayInsts:dayInsts, clicked:{roleKey:h.it.inst.roleKey, num:h.it.inst.num}, startDec:snap });
       };
       var _capMove=function(e){
+        if(_sessUiBlocked()){ _tcHide(); return; }
         if(!$scrollWrap[0].isConnected){
           document.removeEventListener('click',_capClick,true);
           document.removeEventListener('mousemove',_capMove,true);
