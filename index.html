@@ -131,7 +131,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .staff-search{width:100%;font-size:12px;padding:5px 8px 5px 26px;border:1px solid var(--bd);border-radius:7px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 7px center;outline:none;color:var(--tx);}
 .staff-search:focus{border-color:var(--blue);}
 .staff-list-scroll{flex:1;overflow-y:auto;overflow-x:hidden;}
-.staff-row{min-height:68px;padding:0 10px;display:flex;flex-direction:row;align-items:center;gap:9px;border-bottom:1px solid var(--bd2);background:var(--bg);}
+.staff-row{min-height:55px;padding:0 10px;display:flex;flex-direction:row;align-items:center;gap:9px;border-bottom:1px solid var(--bd2);background:var(--bg);}
 .staff-row.hovered .staff-name{font-weight:700;color:var(--blue);}
 .staff-row.hovered{background:#f0f6ff;}
 .staff-no-results{padding:14px 12px;font-size:11px;color:var(--tx2);font-style:italic;text-align:center;}
@@ -148,7 +148,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .hour-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx2);transition:background .1s,color .1s;}
 .hour-cell.col-hovered{background:#eef3ff;color:var(--blue);font-weight:700;}
 .grid-body{position:relative;}
-.grid-row{height:68px;display:flex;border-bottom:1px solid var(--bd2);cursor:pointer;}
+.grid-row{height:55px;display:flex;border-bottom:1px solid var(--bd2);cursor:pointer;}
 .grid-cell:hover{background:rgba(13,110,253,0.04);}
 .grid-cell{flex-shrink:0;width:90px;border-right:1px solid var(--bd2);background:var(--bg);}
 .grid-cell.alt{background:#fafafa;}
@@ -632,7 +632,7 @@ $(function(){
   };
   var guideDetails = {}; // {id: {status:'', ...}}
   function getGuideDetail(id){ return guideDetails[String(id)] || {}; }
-  function setGuideDetail(id,key,val){ var k=String(id); if(!guideDetails[k])guideDetails[k]={}; guideDetails[k][key]=val; }
+  function setGuideDetail(id,key,val){ var k=String(id); if(!guideDetails[k])guideDetails[k]={}; guideDetails[k][key]=val; try{ _pgHist.schedule(); }catch(e){} }
 
   // ── Calendar-cell overrides ────────────────────────────────────────────────
   // Per-cell edits made in the pinned Calendar Hours Breakdown popup. Keyed by
@@ -1482,6 +1482,13 @@ $(function(){
   }
 
   // Format decimal hours as "X hrs" or "X:MM hrs"
+  // Shift Schedule displays the FULL shift duration (end - start, meal break INCLUDED).
+  // Billable / payable figures keep using hrsEach; the meal break is shown separately.
+  function _shiftSpanH(b){
+    if(!b) return null;
+    if(b.rawEach!=null) return b.rawEach;
+    return (b.hrsEach!=null)?b.hrsEach:null;
+  }
   function fmtHrs(h){
     if(!h || h <= 0) return null;
     var totalMins = Math.round(h * 60);
@@ -3768,6 +3775,82 @@ $(function(){
   function closeStaffMenu(){ $staffMenu.hide(); $(document).off('click._staffmenu'); } // set by rPlanningGuides, used by showGuideDetail
   // Guide-level operations (duplicate / delete) shared by the left-column row menu and the Actions menu.
   var _guideOps = {};
+  // ── Planning Guide History popup ── read-only in both modes; the root is
+  // .pg-view-ok so every locked-mode pass (transform, observer, blockers) skips it.
+  function _pgHistPopup(g){
+    $('.pg-hist-ov').remove();
+    var recs=_pgHist.list(g.id);
+    var $ov=$('<div class="pg-hist-ov pg-view-ok">').css({position:'fixed',inset:'0',background:'rgba(33,37,41,.35)',zIndex:'100050',display:'flex',alignItems:'center',justifyContent:'center'});
+    var $card=$('<div>').css({background:'#fff',borderRadius:'12px',boxShadow:'0 12px 34px rgba(0,0,0,.22)',width:'560px',maxWidth:'92vw',maxHeight:'82vh',display:'flex',flexDirection:'column',overflow:'hidden'});
+    var $hdr=$('<div>').css({padding:'14px 16px 10px',borderBottom:'1px solid #e9ecef',display:'flex',alignItems:'flex-start',gap:'10px'});
+    var $ttl=$('<div>').css({flex:'1',minWidth:'0'});
+    $ttl.append($('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529'}).text('Planning Guide History'));
+    $ttl.append($('<div>').css({fontSize:'11px',color:'#6c757d',marginTop:'2px'}).text(String(g.name||'')+'  \u00b7  '+String(g.id)));
+    var $x=$('<button type="button">').attr('title','Close').css({background:'none',border:'none',cursor:'pointer',fontSize:'16px',color:'#6c757d',lineHeight:'1',padding:'2px 6px',borderRadius:'5px'}).text('\u00d7');
+    $x.on('mouseenter',function(){$(this).css('background','#f1f3f5');}).on('mouseleave',function(){$(this).css('background','none');});
+    $hdr.append($ttl,$x);
+    var $srch=$('<input type="text" placeholder="Search history">').css({margin:'10px 16px',padding:'6px 10px',border:'1px solid #dee2e6',borderRadius:'6px',fontSize:'12px',outline:'none'});
+    var $body=$('<div>').css({overflowY:'auto',padding:'0 16px 14px',flex:'1'});
+    var COLORS={add:'#1e7145',edit:'#0d6efd','delete':'#c5221f',reset:'#b06000','import':'#5f6368',error:'#c5221f',lock:'#495057',unlock:'#495057',info:'#5f6368'};
+    var ICON={add:'duplicate',edit:'history','delete':'trash',reset:'history','import':'import',error:'import',lock:'lock',unlock:'unlock',info:'history'};
+    function dayLabel(ts){
+      var d=new Date(ts), t=new Date(); t.setHours(0,0,0,0);
+      var d0=new Date(d); d0.setHours(0,0,0,0);
+      var dd=(t-d0)/86400000;
+      if(dd===0) return 'Today';
+      if(dd===1) return 'Yesterday';
+      return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    }
+    function tmLabel(ts){ return new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
+    var SHOW=150;
+    function render(){
+      $body.empty();
+      var q=String($srch.val()||'').toLowerCase().trim();
+      var list=recs.filter(function(r){ if(!q) return true; var hay; try{ hay=JSON.stringify(r).toLowerCase(); }catch(e){ hay=String(r.action||'').toLowerCase(); } return hay.indexOf(q)>=0; });
+      if(!list.length){ $body.append($('<div>').css({padding:'26px 8px',textAlign:'center',color:'#98a2ad',fontSize:'12px'}).text('No matching history records found.')); return; }
+      var lastDay=null;
+      list.slice(0,SHOW).forEach(function(r){
+        var dl=dayLabel(r.ts);
+        if(dl!==lastDay){ lastDay=dl; $body.append($('<div>').css({fontSize:'10.5px',fontWeight:'700',color:'#8a929b',textTransform:'uppercase',letterSpacing:'.4px',margin:'14px 0 6px'}).text(dl)); }
+        var col=COLORS[r.kind]||'#5f6368';
+        var $row=$('<div>').css({borderLeft:'3px solid '+col,background:'#fbfcfd',border:'1px solid #eef1f4',borderLeftWidth:'3px',borderLeftColor:col,borderRadius:'7px',padding:'8px 10px',marginBottom:'6px'});
+        var $top=$('<div>').css({display:'flex',alignItems:'center',gap:'7px'});
+        var $ic=$('<span>').css({display:'inline-flex',flexShrink:'0',color:col}).html((_PG_ICONS[ICON[r.kind]||'history']||'').replace(/width="16"/,'width="13"').replace(/height="16"/,'height="13"'));
+        var $at=$('<span>').css({fontWeight:'600',fontSize:'12px',color:'#212529',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.action||'');
+        var $tm=$('<span>').css({fontSize:'10.5px',color:'#98a2ad',flexShrink:'0'}).text(tmLabel(r.ts));
+        $top.append($ic,$at,$tm);
+        $row.append($top);
+        if(r.desc) $row.append($('<div>').css({fontSize:'11.5px',color:'#495057',margin:'3px 0 0 20px'}).text(r.desc));
+        $row.append($('<div>').css({fontSize:'10.5px',color:'#8a929b',margin:'3px 0 0 20px'}).text('Updated by '+((r.user&&r.user.name)||'Unknown')));
+        if(r.details&&r.details.length>1){
+          var $tog=$('<div>').css({fontSize:'10.5px',color:'#0d6efd',cursor:'pointer',margin:'4px 0 0 20px',userSelect:'none'}).text('Show '+r.details.length+' changes \u25be');
+          var $det=$('<div>').css({display:'none',margin:'5px 0 0 20px',borderTop:'1px dashed #e3e7ec',paddingTop:'5px'});
+          r.details.forEach(function(dd){
+            var $l=$('<div>').css({fontSize:'11px',color:'#495057',padding:'2px 0'});
+            if(dd.text){ $l.text('\u2022  '+dd.text); }
+            else { // legacy structured rows from before the plain-English generator
+              $l.append($('<span>').css({color:'#6c757d'}).text((dd.label||'')+':  '));
+              $l.append($('<span>').css({color:'#8a929b'}).text(dd.prev));
+              $l.append($('<span>').css({color:'#adb5bd'}).text(' \u2192 '));
+              $l.append($('<span>').css({fontWeight:'600',color:'#212529'}).text(dd.next));
+            }
+            $det.append($l);
+          });
+          $tog.on('click',function(){ var open=$det.is(':visible'); $det.toggle(!open); $tog.text(open?('Show '+r.details.length+' changes \u25be'):('Hide changes \u25b4')); });
+          $row.append($tog,$det);
+        }
+        $body.append($row);
+      });
+      if(list.length>SHOW) $body.append($('<div>').css({textAlign:'center',padding:'8px',fontSize:'11px',color:'#0d6efd',cursor:'pointer'}).text('Show more\u2026').on('click',function(){ SHOW+=150; render(); }));
+    }
+    $srch.on('input',render);
+    $x.on('click',function(){ $ov.remove(); });
+    $ov.on('mousedown',function(e){ if(e.target===$ov[0]) $ov.remove(); });
+    $card.on('mousedown',function(e){ e.stopPropagation(); });
+    $card.append($hdr,$srch,$body); $ov.append($card); $('body').append($ov);
+    render();
+  }
+  _guideOps.history=function(g){ _pgHistPopup(g); };
   // Shared dropdown menu-item builder - keeps Duplicate / Delete (and the header Actions
   // items) visually identical across the guide-list "..." menu and the Actions menu.
   // ── Menu icon set ── Small inline SVGs (16px) for the guide Actions / row menus and the Workspace panel menu,
@@ -3777,6 +3860,9 @@ $(function(){
     excel:'<svg data-icon="excel" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.6" fill="#1e7145"/><path d="M5 5.3l6 5.4M11 5.3l-6 5.4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>',
     json:'<svg data-icon="json" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#f2ecfb" stroke="#7e57c2" stroke-width="1"/><path d="M6.6 7.1c-.9 0-.7.9-.7 1.4 0 .5-.5.6-.5.6s.5.1.5.6c0 .5-.2 1.4.7 1.4M9.4 7.1c.9 0 .7.9.7 1.4 0 .5.5.6.5.6s-.5.1-.5.6c0 .5.2 1.4-.7 1.4" stroke="#7e57c2" stroke-width=".95" stroke-linecap="round" fill="none"/></svg>',
     import:'<svg data-icon="import" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M7.5 11.2V6.4M5.7 8.2l1.8-1.8 1.8 1.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    lock:'<svg data-icon="lock" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3.2" y="7" width="9.6" height="7" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.4" r="1.1" fill="#1a73e8"/></svg>',
+    unlock:'<svg data-icon="unlock" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3.2" y="7" width="9.6" height="7" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.5-1.1" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.4" r="1.1" fill="#1a73e8"/></svg>',
+    history:'<svg data-icon="history" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8.4" r="5.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M8 5.4v3.2l2.2 1.3" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.6 5.2V2.9M2.6 5.2h2.3" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     workspace:'<svg data-icon="workspace" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.6 1.9l4.5 4.5-1.6 1.6-1-.3-2.4 2.4.3 3-1 1-2.5-2.5-3 3-.7-.7 3-3L2.7 8.4l1-1 3 .3 2.4-2.4-.3-1 .8-.4z" fill="#7e57c2"/></svg>',
     duplicate:'<svg data-icon="duplicate" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.4" y="5.4" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><rect x="2.5" y="2.5" width="8.1" height="8.1" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/></svg>',
     copy:'<svg data-icon="copy" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.6" y="5.6" width="7.9" height="7.9" rx="1.4" fill="#fff" stroke="#5f6368" stroke-width="1.2"/><path d="M10.4 2.7H4.1a1.4 1.4 0 0 0-1.4 1.4v6.3" stroke="#5f6368" stroke-width="1.2" stroke-linecap="round"/></svg>',
@@ -3882,6 +3968,10 @@ $(function(){
         var nid='pg-'+Date.now();
         var ng={id:nid,name:nm};
         PLANNING_GUIDES.push(ng);
+        try{
+          _pgHist.evt(gObj.id,{kind:'add',action:'Planning Guide duplicated',desc:'Copy created: '+String(ng.name||'')});
+          _pgHist.evt(nid,{kind:'add',action:'Planning Guide created',desc:'Duplicated from '+String(gObj.name||'')+' ('+String(gObj.id)+')'});
+        }catch(e){}
         if(guideDetails[String(gObj.id)]) guideDetails[nid]=JSON.parse(JSON.stringify(guideDetails[String(gObj.id)]));
         if(!guideDetails[nid]) guideDetails[nid]={};
         guideDetails[nid].status='Draft';
@@ -3934,6 +4024,8 @@ $(function(){
         try{ parsed=JSON.parse(text); }catch(e){ return false; }                         // malformed / failed parse
         if(!parsed || typeof parsed!=='object' || Array.isArray(parsed)) return false;    // not an object
         if(parsed.type!=='planning-guide') return false;                                  // wrong format
+        // History can never be injected or overwritten through an import
+        try{ delete parsed.history; if(parsed.data&&typeof parsed.data==='object'){ delete parsed.data.history; delete parsed.data.pgHistory; } }catch(e){}
         var data=parsed.data;
         if(!data || typeof data!=='object' || Array.isArray(data)) return false;          // missing required saved state
         var clone;
@@ -3944,6 +4036,26 @@ $(function(){
         var gi=PLANNING_GUIDES.findIndex(function(x){return x.id===gObj.id;});
         try{
           guideDetails[String(gObj.id)]=clone;              // full replace of saved state (no merge)
+          // Restore assigned staff + shift notes from the export's gid-agnostic suffixes,
+          // rebuilt under THIS guide's id. Ids are checked against the roster; a missing id
+          // falls back to a UNIQUE name match so assignments survive roster id drift.
+          (function(){
+            var pfx=String(gObj.id)+'|';
+            Object.keys(scheduleAssignments).forEach(function(k){ if(k.indexOf(pfx)===0) delete scheduleAssignments[k]; });
+            Object.keys(scheduleShiftNotes).forEach(function(k){ if(k.indexOf(pfx)===0) delete scheduleShiftNotes[k]; });
+            var sa=clone.staffAssignments||{}, sn=clone.shiftNotes||{};
+            Object.keys(sa).forEach(function(suf){
+              var rec=sa[suf]; if(!rec||rec.staffId==null) return;
+              var sid=rec.staffId;
+              var hit=STAFF.find(function(x){ return String(x.id)===String(sid); });
+              if(!hit && rec.staffName){
+                var nm=STAFF.filter(function(x){ return (x.n||'')===rec.staffName; });
+                if(nm.length===1){ sid=nm[0].id; }
+              }
+              scheduleAssignments[pfx+suf]=sid;
+            });
+            Object.keys(sn).forEach(function(suf){ if(sn[suf]!=null&&sn[suf]!=='') scheduleShiftNotes[pfx+suf]=sn[suf]; });
+          })();
           if(gi>-1) PLANNING_GUIDES[gi].name=newName;
           gObj.name=newName;
           ensureGuideEntityIds(gObj);                       // backfill any missing internal ids
@@ -3977,6 +4089,16 @@ $(function(){
         reader.onload=function(){
           var ok=false;
           try{ ok=applyImport(String(reader.result)); }catch(e){ ok=false; }
+          try{
+            if(ok){
+              var d2=getGuideDetail(gObj.id)||{};
+              var sm='calendars: '+((d2.calendarRows||[]).length)+', schools: '+((d2.siteRows||[]).length)+', roles: '+((d2.roles||[]).length)+', sessions: '+((d2.sessions||[]).length);
+              _pgHist.evt(gObj.id,{kind:'import',action:'JSON imported',desc:(nm||'file')+' \u00b7 '+sm});
+              _pgHist.begin(gObj.id);
+            } else {
+              _pgHist.evt(gObj.id,{kind:'error',action:'Import failed',desc:(nm||'file')+' \u00b7 file was rejected (invalid or wrong format)'});
+            }
+          }catch(e){}
           if(!ok) importFailed();
         };
         try{ reader.readAsText(file); }catch(e){ importFailed(); }
@@ -4753,12 +4875,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // ---- Role ----
     var $roleField=$('<div class="field">');
     $roleField.append($('<label>').text('Role'));
-    $roleField.append($('<div>').css({fontSize:'13px',fontWeight:'600',color:'#212529'}).text(det.roleLabel+' #'+det.num));
+    $roleField.append($('<div>').css({fontSize:'13px',fontWeight:'600',color:'#212529',padding:'2px 0'}).text(det.roleLabel+' #'+det.num));
 
 
     // ---- Assigned staff (interactive: click to assign / change / remove) ----
     var $staffField=$('<div class="field">');
-    $staffField.append($('<label>').text('Assigned staff'));
     var $staffArea=$('<div>');
     $staffField.append($staffArea);
 
@@ -4766,18 +4887,75 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // ---- read-only: Start–End, Total hours, Meal break ----
     function _fmtBreak(){ if(det.billable) return 'None'; return (det.mealMins>0)?(det.mealMins+' min'):'None'; }
     function roCell(lbl,val){ var $c=$('<div>'); $c.append($('<label>').text(lbl)); $c.append($('<div>').css({fontSize:'13px',color:'#212529',padding:'2px 0'}).text(val)); return $c; }
-    var $ro=$('<div class="field">').css({display:'flex',gap:'14px',alignItems:'flex-start',flexWrap:'wrap',marginTop:'13px',marginBottom:'13px'});
+    var $ro=$('<div class="field" id="shiftdet-time-row">').css({display:'flex',gap:'18px',alignItems:'flex-start',flexWrap:'wrap',marginTop:'13px',marginBottom:'13px'});
     var _mealVal=(!det.billable && det.mealMins>0) ? (det.mealMins+' min') : null;
-    $ro.append(roCell('Start \u2013 End', fmtT(det.start)+' \u2013 '+fmtT(det.end)).css({flex:'1 1 auto',whiteSpace:'nowrap'}));
-    if(_mealVal) $ro.append(roCell('Meal break', _mealVal).css({flex:'0 0 auto',whiteSpace:'nowrap'}));
-    $ro.append(roCell('Total', fmtHrs(det.hrsEach)||'\u2014').css({flex:'0 0 auto',whiteSpace:'nowrap'}));
+    $roleField.removeClass('field').css({flex:'0 0 auto',whiteSpace:'nowrap',marginBottom:'0'});
+    $ro.append($roleField);
+    $ro.append(roCell('Start \u2013 End', fmtT(det.start)+' \u2013 '+fmtT(det.end)).css({flex:'0 0 auto',whiteSpace:'nowrap'}));
+    if(_mealVal){
+      var $mc=roCell('Meal break', _mealVal).css({flex:'0 0 auto',whiteSpace:'nowrap'});
+      $mc.children('div').css({color:'rgb(85, 85, 181)',fontWeight:'600'});
+      $ro.append($mc);
+    }
     $body.append($ro);
-    // Role + Assigned staff share one row; the staff area flexes wider and clips long names.
-    var $rsRow=$('<div class="field">').css({display:'flex',gap:'14px',alignItems:'flex-start'});
-    $roleField.css({flex:'0 0 auto',marginBottom:'0'});
-    $staffField.css({flex:'1 1 auto',minWidth:'0',marginBottom:'0'});
-    $rsRow.append($roleField).append($staffField);
-    $body.append($rsRow);
+    // Total: its own row, emphasized value, breathing room on both sides.
+    var $totRow=$('<div class="field" id="shiftdet-total-row">').css({marginTop:'13px',marginBottom:'13px'});
+    var $tc=roCell('Total', fmtHrs(det.rawHrs!=null?det.rawHrs:det.hrsEach)||'\u2014');
+    $tc.children('div').css({fontWeight:'600'});
+    $totRow.append($tc);
+    $body.append($totRow);
+    // Assigned staff: its own row below Total (Role now leads the time row).
+    $staffField.css({minWidth:'0',marginBottom:''});
+    $body.append($staffField);
+    // ── Related Sessions ── every session overlapping this shift on this school grid, date
+    // and role, as compact grid-styled blocks; hidden entirely when none exist. The section
+    // scrolls internally so the window never outgrows its height, and _shiftDetRefreshSess
+    // repaints it live after any session mutation while the window is open.
+    var $sessWrap=$('<div class="field" id="shiftdet-sessions">').css({marginBottom:'18px'});
+    function _sdSessList(){
+      var list=[];
+      try{
+        (getSessions(det.guideId)||[]).forEach(function(o){
+          if(!o||!o.shifts||!o.shifts[0]) return;
+          if(det.si!=null && o.si!==det.si) return;
+          if(det.origIdx!=null && o.origIdx!==det.origIdx) return;
+          if(det.roleKey!=null && (o.shifts[0].roleKey!==det.roleKey || o.shifts[0].num!==det.num)) return;
+          if(!_sessOnDate(o, det.dateStr, new Date(det.dateStr+'T00:00:00').getDay())) return;
+          if(!(o.start<det.end && o.end>det.start)) return;
+          list.push(o);
+        });
+      }catch(e){}
+      list.sort(function(a,b){ return (a.start-b.start)||(a.end-b.end)||String(a.type||'').localeCompare(String(b.type||'')); });
+      return list;
+    }
+    function _sdRenderSess(){
+      var $oldSc=$sessWrap.find('.sd-sess-scroll');
+      var keepScroll=$oldSc.length?$oldSc[0].scrollTop:0;
+      $sessWrap.empty();
+      var list=_sdSessList();
+      if(!list.length){ $sessWrap.hide(); return; }
+      $sessWrap.show();
+      $sessWrap.append($('<label>').text('Sessions'));
+      var $sc=$('<div class="sd-sess-scroll">').css({maxHeight:'168px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'5px',paddingRight:'2px',marginTop:'2px'});
+      list.forEach(function(o){
+        var bg=o.color||'#5f6b76', fg=_sessContrast(bg);
+        var $b=$('<div class="sd-sess-block">').css({background:bg,color:fg,borderRadius:'5px',padding:'4px 8px',overflow:'hidden',boxShadow:'0 1px 2px rgba(20,30,40,.12)',flexShrink:'0'});
+        // Compact single row: name and time share one baseline with a small gap; no notes line.
+        var $line1=$('<div class="sd-sess-row">').css({display:'flex',alignItems:'baseline',gap:'6px',minWidth:'0'});
+        $line1.append($('<div class="sd-sess-type">').css({fontWeight:'700',fontSize:'9.5px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:'0 1 auto',minWidth:'0'}).attr('title',o.type||'').text(o.type||'Session'));
+        $line1.append($('<div class="sd-sess-time">').css({fontSize:'8.5px',fontWeight:'400',opacity:'.95',whiteSpace:'nowrap',flex:'0 0 auto'}).text(fmtT(o.start)+' \u2013 '+fmtT(o.end)));
+        $b.append($line1);
+        if(o.activities&&o.activities.length){
+          $b.append($('<div class="sd-sess-acts">').css({fontSize:'8.5px',fontWeight:'600',whiteSpace:'normal',wordBreak:'break-word',opacity:'.96',marginTop:'1px'}).text(o.activities.join(', ')));
+        }
+        $sc.append($b);
+      });
+      $sessWrap.append($sc);
+      if($sc.length) $sc[0].scrollTop=keepScroll;
+    }
+    _sdRenderSess();
+    $body.append($sessWrap);
+    _shiftDetRefreshSess=_sdRenderSess;
 
     // ---- Notes (same WYSIWYG component as the + Availability Description) ----
     var $notesField=$('<div class="field">').css({marginTop:'2px'});
@@ -4889,7 +5067,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
 
     // ---- commit / discard ----
-    function closeWin(){ $ov.remove(); $(document).off('keydown._shiftdet'); }
+    function closeWin(){ _shiftDetRefreshSess=null; $ov.remove(); $(document).off('keydown._shiftdet'); }
     function doSave(){
       if(draftAssign!=null) scheduleAssignments[shiftKey]=draftAssign; else delete scheduleAssignments[shiftKey];
       var nh=notesHtml();
@@ -4994,6 +5172,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // date (key 'si|origIdx|iso'). Module-scoped so it survives re-renders.
   var _sessSel={key:null, ids:[]};
   function _sessSelClear(){ _sessSel={key:null, ids:[]}; }
+  // While a Shift Details window is open, this holds its related-Sessions refresher so any
+  // session mutation repaints the list live; null when no window is open.
+  var _shiftDetRefreshSess=null;
   // Predefined activity groups (non-selectable headings; selectable items).
   var SESSION_ACTIVITY_GROUPS=[
     {name:'STEM',   items:['Science Experiments','Engineering','Coding','Math','LEGO']},
@@ -5014,6 +5195,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var det=guideDetails[String(gid)];
     if(!det||!det.sessions) return;
     det.sessions=det.sessions.filter(function(x){ return x.id!==id; });
+    if(_shiftDetRefreshSess){ try{ _shiftDetRefreshSess(); }catch(e){} }
   }
   function openSessDeleteConfirm(sessGid, sessRec, done, anchorEl){
     $('#sess-del-confirm').remove();
@@ -5045,8 +5227,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   function _sessSave(gid,sess){
     var det=_sessDet(gid); if(!det.sessions) det.sessions=[];
-    var i; for(i=0;i<det.sessions.length;i++){ if(det.sessions[i].id===sess.id){ det.sessions[i]=sess; return; } }
-    det.sessions.push(sess);
+    var i, done=false;
+    for(i=0;i<det.sessions.length;i++){ if(det.sessions[i].id===sess.id){ det.sessions[i]=sess; done=true; break; } }
+    if(!done) det.sessions.push(sess);
+    if(_shiftDetRefreshSess){ try{ _shiftDetRefreshSess(); }catch(e){} }
   }
   function _sessTypesFor(gid){
     var det=guideDetails[String(gid)]||{}; var extra=det.sessionTypes||[]; var out=SESSION_TYPE_DEFAULTS.slice();
@@ -5678,7 +5862,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var _raw=calcH(d.start,d.end);
         var h=adjForBillable(_raw,(origIdx!=null?calRows[origIdx]:null)); if(!h||h<=0) return;
         var _rawH=calcH(d.start,d.end);
-        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h,
+        out.push({roleKey:role.key, label:role.label, start:d.start, end:d.end, count:cnt, hrsEach:h, rawEach:_raw,
           brkMins:(_rawH!=null&&h!=null&&(_rawH-h)>1/120)?Math.round((_rawH-h)*60):0,
           status:billableStatus(_raw,(origIdx!=null?calRows[origIdx]:null))});
       });
@@ -5726,7 +5910,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(raw==null||raw<=0||isNaN(cnt)||cnt<=0) return;
           var h=adjForBillable(raw,cr); if(!(h>0)) return;
           var gk=String(row.role)+'|'+row.start+'|'+row.end;
-          if(!_grp[gk]){ _grp[gk]={xsKey:'xs:'+sh.id+':'+ri, roleLabel:(_roleLbl[row.role]||String(row.role)), start:row.start, end:row.end, count:0, hrsEach:h, status:billableStatus(raw,cr)}; _order.push(gk); }
+          if(!_grp[gk]){ _grp[gk]={xsKey:'xs:'+sh.id+':'+ri, roleLabel:(_roleLbl[row.role]||String(row.role)), start:row.start, end:row.end, count:0, hrsEach:h, rawEach:raw, status:billableStatus(raw,cr)}; _order.push(gk); }
           _grp[gk].count+=cnt;
         });
       });
@@ -5799,7 +5983,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         datesInRange.forEach(function(d){
           var r=resolveDay(si, origIdx, d); inRangeCount++;
           var key = r.sd ? r.sd.id : '__none__'; sdIdsSeen[key]=(sdIdsSeen[key]||0)+1;
-          if(!r.noHours) r.blocks.forEach(function(b){ totalHours += b.hrsEach*b.count; });
+          if(!r.noHours) r.blocks.forEach(function(b){ totalHours += (_shiftSpanH(b)||0)*b.count; });
         });
         // Special Day label + color only when uniform across all in-range visible dates (covers Day view)
         var sdLabel='', sdColor='', seenKeys=Object.keys(sdIdsSeen);
@@ -5912,13 +6096,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             renderShiftAssign($line1, $el, shiftKey, inst.roleLabel+' #'+inst.num, false);
             $el.append($line1);
             _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(dateObj), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
             $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
-            $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(b.hrsEach)));
+            $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(_shiftSpanH(b))));
             if(b.status) $l2.append($('<span class="block-status" style="margin-left:5px;font-weight:800;">').css({fontSize:'9px',color:b.status.color}).text(b.status.text));
             $el.append($l2);
-            $el.attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
+            $el.attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(_shiftSpanH(b))+(b.status?('  \u00b7  '+b.status.text):''));
             $el.css('cursor','pointer').on('click',function(){ openShiftDetails(shiftKey); });
             $cells.append($el);
           }
@@ -5974,8 +6158,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var y=(ds-GSH)*HH, bh=Math.max((de-ds)*HH-4, 12);
             it.$el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">')
               .css({left:'4px',right:'4px',width:'auto',top:y+'px',height:bh+'px',cursor:'pointer'})
-              .attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(b.hrsEach)+(b.status?('  \u00b7  '+b.status.text):''));
-            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+              .attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(_shiftSpanH(b))+(b.status?('  \u00b7  '+b.status.text):''));
+            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
           }
         }
         return it;
@@ -6116,7 +6300,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var dx=e.clientX-sx, dy=e.clientY-sy;
           if(!moved && Math.abs(dx)<4 && Math.abs(dy)<4) return;
           moved=true; _sessDragConsumed=true;
-          prop.dT=Math.round((dy/HH)*4)/4;
+          prop.dT=Math.round((dy/HH)*12)/12;   // 5-minute snap for block movement/resize
           var ciNow=_colIdxAtX(e.clientX);
           if(ciNow>=0) prop.dC=ciNow-am.ci;
           prop.valid=validate();
@@ -6176,12 +6360,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $row=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px'});
         var $ca=$('<button type="button" id="sess-del-cancel">').css({fontSize:'12px',fontWeight:'600',padding:'5px 12px',border:'1px solid var(--bd2,#ced4da)',borderRadius:'6px',background:'#fff',cursor:'pointer',color:'#343a40'}).text('Cancel');
         var $ok=$('<button type="button" id="sess-del-go">').css({fontSize:'12px',fontWeight:'700',padding:'5px 14px',border:'none',borderRadius:'6px',background:'var(--red,#dc3545)',color:'#fff',cursor:'pointer'}).text('Delete ('+n+') Sessions');
-        $ca.on('click',function(){ $c.remove(); });
+        // Escape and outside clicks dismiss the confirmation without deleting anything.
+        function _gdClose(){ document.removeEventListener('mousedown',_gdOut,true); document.removeEventListener('keydown',_gdEsc,true); $c.remove(); }
+        var _gdOut=function(ev){ if($c[0].isConnected && !$c[0].contains(ev.target)) _gdClose(); if(!$c[0].isConnected){ document.removeEventListener('mousedown',_gdOut,true); document.removeEventListener('keydown',_gdEsc,true); } };
+        var _gdEsc=function(ev){ if(ev.key==='Escape'){ ev.stopPropagation(); _gdClose(); } if(!$c[0].isConnected){ document.removeEventListener('keydown',_gdEsc,true); } };
+        setTimeout(function(){ document.addEventListener('mousedown',_gdOut,true); document.addEventListener('keydown',_gdEsc,true); },0);
+        $ca.on('click',function(){ _gdClose(); });
         $ok.on('click',function(){
           var det=_sessDet(g.id)||{}; var kill={}; members.forEach(function(o){ kill[o.id]=1; });
           if(det.sessions) det.sessions=det.sessions.filter(function(x){ return !kill[x.id]; });
+          if(_shiftDetRefreshSess){ try{ _shiftDetRefreshSess(); }catch(e){} }
           _sessSelClear();
-          $c.remove();
+          _gdClose();
           render(true);
         });
         $row.append($ca).append($ok);
@@ -6420,7 +6610,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var dx=e.clientX-sx, dy=e.clientY-sy;
             if(!moved && Math.abs(dx)<4 && Math.abs(dy)<4) return;
             moved=true; _sessDragConsumed=true;
-            var dT=Math.round((dy/HH)*4)/4;
+            var dT=Math.round((dy/HH)*12)/12;   // 5-minute snap for group movement
             if(mode==='move'){
               var r=sharedOf(prop.shifts);
               prop.s=Math.min(Math.max(oS+dT, r.a), r.b-dur); prop.e=prop.s+dur;
@@ -6511,8 +6701,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $tRow=$('<div class="block-time-row">').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',fmtT(it.ds)+' \u2013 '+fmtT(it.de));
           $tRow.append($('<span class="block-time">').text(fmtT(it.ds)+' \u2013 '+fmtT(it.de)));
           $in.append($tRow);
-          var $hRow=$('<div class="block-hours-row">').css({display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',overflow:'hidden'}).attr('title',fmtHrs(it.b.hrsEach)+(it.b.status?(' '+it.b.status.text):''));
-          $hRow.append($('<span class="block-time" style="font-weight:700;">').text(fmtHrs(it.b.hrsEach)));
+          var $hRow=$('<div class="block-hours-row">').css({display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',overflow:'hidden'}).attr('title',fmtHrs(_shiftSpanH(it.b))+(it.b.status?(' '+it.b.status.text):''));
+          $hRow.append($('<span class="block-time" style="font-weight:700;">').text(fmtHrs(_shiftSpanH(it.b))));
           if(it.b.status) $hRow.append($('<span class="block-status" style="font-weight:800;">').css({fontSize:'9px',color:it.b.status.color}).text(it.b.status.text));
           $in.append($hRow);
         }
@@ -6597,6 +6787,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var _sbActs=(ssn.activities&&ssn.activities.length)?ssn.activities.join(', '):'';
             var _sbNote=String(ssn.notes||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/\s+/g,' ').trim();
             var _nAvail=Math.floor((shh-4-13-1)/10);      // whole ~10px lines under the name (3px bottom clearance)
+            if(_nAvail>=1){
+              // Start\u2013End on its own line directly below the name, ahead of activities and notes.
+              $sb.append($('<div class="sess-time">').css({fontSize:'8.5px',fontWeight:'400',lineHeight:'1.15',marginTop:'1px',opacity:'.95',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(fmtT(ssn.start)+' \u2013 '+fmtT(ssn.end)));
+              _nAvail-=1;
+            }
             if(_sbActs && _nAvail>=1){
               var _aLines=Math.min(Math.max(Math.ceil(_sbActs.length/26),1), _nAvail);
               $sb.append($('<div class="sess-acts">').css({fontSize:'8.5px',fontWeight:'600',fontStyle:'normal',lineHeight:'1.15',marginTop:'1px',opacity:'.96',overflow:'hidden',whiteSpace:'normal',wordBreak:'break-word',maxHeight:(_aLines*10)+'px',display:'-webkit-box',WebkitBoxOrient:'vertical',WebkitLineClamp:String(_aLines)}).text(_sbActs));
@@ -6630,7 +6825,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 render(true);
                 return;
               }
-              if(_selCount()>1){ _sessSel={key:_gridKey(), ids:[ssn.id]}; render(true); }
+              // Two-step: the first plain click SELECTS the block (the grid's selected-cell
+              // highlight); only a second click on the already-selected block opens Edit.
+              // Clicking a different block just moves the highlight. Empty cells keep their
+              // immediate Add behavior in the capture handler.
+              var pk=_gridKey();
+              var soleSelected = _sessSel.key===pk && _sessSel.ids.length===1 && _sessSel.ids[0]===ssn.id;
+              if(!soleSelected){
+                _sessSel={key:pk, ids:[ssn.id]};
+                render(true);
+                return;
+              }
               openSessionDialog({ mode:'edit', gid:g.id, guideName:g.name, si:si, origIdx:origIdx,
                 calRow:calRows[origIdx]||{}, schoolName:schoolName, dateIso:isoD(dateObj), dow:dateObj.getDay(),
                 dayInsts:dayInsts, clicked:{roleKey:it.inst.roleKey, num:it.inst.num}, sess:ssn });
@@ -6800,13 +7005,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
             $chip.append($line1);
             _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(col.date), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div>');
             $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
-            $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(b.hrsEach)));
+            $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(_shiftSpanH(b))));
             if(b.status) $l2.append($('<span>').css({marginLeft:'4px',fontWeight:'800',color:b.status.color}).text(b.status.text));
             $chip.append($l2);
-            $chip.attr('title', inst.roleLabel+' #'+inst.num+' · '+fmtT(ds)+'–'+fmtT(de)+' · '+fmtHrs(b.hrsEach)+(b.status?(' · '+b.status.text):''));
+            $chip.attr('title', inst.roleLabel+' #'+inst.num+' · '+fmtT(ds)+'–'+fmtT(de)+' · '+fmtHrs(_shiftSpanH(b))+(b.status?(' · '+b.status.text):''));
             $chip.css('cursor','pointer').on('click',function(){ openShiftDetails(shiftKey); });
             $td.append($chip);
           } else {
@@ -6953,7 +7158,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _hx=adjForBillable(_rawx,_crx); if(!_hx||_hx<=0) return null;
       return {
         start:_ssDecH(_row.start), end:_ssDecH(_row.end),
-        hrsEach:_hx, status:billableStatus(_rawx,_crx), isBillable:calRowBillable(_crx),
+        hrsEach:_hx, rawEach:_rawx, status:billableStatus(_rawx,_crx), isBillable:calRowBillable(_crx),
         calId:(_calIdx!=null?_calIdx:null),
         calName:_crx?((_crx.name&&_crx.name.trim())?_crx.name:('Calendar '+(origIdx+1))):'\u2014',
         calColor:_crx?(_crx.color||'#ffffff'):'#cfcfcf',
@@ -6992,7 +7197,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var h=adjForBillable(raw, cr); if(!h||h<=0) return null;                  // no hours configured
     return {
       start:_ssDecH(dd.start), end:_ssDecH(dd.end),
-      hrsEach:h, status:billableStatus(raw, cr), isBillable:isBil,
+      hrsEach:h, rawEach:raw, status:billableStatus(raw, cr), isBillable:isBil,
       calId:(_rdCalId!=null?_rdCalId:null),
       calName:cr?((cr.name&&cr.name.trim())?cr.name:('Calendar '+(origIdx+1))):'—',   // blank name → "Calendar N" (origIdx+1 = row position in Program Calendars table), matching the convention used elsewhere
       calColor:cr?(cr.color||'#ffffff'):'#cfcfcf',
@@ -7755,13 +7960,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     //  via an Options menu next to each Calendar name in the combo headers below.)
 
     // View button — shown only when multiple combo tables are rendered
-    var $viewBtn=$('<button type="button">').css({
+    var $viewBtn=$('<button type="button">').addClass('pg-view-ok').css({
       background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
       padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
       display:'none',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'0'
     }).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
     $viewBtn.css('marginLeft','4px');   // sits next to the Staffing Hours label, not pushed right
-    var $viewDD=$('<div>').css({
+    // buildViewDD is (re)assigned by the staffing render below; an outer slot keeps it
+    // in scope for the Filter button's click handler (it was previously nested one
+    // function deeper, which made the Filter throw before the first assignment).
+    var buildViewDD=function(){};
+    var $viewDD=$('<div>').addClass('pg-view-ok').css({
       position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',
       borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.12)',padding:'4px 0',
       minWidth:'210px',display:'none',fontSize:'12px'
@@ -8170,7 +8379,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
           updateViewBtn();
 
-          function buildViewDD(){
+          buildViewDD=function(){
             $viewDD.empty();
             var state={leaves:[], wks:[]};
 
@@ -8572,13 +8781,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 // rows inside a multi-row pod run add no cell; the rowspan covers them
               }
               $tr.append($('<td>').css({padding:'4px 6px',borderBottom:'1px solid #f1f3f5',color:'#3c4043',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'240px'}).text(nm));
-              var $ctd=$('<td>').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',cursor:'pointer'}).attr('title','Click to edit');
+              var $ctd=$('<td>').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',cursor:(_pgvCur.mode==='view'?'default':'pointer')}).attr('title',(_pgvCur.mode==='view'?'':'Click to edit'));
               r.$span=$('<span class="sh-cnt-popup-val">').css({fontSize:'11px',color:'#495057',fontWeight:'600'});
               $ctd.append(r.$span);
               $ctd.on('mouseenter',function(){ $ctd.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
               $ctd.on('mouseleave',function(){ $ctd.css({background:'',boxShadow:''}); });
               $ctd.on('click',function(e){
                 e.stopPropagation();
+                if(_pgvCur.mode==='view') return;   // read-only popup: counts are inspection-only
                 if($ctd.find('input').length) return;
                 var _preEdit=r.val;   // Escape / empty-blur restore point
                 var $inp=$('<input type="text" inputmode="numeric">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(String(r.val));
@@ -8674,6 +8884,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $card.on('mousedown',function(e){ e.stopPropagation(); });
             rowsState.forEach(paintRow); paintTotal(); refreshFooter();
             $card.append($foot); $ov.append($card); $('body').append($ov);
+            if(_pgvCur.mode==='view'){ try{ _pgvDocPopup($ov[0]); }catch(e){} }
           }
           // ── Composite school strip ── a composite table (aggregate or pod) lists the schools it sums
           // over, in Site Breakdown order, directly beneath the table title and above the column headers.
@@ -9532,8 +9743,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // color circle, nested schools in Site Breakdown order, pod name+rail brackets, parent/child +
     // indeterminate behavior). Every change applies immediately; Reset restores all schools.
     function _calVFBtn(scopeCals){
-      var $b=$('<button type="button" class="cal-vf-btn">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'5px',padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'8px'}).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
-      var $dd=$('<div class="cal-vf-dd">').css({position:'fixed',zIndex:12050,background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 8px 24px rgba(0,0,0,.14)',padding:'8px 0',minWidth:'230px',maxHeight:'340px',overflowY:'auto',display:'none'}).appendTo('body');
+      var $b=$('<button type="button" class="cal-vf-btn pg-view-ok">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'5px',padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',fontWeight:'500',marginLeft:'8px'}).html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+      var $dd=$('<div class="cal-vf-dd pg-view-ok">').css({position:'fixed',zIndex:12050,background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 8px 24px rgba(0,0,0,.14)',padding:'8px 0',minWidth:'230px',maxHeight:'340px',overflowY:'auto',display:'none'}).appendTo('body');
       function badge(){ var f=scopeCals.some(function(sc){ return !!_cvfSel(g.id,(sc.cr.calId!=null?sc.cr.calId:null)); }); $b.css({color:f?'#0d6efd':'#6c757d',borderColor:f?'#9ec5fe':'#dee2e6'}); }
       function applyNow(){ updateCalendarHours(); try{ hideCalTooltip(); }catch(_e){} badge(); }
       function mkRow(lbl,checked,color){
@@ -9635,7 +9846,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     // Combined View toggle — shown ONLY when the guide has more than one valid Program Calendar. Display-only; never mutates calendar data.
     if(_validCalRows.length>1){
-      var $cvWrap=$('<label>').css({display:'inline-flex',alignItems:'center',gap:'6px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',cursor:'pointer',fontWeight:'600',color:'#212529',alignSelf:'center'});
+      var $cvWrap=$('<label>').addClass('pg-view-ok').css({display:'inline-flex',alignItems:'center',gap:'6px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',cursor:'pointer',fontWeight:'600',color:'#212529',alignSelf:'center'});
       $cvWrap.append($('<span>').text('Combined View'));
       var $cvChk=$('<input type="checkbox">').css({cursor:'pointer',margin:'0',verticalAlign:'middle'}).prop('checked',!!det.combinedView);
       $cvChk.on('change',function(){
@@ -12027,7 +12238,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }); }); }
 
       function valCell(m,field){
-        var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap',cursor:'pointer'}).attr('title','Click to edit');
+        var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap',cursor:(_pgvCur.mode==='view'?'default':'pointer')}).attr('title',(_pgvCur.mode==='view'?'':'Click to edit'));
         function paint(){
           $td.empty();
           if(field==='cnt'){
@@ -12044,6 +12255,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $td.on('mouseleave',function(){ $td.css({background:''}); });
         $td.on('click',function(e){
           e.stopPropagation();
+          if(_pgvCur.mode==='view') return;
           if($td.find('input').length) return;
           if(field==='cnt'){
             var cur=String(curVal(m,'cnt'));
@@ -12368,12 +12580,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function _valCell(r,field){
         function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
         var $td=$('<td>').css({padding:'3px 5px',textAlign:'center',color:'#495057',whiteSpace:'nowrap'});
-        var editable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length && (field!=='cnt' || r.siList.length===1);   // Count is editable only when the row/group is a SINGLE school (siList length 1); a grouped multi-school Count stays read-only so one edit can't be split ambiguously across schools. Start/End are always editable.
+        var editable=_tipPinned && _pgvCur.mode!=='view' && !r.noHoursNote && r.roleKey && r.siList && r.siList.length && (field!=='cnt' || r.siList.length===1);   // Count is editable only when the row/group is a SINGLE school (siList length 1); a grouped multi-school Count stays read-only so one edit can't be split ambiguously across schools. Start/End are always editable.
         // Combined multi-school Count: clickable treatment that opens the per-school, DATE-specific
         // Edit Coach/Staff Count popup (each contributing school gets its own value for this date).
         var cntGroupEditable=_tipPinned && !r.noHoursNote && r.roleKey && r.siList && r.siList.length>1 && field==='cnt';
         if(cntGroupEditable){
-          $td.css({cursor:'pointer'}).attr('title','Click to edit each school for this date');
+          $td.css({cursor:'pointer'}).attr('title',(_pgvCur.mode==='view'?'Click to view each school':'Click to edit each school for this date'));
           $td.on('mouseenter.tipedit',function(){ $td.css({background:'#eef4fb',boxShadow:'inset 0 -1px 0 #b6c9e2'}); });
           $td.on('mouseleave.tipedit',function(){ $td.css({background:'',boxShadow:''}); });
           $td.on('click.tipedit',function(e){ e.stopPropagation();
@@ -12515,7 +12727,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',whiteSpace:'nowrap',flexShrink:'0'}).text(dateLabel));
       // '+ Add Extra Shift' — pinned popup only, next to the date, styled exactly like the regular view's link
       // (the Combined title row supplies the 8px spacing via its flex gap, so no extra margin here).
-      if(_tipPinned && gObj && gObj.id){
+      if(_tipPinned && gObj && gObj.id && _pgvCur.mode!=='view'){
         var $xsAddC=$('<a href="#" class="cal-tip-xsadd">').css({display:'inline-flex',alignItems:'center',gap:'3px',flexShrink:'0',fontSize:'10px',fontWeight:'600',color:'#0d6efd',textDecoration:'none',cursor:'pointer',padding:'1px 6px',borderRadius:'4px',lineHeight:'1.4'}).text('+ Add Extra Shift');
         $xsAddC.on('mouseenter',function(){ $(this).css({background:'#eaf2ff',textDecoration:'underline'}); });
         $xsAddC.on('mouseleave',function(){ $(this).css({background:'transparent',textDecoration:'none'}); });
@@ -12957,7 +13169,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $titleRow.append($('<span>').css({fontWeight:'700',fontSize:'11px',color:'#3c4043',whiteSpace:'nowrap',flexShrink:'0'}).text(headerText));
       // '+ Add Extra Shift' — pinned popup only, placed between the date and the Schedule link, styled to
       // match the Schedule link (same size/weight/hover) so the header reads: {Date}  + Add Extra Shift  Schedule.
-      if(_tipPinned && gObj && gObj.id && _tipCalId!=null){
+      if(_tipPinned && gObj && gObj.id && _tipCalId!=null && _pgvCur.mode!=='view'){
         var $xsAdd=$('<a href="#" class="cal-tip-xsadd">').css({display:'inline-flex',alignItems:'center',gap:'3px',marginLeft:'8px',flexShrink:'0',fontSize:'10px',fontWeight:'600',color:'#0d6efd',textDecoration:'none',cursor:'pointer',padding:'1px 6px',borderRadius:'4px',lineHeight:'1.4'}).text('+ Add Extra Shift');
         $xsAdd.on('mouseenter',function(){ $(this).css({background:'#eaf2ff',textDecoration:'underline'}); });
         $xsAdd.on('mouseleave',function(){ $(this).css({background:'transparent',textDecoration:'none'}); });
@@ -14111,6 +14323,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Derived, read-only snapshot - convenience for integrations / debugging; recomputed on import.
         calculated:calc
       };
+      // Assigned staff + per-shift notes live in module maps keyed by guide-scoped
+      // shiftKeys; export them gid-agnostically (suffix si|origIdx|date|roleKey|num)
+      // with the staff display name beside the id so imports survive roster id drift.
+      try{
+        var _pfx=g.id+'|', _sa={}, _sn={};
+        Object.keys(scheduleAssignments).forEach(function(k){
+          if(k.indexOf(_pfx)!==0) return;
+          var _sid=scheduleAssignments[k]; if(_sid==null) return;
+          var _st=STAFF.find(function(x){ return String(x.id)===String(_sid); });
+          _sa[k.slice(_pfx.length)]={ staffId:_sid, staffName:(_st&&_st.n)||null };
+        });
+        Object.keys(scheduleShiftNotes).forEach(function(k){
+          if(k.indexOf(_pfx)!==0) return;
+          var _nv=scheduleShiftNotes[k]; if(_nv==null||_nv==='') return;
+          _sn[k.slice(_pfx.length)]=_nv;
+        });
+        payload.data.staffAssignments=_sa;
+        payload.data.shiftNotes=_sn;
+      }catch(_ex){}
       var json=JSON.stringify(payload,null,2);
       var mm=String(now.getMonth()+1).padStart(2,'0'), dd2=String(now.getDate()).padStart(2,'0');
       var fname=(g.name+' ('+g.id+') - '+mm+'-'+dd2+'-'+now.getFullYear()+'.json')
@@ -14392,9 +14623,402 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   function refreshSummary(g){ var $s=$('#summary-section-'+g.id); if($s.length) $s.replaceWith(buildSummarySection(g)); _maybeRefreshCombined(g); }
 
+  // ── Planning Guide View/Edit mode ──
+  // Mode is remembered per guide (localStorage; keyed per-user once the backend
+  // lands). Guides never opened before default to VIEW. The mode governs ONLY the
+  // Planning Guide editor inside #planning-panel — the Shift Schedule grid, Shift
+  // Details, and Sessions stay fully editable in both modes.
+  // Guides open in EDIT mode; only an explicit Lock (Actions menu) stores 'view'.
+  // The lock state is per guide and deliberately NOT part of the export payload.
+  function _pgGuideMode(gid){ try{ var v=window.localStorage.getItem('pg_mode_'+gid); return v==='view'?'view':'edit'; }catch(e){ return 'edit'; } }
+  function _pgSetGuideMode(gid,m){ try{ window.localStorage.setItem('pg_mode_'+gid,m); }catch(e){} }
+  // ── Planning Guide History ──────────────────────────────────────────────
+  // Audit log per guide. Records live OUTSIDE the guide data (localStorage
+  // 'pg_hist_<id>'), so JSON/Excel exports never include them and imports can
+  // never inject them. Every record carries a user (placeholder local identity
+  // until auth exists) and a timestamp, shaped for future database storage:
+  // {id, ts, user:{id,name}, kind, action, desc, section, details:[{label,prev,next}]}.
+  // Data edits are captured by a debounced SNAPSHOT DIFF of guideDetails —
+  // one logical record per edit burst (never per keystroke; discarded edits
+  // restore the data and so produce no diff). Non-data events (lock/unlock,
+  // import, duplicate) log explicitly.
+  var _pgHist=(function(){
+    var CAP=400, DEB=1200, _gid=null, _snap=null, _t=null;
+    function user(){ try{ var u=JSON.parse(window.localStorage.getItem('pg_user')||'null'); if(u&&u.name) return u; }catch(e){} return {id:'local-user',name:'Local User'}; }
+    function key(g){ return 'pg_hist_'+g; }
+    function load(g){ try{ var l=JSON.parse(window.localStorage.getItem(key(g))||'[]'); return Array.isArray(l)?l:[]; }catch(e){ return []; } }
+    function persist(g,l){ try{ window.localStorage.setItem(key(g), JSON.stringify(l.slice(-CAP))); }catch(e){} }
+    function push(g,e){ var l=load(g); e.id='h'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); e.ts=e.ts||Date.now(); e.user=e.user||user(); l.push(e); persist(g,l); }
+    function snapOf(g){
+      var meta=(typeof PLANNING_GUIDES!=='undefined'?PLANNING_GUIDES:[]).filter(function(x){ return String(x.id)===String(g); })[0]||{};
+      var det={}; try{ det=getGuideDetail(g)||{}; }catch(e){}
+      try{ return JSON.parse(JSON.stringify({name:meta.name, det:det})); }catch(e){ return {name:meta.name, det:{}}; }
+    }
+    function isObj(x){ return x!==null && typeof x==='object'; }
+    function diff(a,b,path,out){
+      if(a===b) return;
+      if(!isObj(a)||!isObj(b)||Array.isArray(a)!==Array.isArray(b)){
+        var sa,sb; try{ sa=JSON.stringify(a); sb=JSON.stringify(b); }catch(e){ sa=String(a); sb=String(b); }
+        if(sa!==sb) out.push({p:path.slice(), prev:a, next:b});
+        return;
+      }
+      var ks={}; Object.keys(a).forEach(function(k){ ks[k]=1; }); Object.keys(b).forEach(function(k){ ks[k]=1; });
+      Object.keys(ks).forEach(function(k){ if(out.length<80) diff(a[k],b[k],path.concat([k]),out); });
+    }
+    // ── Plain-English sentence generator ──────────────────────────────────
+    // History reads like an activity log: every change becomes a human sentence
+    // (names resolved, values humanized, NEVER raw keys / IDs / JSON). The raw
+    // structural diff is kept on each record under details[].raw for debugging.
+    function _q(x){ return '\u201c'+String(x)+'\u201d'; }
+    function _fmtDate(k){ try{ var d=new Date(String(k)+'T00:00:00'); if(!isNaN(d)) return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch(e){} return String(k); }
+    function _fmtTime(v){ var m=String(v||'').match(/^(\d{1,2}):(\d{2})$/); if(!m) return String(v); var h=+m[1], ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+m[2]+' '+ap; }
+    function _money(v){ var n=parseFloat(v); return isNaN(n)?String(v):('$'+(n%1?n.toFixed(2):n)); }
+    function _fv(v){ if(v===undefined||v===null||v==='') return '(blank)'; return String(v); }
+    function _isNew(ch){ return ch.prev===undefined; }
+    function _isGone(ch){ return ch.next===undefined; }
+    function sentence(ch, snapB, snapA){
+      var p=ch.p, det=(snapB&&snapB.det)||{}, det0=(snapA&&snapA.det)||det;
+      function calById(id){ var r=(det.calendarRows||[]).concat(det0.calendarRows||[]).filter(function(x){ return String(x.calId)===String(id); })[0]; return (r&&r.name)||'a calendar'; }
+      function calByIdx(i){ var r=(det.calendarRows||[])[i]||(det0.calendarRows||[])[i]; return (r&&r.name)||('Calendar '+(Number(i)+1)); }
+      function roleByKey(k){ var r=(det.roles||[]).concat(det0.roles||[]).filter(function(x){ return x.key===k; })[0]; return (r&&r.name)||String(k||'staff'); }
+      function schoolBySi(si, calId){ var rows=(det.siteRowsByCal&&det.siteRowsByCal[String(calId)])||det.siteRows||[]; var r=rows[Number(si)]; if(!r){ rows=(det0.siteRowsByCal&&det0.siteRowsByCal[String(calId)])||det0.siteRows||[]; r=rows[Number(si)]; } return (r&&r.school)||'a school'; }
+      function sdName(id){ var r=(det.specialDays||[]).concat(det0.specialDays||[]).filter(function(x){ return String(x.id)===String(id)||String(x.key)===String(id); })[0]; if(r&&r.name) return r.name; return String(id||'').replace(/^sd[-_]?/,'').replace(/[-_]+/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})||'a Special Day'; }
+      function row(){ return (ch.next!==undefined&&ch.next!==null&&typeof ch.next==='object')?ch.next:((typeof ch.prev==='object'&&ch.prev)||{}); }
+      var kind='edit'; if(_isNew(ch)) kind='add'; if(_isGone(ch)) kind='delete';
+      var last=p[p.length-1];
+      var S=null;
+      if(p[0]==='name'){ S='Renamed the Planning Guide from '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+      else if(p[1]==='status'){ S='Changed the Status from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+      else if(p[1]==='district'){ S=(ch.next?('Changed the District to '+_q(ch.next&&ch.next.name||ch.next)):'Cleared the District'); }
+      else if(p[1]==='hubspot'||p[1]==='hubspotDeal'){ S='Changed the HubSpot Deal from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+      else if(p[1]==='combinedView'){ S=(ch.next?'Enabled':'Disabled')+' the Combined Calendar view'; }
+      else if(p[1]==='calendarRows'){
+        var cn=calByIdx(p[2]);
+        if(p.length===3){ var nm=row().name||cn; S=(kind==='add'?('Added the calendar '+_q(nm)):(kind==='delete'?('Deleted the calendar '+_q(nm)):('Updated the calendar '+_q(nm)))); }
+        else if(last==='name'){ S='Renamed the calendar '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+        else if(last==='pricePerHour'){ S='Changed Price per Hour for '+_q(cn)+' from '+_money(ch.prev)+' to '+_money(ch.next); }
+        else if(last==='color'){ S='Updated the '+_q(cn)+' calendar color'; kind='edit'; }
+        else if(last==='billable'){ S='Marked '+_q(cn)+' as '+(ch.next?'Billable':'Non-Billable'); }
+        else if(last==='firstDay'||last==='lastDay'){ S='Changed the '+(last==='firstDay'?'First':'Last')+' Day for '+_q(cn)+' from '+_fmtDate(ch.prev)+' to '+_fmtDate(ch.next); }
+        else if(p[3]==='mealBreaks'||last==='mealBreaks'){ S='Updated the Meal Break settings for '+_q(cn); }
+        else { S='Updated the calendar '+_q(cn); }
+      }
+      else if(p[1]==='roles'){
+        var rr=row(); var rn=rr.name||roleByKey(rr.key);
+        if(p.length===3){ S=(kind==='add'?('Added the role '+_q(rn)):(kind==='delete'?('Deleted the role '+_q(rn)):('Updated the role '+_q(rn)))); }
+        else { var rn2=(((det.roles||[])[p[2]]||{}).name)||rn;
+          if(last==='name'){ S='Renamed the role '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          else if(last==='isCoach'){ S='Marked '+_q(rn2)+' as '+(ch.next?'a Coach role':'a non-Coach role'); }
+          else if(last==='spc'){ S='Changed Students per Coach for '+_q(rn2)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+          else { S='Updated the role '+_q(rn2); } }
+      }
+      else if(p[1]==='specialDays'){
+        var sr=row(); var sn=sr.name||sdName(sr.id);
+        if(p.length===3){ S=(kind==='add'?('Added the Special Day '+_q(sn)):(kind==='delete'?('Removed the Special Day '+_q(sn)):('Updated the Special Day '+_q(sn)))); }
+        else { var sn2=(((det.specialDays||[])[p[2]]||{}).name)||sn;
+          if(last==='color'){ S='Updated the '+_q(sn2)+' color'; }
+          else if(last==='noHours'){ S=(ch.next?'Enabled':'Disabled')+' No Hours for '+_q(sn2); }
+          else if(last==='name'){ S='Renamed the Special Day '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          else { S='Updated the Special Day '+_q(sn2); } }
+      }
+      else if(p[1]==='siteRows'||p[1]==='siteRowsByCal'){
+        var byCal=(p[1]==='siteRowsByCal'); var calId=byCal?p[2]:null; var idx=byCal?p[3]:p[2];
+        var sch=row().school||schoolBySi(idx,calId);
+        if((byCal&&p.length===4)||(!byCal&&p.length===3)){ S=(kind==='add'?('Added '+_q(sch)+' to the Site Breakdown'):(kind==='delete'?('Removed '+_q(sch)+' from the Site Breakdown'):('Updated '+_q(sch)))); }
+        else {
+          var m=String(last).match(/^coaches_(\w+)$/);
+          if(m){ var rnm=roleByKey(m[1]); S='Changed the '+rnm+(/coach/i.test(rnm)?'':' Coach')+' count for '+_q(sch)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+          else if(last==='school'){ S='Renamed the school '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          else if(/^pod/i.test(String(last))){ S=(ch.next?('Assigned '+_q(sch)+' to a POD'):('Removed '+_q(sch)+' from its POD')); }
+          else if((det.roles||[]).some(function(r){ return r.key===last; })){ S='Changed the '+roleByKey(last)+' student count for '+_q(sch)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+          else { S='Updated '+_q(sch); }
+        }
+      }
+      else if(p[1]==='podsByCal'||p[1]==='pods'){
+        var pr=row(); var pn=pr.name||'a POD';
+        if(_isNew(ch)&&typeof ch.next==='object'){ S='Created the POD '+_q(pn); kind='add'; }
+        else if(_isGone(ch)&&typeof ch.prev==='object'){ S='Deleted the POD '+_q(pn); kind='delete'; }
+        else if(last==='name'){ S='Renamed the POD '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+        else if(last==='color'){ S='Updated a POD color'; }
+        else { S='Updated the POD assignments'; }
+      }
+      else if(p[1]==='staffingHoursSlots'){
+        var ci=String(p[2]||'').replace(/^c/,''); var cn2=calByIdx(ci); var role=roleByKey(p[3]); var _DAYS={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'}; var day=_DAYS[String(p[4]||'')]||String(p[4]||'');
+        if(last==='start'||last==='end'){ S='Changed the '+day+' '+role+' '+(last==='start'?'Start':'End')+' time for '+_q(cn2)+' from '+_fmtTime(ch.prev)+' to '+_fmtTime(ch.next); }
+        else { S='Updated the '+(day?day+' ':'')+role+' Staffing Hours for '+_q(cn2); }
+      }
+      else if(p[1]==='staffingOptsByCal'||p[1]==='staffingOpts'){
+        var cn3=calById(p[2]);
+        if(last==='bySchool'){ S=(ch.next?'Separated Staffing Hours by School':'Combined Staffing Hours across schools')+' for '+_q(cn3); }
+        else if(last==='byPods'){ S=(ch.next?'Separated Staffing Hours by POD':'Stopped separating Staffing Hours by POD')+' for '+_q(cn3); }
+        else if(/alternate/i.test(String(last))){ S=(ch.next?'Enabled':'Disabled')+' Alternate A/B Weeks for '+_q(cn3); }
+        else { S='Changed the Staffing options for '+_q(cn3); }
+      }
+      else if(p[1]==='calCellOverrides'){
+        var kk=String(p[2]||'').split('|'); var cnm=calById(kk[0]); var dt=_fmtDate(kk[1]); var sch2=schoolBySi(kk[2],kk[0]); var rl=roleByKey(kk[3]);
+        var what=(last==='cnt'?'Count':(last==='start'?'Start time':(last==='end'?'End time':'hours')));
+        if(kind==='add'&&p.length===3){ S='Set a date-specific '+rl+' override for '+_q(sch2)+' on '+dt+' ('+cnm+')'; }
+        else if(kind==='delete'&&p.length===3){ S='Reset the date-specific '+rl+' override for '+_q(sch2)+' on '+dt+' ('+cnm+')'; kind='reset'; }
+        else { S='Changed the date-specific '+rl+' '+what+' for '+_q(sch2)+' on '+dt+(ch.prev!==undefined&&ch.next!==undefined&&typeof ch.prev!=='object'&&typeof ch.next!=='object'?(' from '+_fv(ch.prev)+' to '+_fv(ch.next)):''); }
+      }
+      else if(p[1]==='calExtraShifts'){
+        var k2=String(p[2]||'').split('|'); var cne=calById(k2[0]); var dte=_fmtDate(k2[1]);
+        S=(kind==='add'?'Added an Extra Shift':(kind==='delete'?'Removed an Extra Shift':'Updated an Extra Shift'))+' on '+dte+' ('+cne+')';
+      }
+      else if(p[1]==='calMarkers'){
+        var k3=String(p[2]||'').split('|'); var cnm2=calById(k3[0]); var dtm=_fmtDate(k3[1]);
+        var val=(typeof ch.next==='object'&&ch.next)||(typeof ch.prev==='object'&&ch.prev)||{};
+        var ids=[]; try{ Object.keys(val.schools||{}).forEach(function(si){ var n=sdName(val.schools[si]); if(ids.indexOf(n)<0) ids.push(n); }); }catch(e){}
+        if(!ids.length&&last!=='schools'&&p.length>3){ ids=[sdName(ch.next||ch.prev)]; }
+        var names=ids.length?ids.join(' and '):'a Special Day';
+        S=(kind==='add'?('Applied '+names+' on '+dtm+' ('+cnm2+')'):(kind==='delete'?('Removed '+names+' from '+dtm+' ('+cnm2+')'):('Updated the Special Days on '+dtm+' ('+cnm2+')')));
+      }
+      else if(p[1]==='calDayNotes'){ var cnn=calById(p[2]); S=(kind==='delete'?'Removed':(kind==='add'?'Added':'Updated'))+' the calendar note for '+_fmtDate(p[3])+' ('+cnn+')'; }
+      else if(p[1]==='sessions'){
+        var se=row();
+        if(p.length===3){
+          var tspan=(se.start&&se.end)?(' from '+_fmtTime(se.start)+' \u2013 '+_fmtTime(se.end)):'';
+          var act=se.activity?(' for '+se.activity):'';
+          S=(kind==='add'?('Added a session'+act+tspan):(kind==='delete'?('Removed a session'+act):('Updated a session'+act)));
+        }
+        else if(last==='start'||last==='end'){ S='Moved a session '+(last==='start'?'Start':'End')+' from '+_fmtTime(ch.prev)+' to '+_fmtTime(ch.next); }
+        else if(/staff/i.test(String(last))){ S='Changed the Assigned Staff on a session'; }
+        else if(/activity|type/i.test(String(last))){ S='Changed a session activity from '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+        else if(/note/i.test(String(last))){ S='Updated a session note'; }
+        else { S='Updated a session'; }
+      }
+      else if(p[1]==='mealMins'){ S='Updated the Meal Break minutes'; }
+      else if(/note/i.test(String(last))){ S='Updated a note'; }
+      else { S=(kind==='add'?'Added to':'Updated')+' the Planning Guide details'; kind=(kind==='delete'?'edit':kind); }
+      return {text:S, kind:kind};
+    }
+    function commit(){
+      _t=null;
+      if(_gid==null||!_snap) return;
+      try{ if(_pgvCur.mode==='view') { _snap=snapOf(_gid); return; } }catch(e){}
+      var now=snapOf(_gid), out=[];
+      diff(_snap, now, [], out);
+      if(!out.length) return;
+      var det=[], kinds={};
+      var snapA=_snap;
+      out.slice(0,40).forEach(function(ch){
+        var L=sentence(ch, now, snapA); kinds[L.kind]=1;
+        det.push({text:L.text, kind:L.kind, raw:{p:ch.p, prev:ch.prev, next:ch.next}});
+      });
+      var kind=kinds.add&&!kinds.edit&&!kinds['delete']?'add':(kinds['delete']&&!kinds.edit&&!kinds.add?'delete':(kinds.reset&&Object.keys(kinds).length===1?'reset':'edit'));
+      var action, desc='';
+      if(det.length===1){ action=det[0].text; }
+      else { action=String(det.length)+' changes saved together'; desc=det.slice(0,2).map(function(x){ return x.text; }).join('  \u00b7  ')+(det.length>2?'  \u2026':''); }
+      push(_gid,{kind:kind, action:action, desc:desc, details:det});
+      _snap=now;
+    }
+    return {
+      begin:function(g){ _gid=g; _snap=snapOf(g); if(_t){ clearTimeout(_t); _t=null; } },
+      schedule:function(){ if(_gid==null) return; if(_t) clearTimeout(_t); _t=setTimeout(commit,DEB); },
+      flushNow:function(){ if(_t){ clearTimeout(_t); } commit(); },
+      evt:function(g,e){ push(g,e); },
+      _sentence:sentence,   // test/debug: render one structural change as its sentence
+      list:function(g){ return load(g).slice().reverse(); },
+      user:user
+    };
+  })();
+  try{ window._pgHist=_pgHist; }catch(e){}   // test/debug handle
+  // dirty-signal: any editing interaction in the planning panel schedules a diff
+  (function(){
+    function maybe(){ try{ var p=document.getElementById('planning-panel'); if(p&&p.style.display!=='none'&&p.children.length&&_pgvCur.mode!=='view') _pgHist.schedule(); }catch(e){} }
+    ['input','change','click','keyup'].forEach(function(evt){ document.addEventListener(evt,function(ev){ var p=document.getElementById('planning-panel'); if(p&&(p.contains(ev.target)||!document.body.contains(ev.target))) maybe(); },true); });
+  })();
+  var _pgvCur={mode:'edit',gid:null};
+  var _pgSyncLockItem=function(){};
+  function _pgvGate(ev){
+    if(_pgvCur.mode!=='view') return;
+    var t=ev.target; if(!t||!t.closest) return;
+    if(t.closest('#pg-actions-pill,.pg-view-ok')) return;
+    if(t.closest('button,input,select,textarea,label,[contenteditable="true"]')){ ev.preventDefault(); ev.stopPropagation(); return; }
+    if(ev.type==='dblclick'||ev.type==='contextmenu'){ ev.preventDefault(); ev.stopPropagation(); }
+  }
+  function _pgvEnsureGate(){
+    var p=document.getElementById('planning-panel'); if(!p||p.__pgvGated) return;
+    p.__pgvGated=true;
+    ['mousedown','click','dblclick','contextmenu','change','keydown'].forEach(function(e){ p.addEventListener(e,_pgvGate,true); });
+  }
+  function _pgvEnsureStyle(){
+    if(document.getElementById('pg-mode-style')) return;
+    var st=document.createElement('style'); st.id='pg-mode-style';
+    st.textContent='#planning-panel.pg-view-mode button:not(#pg-actions-pill):not(.pg-view-ok){opacity:.45;cursor:default;pointer-events:none;} #planning-panel.pg-view-mode .pgv-text{cursor:default;} .pgv-missing{color:#98a2ad;font-style:italic;} .pgv-check{display:inline-flex;vertical-align:middle;} #planning-panel.pg-view-mode td, #planning-panel.pg-view-mode .pgv-text{cursor:default;}';
+    document.head.appendChild(st);
+  }
+  // ── Locked document view ──
+  // A locked guide renders as a READ-ONLY DOCUMENT: saved values as plain text (blank
+  // -> "Missing"), editing buttons / Del columns / gear / × removed, checked boxes as
+  // checkmarks, Billable / Non-Billable tinted. Unlock re-renders the edit UI fresh.
+  function _pgvChk(){ return $('<span class="pgv-check">').html('<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.6l3.2 3.2L13 5" stroke="#1e7145" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  function _pgvStripCols(tbl){
+    var $t=$(tbl); var kills=[];
+    $t.find('tr').first().children('th,td').each(function(i){ var x=$(this).text().replace(/[\u25bc\u25be\u2026]/g,'').trim(); if(/^(del|restore|copy to)$/i.test(x)) kills.push(i); });
+    if(!kills.length) return;
+    $t.find('tr').each(function(){ var $c=$(this).children('th,td'); kills.slice().reverse().forEach(function(i){ $c.eq(i).remove(); }); });
+  }
+  function _pgvReplaceFields($R){
+    $R.find('input[type=text],input[type=number],input:not([type]),textarea').each(function(){
+      if(this.closest('.pg-view-ok')||this.hasAttribute('data-pgv-keep')) return;
+      var v=$(this).val(); v=(v==null?'':String(v)).trim();
+      var ph=this.getAttribute('placeholder')||'';
+      var $t=$('<span class="pgv-text">');
+      if(v!==''){ $t.text(v); }
+      else if(/HubSpot|district/i.test(ph)){ $t.text('Missing').addClass('pgv-missing'); }
+      $(this).replaceWith($t);
+    });
+    $R.find('select').each(function(){
+      if(this.closest('.pg-view-ok')) return;
+      var t=''; try{ t=this.options[this.selectedIndex]?this.options[this.selectedIndex].text:''; }catch(e){}
+      $(this).replaceWith($('<span class="pgv-text">').text(String(t).trim()));
+    });
+    $R.find('input[type=checkbox]').each(function(){
+      if(this.closest('.pg-view-ok')||this.hasAttribute('data-pgv-keep')) return;
+      $(this).replaceWith(this.checked?_pgvChk():$('<span class="pgv-blank">'));
+    });
+    $R.find('input[type=radio]').each(function(){
+      if(this.closest('.pg-view-ok')) return;
+      $(this).replaceWith(this.checked?_pgvChk():$('<span class="pgv-blank">'));
+    });
+  }
+  var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Copy To|Options|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
+  function _pgvDocTransform(root){
+    var $R=$(root);
+    _pgvReplaceFields($R);
+    $R.find('button,[role=button]').each(function(){
+      if(this.id==='pg-actions-pill'||this.closest('.pg-view-ok')) return;
+      var t=$(this).text().replace(/[\u25bc\u25be]/g,'').replace(/\s+/g,' ').trim();
+      if(_PGV_KILL.test(t) || /remove|delete/i.test(this.getAttribute('title')||'') || this.querySelector('svg[data-icon="gear"]')) $(this).remove();
+    });
+    $R.find('[title]').each(function(){
+      if(this.tagName==='BUTTON') return;
+      var ti=this.getAttribute('title')||'';
+      if(/Non-Billable Settings/i.test(ti)) $(this).remove();
+      else if(/^Remove\b/i.test(ti) && $(this).text().trim().length<=2) $(this).remove();
+    });
+    // saved color circles stay visible but purely visual: no pointer, hover, or picker path
+    $R.find('div').each(function(){
+      if(this.closest('.pg-view-ok')) return;
+      if(this.style.borderRadius==='50%' && /pointer/.test(this.style.cursor||'')){
+        this.style.cursor='default'; this.style.pointerEvents='none'; this.removeAttribute('tabindex');
+      }
+    });
+    // combo/date/price wrappers keep their input-box styling after the field swap;
+    // flatten them (and drop dropdown carets) so values read as plain table text.
+    $R.find('div,span').each(function(){
+      if(this.closest('.pg-view-ok')) return;
+      var st=this.style;
+      var fieldish=/inset/.test(st.boxShadow||'') || ((st.border||'').indexOf('221, 227, 234')>=0);
+      if(!fieldish) return;
+      st.border='none'; st.background='transparent'; st.boxShadow='none';
+      $(this).find('span').addBack().filter(function(){ return !this.children.length && this.textContent.trim()==='\u25be'; }).remove();
+    });
+    // "Copy to" / "Options" affordances are removed wholesale (any tag, any caret, any case)
+    $R.find('*').each(function(){
+      if(!this.isConnected||this.closest('.pg-view-ok')) return;
+      if(this.textContent.length>24) return;
+      var t=$(this).text().replace(/[\u25bc\u25be\u2026]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+      if(t==='copy to'||t==='options') $(this).remove();
+    });
+    $R.find('table').each(function(){ _pgvStripCols(this); });
+    $R.find('td,th,span,div,label').each(function(){
+      if(this.children.length) return;
+      var t=this.textContent.trim();
+      if(t==='Billable') this.style.color='rgb(48, 137, 48)';
+      else if(t==='Non-Billable') this.style.color='rgb(85, 85, 181)';
+      else if(_PGV_KILL.test(t) && this.tagName!=='TH' && /pointer/.test(this.style.cursor||'')) $(this).remove();
+    });
+  }
+  function _pgvDocPopup(n){
+    var $n=$(n);
+    // read-only popups use the role-specific non-edit title: "Coach Count" / "Staff Count"
+    $n.find('*').each(function(){
+      if(this.children.length) return;
+      var m=this.textContent.trim().match(/^Edit (Coach|Staff) Count$/);
+      if(m) this.textContent=m[1]+' Count';
+    });
+    $n.find('button').addBack('button').each(function(){
+      var t=$(this).text().replace(/\s+/g,' ').trim();
+      if(/^\+?\s*(Save|Discard|Update|Add Extra Shift|Reset to Original Counts|Reset to Original Hours|Restore|Delete)$/.test(t) || /remove|delete|restore/i.test(this.getAttribute('title')||'')) $(this).remove();
+      else if(t==='Cancel') $(this).text('Close');   // the standard dismiss control the spec allows
+    });
+    $n.find('button,span,div,a').each(function(){ if(!this.isConnected) return; var _tt=(this.getAttribute&&this.getAttribute('title'))||''; var _tx=$(this).text().replace(/\s+/g,' ').trim(); if((/edit|note/i.test(_tt)&&_tx.length<=2) || /^[\u270e\u270f\u2710\u270d]$/.test(_tx) || /^\+?\s*Add Extra Shift$/.test(_tx)) $(this).remove(); });
+    $n.find('[title="Click to edit"]').attr('title','Click to view');
+    $n.find('table').each(function(){ _pgvStripCols(this); });
+    _pgvReplaceFields($n);
+    // inspection-only: block interactions except the dismiss control and allowlisted filters
+    if(!n.__pgvBlocked){
+      n.__pgvBlocked=true;
+      ['click','dblclick','keydown','paste','contextmenu'].forEach(function(evt){
+        n.addEventListener(evt,function(ev){
+          var t=ev.target;
+          if(!t.closest) { ev.preventDefault(); ev.stopPropagation(); return; }
+          if(t.closest('.pg-view-ok')) return;
+          // dismiss controls (any tag): the corner \u00d7, title Close, *close* classes
+          if(t.closest('.cal-tip-close,[title="Close"],.modal-close,.sh-cnt-popup-cancel')) return;
+          var b=t.closest('button');
+          if(b && (/close/i.test(b.getAttribute('title')||'') || /^(Close|\u00d7|\u2715)$/.test($(b).text().trim()))) return;
+          if(evt==='click'){
+            // read-only inspection paths stay live: school links open read-only school
+            // windows; combined counts open the read-only Coach/Staff Count popup
+            if(t.closest('.cal-school-link')) return;
+            if(t.closest('.count-cell-u,[title*="each school"]')) return;
+          }
+          ev.preventDefault(); ev.stopPropagation();
+        },true);
+      });
+    }
+  }
+  var _pgvObs=null;
+  function _pgvPanelActive(){ var p=document.getElementById('planning-panel'); if(!p) return false; if(p.style.display==='none') return false; return p.children.length>0; }
+  function _pgvEnsureObserver(){
+    if(_pgvObs) return;
+    _pgvObs=new MutationObserver(function(muts){
+      if(_pgvCur.mode!=='view'||!_pgvPanelActive()) return;
+      muts.forEach(function(m){ [].forEach.call(m.addedNodes,function(n){
+        if(n.nodeType!==1) return;
+        if(n.classList&&(n.classList.contains('pgv-text')||n.classList.contains('pgv-check')||n.classList.contains('pgv-blank'))) return;
+        if(n.closest&&n.closest('.pg-view-ok')) return;
+        if(n.querySelector&&n.querySelector('.pg-view-ok')) return;
+        try{ _pgvDocPopup(n); }catch(e){}
+      }); });
+      // persistent singleton overlays repopulate in place; sweep them every tick (idempotent)
+      var _tip=document.querySelector('.cal-hours-breakdown');
+      if(_tip&&_tip.textContent){ try{ _pgvDocPopup(_tip); }catch(e){} }
+    });
+    // subtree: popups can be born inside the panel (count popup) or on the body (windows)
+    _pgvObs.observe(document.body,{childList:true,subtree:true});
+  }
+  function _pgvLockVisual(){
+    var $P=$('#planning-panel'); _pgvEnsureStyle();
+    $P.addClass('pg-view-mode');
+    $P.find('input,select,textarea').each(function(){ if(this.closest('.pg-view-ok')||this.hasAttribute('data-pgv-keep')) return; if(!this.disabled){ this.disabled=true; this.setAttribute('data-pgv','1'); } });
+    $P.find('[contenteditable="true"]').each(function(){ this.setAttribute('contenteditable','false'); this.setAttribute('data-pgv-ce','1'); });
+    // destroy any live editors / edit popups before the document transform
+    $('.sh-cnt-popup,.sb-pod-editov').remove();
+    var _tip0=document.querySelector('.cal-hours-breakdown'); if(_tip0&&_tip0.textContent){ try{ _pgvDocPopup(_tip0); }catch(e){} }
+    _pgvDocTransform($P[0]);
+    _pgvEnsureObserver();
+  }
+  function _pgvUnlockVisual(){
+    var $P=$('#planning-panel');
+    $P.removeClass('pg-view-mode');
+    $P.find('[data-pgv]').each(function(){ this.disabled=false; this.removeAttribute('data-pgv'); });
+    $P.find('[data-pgv-ce]').each(function(){ this.setAttribute('contenteditable','true'); this.removeAttribute('data-pgv-ce'); });
+  }
+
   function showGuideDetail(g){
+    try{ _pgHist.flushNow(); }catch(e){}
+    // outer slot: the staffing render assigns this; the Roles table's Students-per-Coach
+    // handler lives in a sibling closure and could never see the nested declaration (it threw).
+    var debouncedRefreshTable=function(){};
+    // baseline AFTER the render seeds defaults, so opening a guide never logs seeding noise
+    try{ (function(_hg){ setTimeout(function(){ _pgHist.begin(_hg); }, 60); })(g.id); }catch(e){}
     var det = getGuideDetail(g.id);
     var currentStatus = det.status || '';
+    var _pgMode=_pgGuideMode(g.id);
 
     function buildStatusControl(){
       var sc = PG_STATUSES[currentStatus];
@@ -14472,7 +15096,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     function buildExportControl(){
       // Compact pill, consistent with the header's status control.
-      var $btn=$('<button type="button">').css({
+      var $btn=$('<button type="button" id="pg-actions-pill">').css({
         background:'#fff',color:'#495057',border:'1px solid #dee2e6',
         borderRadius:'20px',padding:'3px 12px',fontSize:'11px',fontWeight:'600',
         cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',lineHeight:'1.4',whiteSpace:'nowrap'
@@ -14492,18 +15116,49 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       function mkDivider(){ return $('<div>').css({height:'1px',background:'#eceff2',margin:'4px 6px'}); }
       $menu.append(
-        mkItem(_pgIcon('excel'),'Export as Excel',{fn:function(){ exportGuideToExcel(g); }}),
-        mkItem(_pgIcon('json'),'Export as JSON',{fn:function(){ exportGuideToJson(g); }}),
-        mkItem(_pgIcon('import'),'Import\u2026',{fn:function(){ if(_guideOps.import) _guideOps.import(g); }}),
+        mkItem(_pgIcon('excel'),'Export as Excel',{fn:function(){ exportGuideToExcel(g); }}).addClass('pg-view-ok'),
+        mkItem(_pgIcon('json'),'Export as JSON',{fn:function(){ exportGuideToJson(g); }}).addClass('pg-view-ok'),
+        mkItem(_pgIcon('import'),'Import\u2026',{fn:function(){ if(_guideOps.import) _guideOps.import(g); }}).addClass('pg-edit-only'),
         mkDivider(),
-        _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem(_pgIcon('workspace'),'Add to Workspace',{fn:fn}); }, g, function(){ $menu.hide(); }),
-        mkItem(_pgIcon('duplicate'),'Duplicate',{fn:function(){ if(_guideOps.duplicate) _guideOps.duplicate(g); }}),
+        (function(){
+          // Lock <-> Unlock toggles the guide between View and Edit in place. It must stay
+          // clickable while locked (.pg-view-ok), or a locked guide could never be unlocked.
+          var $lk=mkItem(_pgIcon(_pgMode==='view'?'unlock':'lock'), (_pgMode==='view'?'Unlock':'Lock'), {fn:function(){
+            _pgMode=(_pgMode==='view')?'edit':'view';
+            _pgSetGuideMode(g.id,_pgMode);
+            _pgvCur.mode=_pgMode;
+            _pgSyncLockItem();
+            if(_pgMode==='view'){ _pgHist.flushNow(); _pgHist.evt(g.id,{kind:'lock',action:'Planning Guide locked',desc:'Switched to read-only View mode'}); _pgvLockVisual(); }
+            else {
+              // The document view replaced the edit controls, so Unlock re-renders the
+              // editor fresh from saved data and restores the scroll position.
+              var _p=document.getElementById('planning-panel');
+              var _sc=[_p?_p.scrollTop:0, window.pageYOffset||0];
+              _pgHist.evt(g.id,{kind:'unlock',action:'Planning Guide unlocked',desc:'Editing restored'});
+              _pgvUnlockVisual();
+              showGuideDetail(g);
+              var _p2=document.getElementById('planning-panel');
+              if(_p2) _p2.scrollTop=_sc[0];
+              window.scrollTo(0,_sc[1]);
+            }
+          }}).addClass('pg-view-ok').attr('id','pg-lock-item');
+          _pgSyncLockItem=function(){
+            var locked=(_pgMode==='view');
+            _pgSetMenuIcon($lk.children('span').first(), _pgIcon(locked?'unlock':'lock'));
+            $lk.children('span').last().text(locked?'Unlock':'Lock');
+          };
+          return $lk;
+        })(),
+        mkItem(_pgIcon('history'),'History',{fn:function(){ if(_guideOps.history) _guideOps.history(g); }}).addClass('pg-view-ok'),
         mkDivider(),
-        mkItem(_pgIcon('trash'),'Delete',{danger:true,fn:function(){ if(_guideOps.delete) _guideOps.delete(g); }})
+        _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem(_pgIcon('workspace'),'Add to Workspace',{fn:fn}).addClass('pg-view-ok'); }, g, function(){ $menu.hide(); }),
+        mkItem(_pgIcon('duplicate'),'Duplicate',{fn:function(){ if(_guideOps.duplicate) _guideOps.duplicate(g); }}).addClass('pg-view-ok'),
+        mkDivider(),
+        mkItem(_pgIcon('trash'),'Delete',{danger:true,fn:function(){ if(_guideOps.delete) _guideOps.delete(g); }}).addClass('pg-edit-only')
       );
 
       var $wrapE=$('<div style="position:relative;display:inline-block;">').append($btn,$menu);
-      $btn.on('click',function(e){ e.stopPropagation(); $menu.toggle(); });
+      $btn.on('click',function(e){ e.stopPropagation(); $menu.find('.pg-edit-only').css('display',(_pgMode==='view')?'none':'flex'); $menu.toggle(); });
       $(document).off('click.pgexport').on('click.pgexport',function(){ $menu.hide(); });
       return $wrapE;
     }
@@ -15660,6 +16315,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // non-blank and unique (case-insensitive) in this Site Breakdown. Cancel discards; Reset to Original appears
     // only while dirty and restores the popup's opening state without closing or saving.
     function _podEditPopup(pod){
+      if(_pgvCur.mode==='view') return;   // locked-mode guard: POD brackets are read-only grouping indicators
       $('.sb-pod-editov').remove();
       _podHealDuplicateIds();   // the popup's per-school \u00d7 must act on one row, never a twin
       var orig={ name:pod.name, ids:(pod.schoolIds||[]).slice() };
@@ -16576,7 +17232,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     setTimeout(_podRefreshBrackets,0);   // brackets measure row geometry, so build after attach/layout
 
     var _refreshTableTimer=null;
-    function debouncedRefreshTable(){ if(_refreshTableTimer) clearTimeout(_refreshTableTimer); _refreshTableTimer=setTimeout(function(){ _refreshTableTimer=null; refreshTable(); },120); }
+    debouncedRefreshTable=function(){ if(_refreshTableTimer) clearTimeout(_refreshTableTimer); _refreshTableTimer=setTimeout(function(){ _refreshTableTimer=null; refreshTable(); },120); };
 
     function refreshTable(){
       $tableContent.remove();
@@ -16846,6 +17502,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $calSection=buildCalendarSection(g);
     var $summarySection=buildSummarySection(g);
     $('#planning-panel').empty().append($wrap,$staffSection,$calSection,$summarySection);
+    _pgvCur={mode:_pgMode,gid:g.id};
+    _pgvEnsureGate();
+    if(_pgMode==='view') _pgvLockVisual(); else _pgvUnlockVisual();
     // Trigger full recalculation after DOM is mounted
     setTimeout(function(){
       if($staffSection[0]._recalcAll) $staffSection[0]._recalcAll();
