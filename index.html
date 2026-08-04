@@ -348,7 +348,9 @@ body.people-mode .staff-row.selected .staff-name,body.staff-schedule-mode .staff
 .staff-active-chk:focus{outline:none;box-shadow:0 0 0 3px rgba(25,135,84,.2);}
 label.staff-status-label{font-size:9.5px !important;font-weight:700 !important;text-transform:uppercase !important;letter-spacing:.06em !important;color:#6c757d !important;margin-bottom:0 !important;cursor:pointer;line-height:1;}
 label.staff-status-label.active-label{color:#198754 !important;}
-label.staff-status-label.inactive-label{color:#6c757d !important;}
+label.staff-status-label.inactive-label{color:#E24B4A !important;}
+.staff-active-chk:not(:checked){background:#E24B4A;border-color:#E24B4A;}
+.staff-id-inactive-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-left:5px;vertical-align:1px;flex-shrink:0;pointer-events:none;}
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -389,6 +391,8 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
       <button class="mode-btn" id="btn-people">Staff</button>
       <button class="mode-btn" id="btn-availability">Availability</button>
       <button class="mode-btn" id="btn-staff-schedule">Staff Schedule</button>
+      <span class="mode-divider" aria-hidden="true"></span>
+      <button class="mode-btn" id="btn-admin">Admin</button>
     </div>
     <div class="view-toggle">
       <button class="view-btn active" id="btn-day">Day</button>
@@ -400,6 +404,13 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
       <span id="date-label" style="font-size:13px;font-weight:500;color:#212529;min-width:130px;text-align:center;"></span>
       <button id="next-btn">&#8250;</button>
       <span class="today-badge" id="today-badge" style="cursor:pointer;" title="Go to today">today</span>
+    </div>
+    <!-- User menu (far right) — shows the signed-in user once auth exists -->
+    <div id="user-menu-wrap" style="margin-left:auto;position:relative;flex-shrink:0;">
+      <button class="mode-btn" id="user-menu-btn" title="User menu" style="display:inline-flex;align-items:center;gap:7px;"><span class="staff-avatar" id="user-avatar" aria-hidden="true"></span><span id="user-name-label">Local User</span></button>
+      <div id="user-menu-dd" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);min-width:140px;z-index:5000;padding:4px;">
+        <div id="user-signout" style="padding:7px 12px;font-size:12px;color:var(--tx);border-radius:6px;cursor:pointer;">Sign Out</div>
+      </div>
     </div>
   </div>
 
@@ -445,6 +456,7 @@ label.staff-status-label.inactive-label{color:#6c757d !important;}
     <div id="schedule-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="people-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="staff-schedule-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
+    <div id="admin-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     
   </div>
 
@@ -1081,7 +1093,9 @@ $(function(){
   var shiftDayLayout='timeline';   // Shift Schedule Day-view layout: 'timeline' (roles down, time across) | 'grid' (time down, roles across)
   var draggingId=null; // track which block is being dragged
   var _dragOrigDow=undefined; // day-of-week of the chip being dragged
-  var pageMode='schedule'; // 'schedule' or 'availability'
+  var pageMode='schedule';
+  var adminCategory='users';   // Admin mode left-column category (users|groups|permissions)
+  var ADMIN_CATS=['users','groups','permissions']; // 'schedule' or 'availability'
   var availOverlay=false;  // show availability stripes on schedule blocks
 
   function syncOverlayCheckVisibility(){
@@ -1599,9 +1613,11 @@ $(function(){
   /* ── URL state sync ── */
   function buildURLParams(){
     var params = new URLSearchParams();
-    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'shift_schedule'))));
+    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='admin' ? 'admin' : (pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'shift_schedule')))));
     if(pageMode==='workspace'){
       // Workspace is a standalone, user-specific area — no guide/staff/date params ride along with it.
+    } else if(pageMode==='admin'){
+      params.set('category', ADMIN_CATS.indexOf(adminCategory)>=0 ? adminCategory : 'users');
     } else if(pageMode==='people'){
       if(selectedPersonId) params.set('staff_id', selectedPersonId);
     } else if(pageMode==='staff_schedule'){
@@ -1703,6 +1719,10 @@ $(function(){
     var sec=params.get('section')||'';
     if(sec==='workspace'){
       pageMode='workspace';
+    } else if(sec==='admin'){
+      pageMode='admin';
+      var _ac=params.get('category');
+      adminCategory = ADMIN_CATS.indexOf(_ac)>=0 ? _ac : 'users';   // missing or invalid → users
     } else if(sec==='planning_guides'||sec==='planning'){
       pageMode='planning';
       try{ var _gid=params.get('planning_guide'); if(_gid) selectedGuideId=_gid; }catch(e){}
@@ -1753,7 +1773,8 @@ $(function(){
     $('#btn-schedule').toggleClass('active',    pageMode==='schedule');
     $('#btn-availability').toggleClass('active',pageMode==='availability');
     $('#btn-staff-schedule').toggleClass('active',pageMode==='staff_schedule');
-    $('.view-toggle,.date-nav').toggle(pageMode!=='people'&&pageMode!=='planning'&&pageMode!=='staff_schedule'&&pageMode!=='workspace');
+    $('#btn-admin').toggleClass('active',pageMode==='admin');
+    $('.view-toggle,.date-nav').toggle(pageMode!=='people'&&pageMode!=='planning'&&pageMode!=='staff_schedule'&&pageMode!=='workspace'&&pageMode!=='admin');
     $('#shift-layout-toggle').toggle(pageMode==='schedule'&&viewMode==='day');
     // Filter bar: mirror setPageMode's rule on (re)load — panel-based modes never show the top filter bar.
     // Without this, booting directly into Planning/People/Staff Schedule left an empty filter strip visible
@@ -3039,6 +3060,13 @@ $(function(){
     if(pageMode!=='planning') $('#staff-search').off('input.pg');
     if(pageMode!=='schedule') $('#staff-search').off('input.sched');
     // Workspace mode — standalone, user-specific area (empty for now; future home for pinned shortcuts).
+    if(pageMode==='admin'){
+      $('#timeline-header,#grid-body,#week-container').hide();
+      $('#timeline-area').hide(); $('#summary-bar').hide();
+      rAdmin();
+      updateURL(replace);
+      return;
+    }
     if(pageMode==='workspace'){
       $('#timeline-header,#grid-body,#week-container').hide();
       $('#timeline-area').hide(); $('#summary-bar').hide();
@@ -3372,7 +3400,10 @@ $(function(){
       var av=$('<div class="staff-avatar">').text(initials(s.n)).css('background',AVATAR_COLORS[absIdx%AVATAR_COLORS.length]);
       var info=$('<div class="staff-info">').append($('<div class="staff-name">').text(s.n));
       if(pageMode==='people'||pageMode==='staff_schedule'){
-        info.append($('<div style="font-size:10px;color:var(--tx2);margin-top:1px;line-height:1;">').text('ID: ' + s.id));
+        var $idLine=$('<div style="font-size:10px;color:var(--tx2);margin-top:1px;line-height:1;">').text('ID: ' + s.id);
+        // quick visual indicator only (non-clickable): red dot beside the ID for inactive staff
+        if((getStaffDetail(s.id)||{}).active==='false') $idLine.append($('<span class="staff-id-inactive-dot">'));
+        info.append($idLine);
       }
       if(pageMode!=='people'&&pageMode!=='staff_schedule'){
         var dayH, ot;
@@ -3816,7 +3847,9 @@ $(function(){
         var $row=$('<div>').css({borderLeft:'3px solid '+col,background:'#fbfcfd',border:'1px solid #eef1f4',borderLeftWidth:'3px',borderLeftColor:col,borderRadius:'7px',padding:'8px 10px',marginBottom:'6px'});
         var $top=$('<div>').css({display:'flex',alignItems:'center',gap:'7px'});
         var $ic=$('<span>').css({display:'inline-flex',flexShrink:'0',color:col}).html((_PG_ICONS[ICON[r.kind]||'history']||'').replace(/width="16"/,'width="13"').replace(/height="16"/,'height="13"'));
-        var $at=$('<span>').css({fontWeight:'600',fontSize:'12px',color:'#212529',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(r.action||'');
+        function circ(colr){ return $('<span>').css({display:'inline-block',width:'10px',height:'10px',borderRadius:'50%',background:String(colr||'#ccc'),border:'1px solid rgba(0,0,0,.18)',verticalAlign:'-1px',margin:'0 1px'}); }
+        function withColors($el,txt,cc){ $el.text(txt||''); if(cc){ $el.css({whiteSpace:'nowrap'}); $el.append($('<span>').text(' '),circ(cc.prev),$('<span>').css({color:'#adb5bd'}).text(' \u2192 '),circ(cc.next)); } return $el; }
+        var $at=withColors($('<span>').css({fontWeight:'600',fontSize:'12px',color:'#212529',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}), r.action||'', r.colors);
         var $tm=$('<span>').css({fontSize:'10.5px',color:'#98a2ad',flexShrink:'0'}).text(tmLabel(r.ts));
         $top.append($ic,$at,$tm);
         $row.append($top);
@@ -3827,7 +3860,7 @@ $(function(){
           var $det=$('<div>').css({display:'none',margin:'5px 0 0 20px',borderTop:'1px dashed #e3e7ec',paddingTop:'5px'});
           r.details.forEach(function(dd){
             var $l=$('<div>').css({fontSize:'11px',color:'#495057',padding:'2px 0'});
-            if(dd.text){ $l.text('\u2022  '+dd.text); }
+            if(dd.text){ withColors($l,'\u2022  '+dd.text, dd.colors); }
             else { // legacy structured rows from before the plain-English generator
               $l.append($('<span>').css({color:'#6c757d'}).text((dd.label||'')+':  '));
               $l.append($('<span>').css({color:'#8a929b'}).text(dd.prev));
@@ -4757,7 +4790,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Site Schedule assignments are ALWAYS keyed by the staff member's stable staff_id, never by
       // name — the name is used only for display (see renderShiftAssign). Guard against a staff record
       // that somehow lacks an id so we never fall back to storing anything else.
-      if(s && s.id!=null){ scheduleAssignments[shiftKey]=s.id; }
+      if(s && s.id!=null){ scheduleAssignments[shiftKey]=s.id; try{ _pgHist.schedule(); }catch(e){} }
       close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts();
     }
     function refresh(){
@@ -5070,6 +5103,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function closeWin(){ _shiftDetRefreshSess=null; $ov.remove(); $(document).off('keydown._shiftdet'); }
     function doSave(){
       if(draftAssign!=null) scheduleAssignments[shiftKey]=draftAssign; else delete scheduleAssignments[shiftKey];
+      try{ _pgHist.schedule(); }catch(e){}
       var nh=notesHtml();
       if(!notesIsEmpty(nh)) scheduleShiftNotes[shiftKey]=nh; else delete scheduleShiftNotes[shiftKey];
       // refresh the live matrix block(s) for this shift, then recompute conflict styling
@@ -14645,14 +14679,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   var _pgHist=(function(){
     var CAP=400, DEB=1200, _gid=null, _snap=null, _t=null;
     function user(){ try{ var u=JSON.parse(window.localStorage.getItem('pg_user')||'null'); if(u&&u.name) return u; }catch(e){} return {id:'local-user',name:'Local User'}; }
-    function key(g){ return 'pg_hist_'+g; }
-    function load(g){ try{ var l=JSON.parse(window.localStorage.getItem(key(g))||'[]'); return Array.isArray(l)?l:[]; }catch(e){ return []; } }
-    function persist(g,l){ try{ window.localStorage.setItem(key(g), JSON.stringify(l.slice(-CAP))); }catch(e){} }
+    // Temporary History lives ONLY in this tab's runtime memory (per guide).
+    // A refresh clears it; nothing is ever restored from a previous session.
+    // load()/persist() are the seam the future database reads/writes replace.
+    var _mem={};
+    function load(g){ var l=_mem[String(g)]; return Array.isArray(l)?l.slice():[]; }
+    function persist(g,l){ _mem[String(g)]=l.slice(-CAP); }
     function push(g,e){ var l=load(g); e.id='h'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); e.ts=e.ts||Date.now(); e.user=e.user||user(); l.push(e); persist(g,l); }
     function snapOf(g){
       var meta=(typeof PLANNING_GUIDES!=='undefined'?PLANNING_GUIDES:[]).filter(function(x){ return String(x.id)===String(g); })[0]||{};
       var det={}; try{ det=getGuideDetail(g)||{}; }catch(e){}
-      try{ return JSON.parse(JSON.stringify({name:meta.name, det:det})); }catch(e){ return {name:meta.name, det:{}}; }
+      // the guide's slice of the shift-level staff assignments and notes (they
+      // live outside guideDetails, keyed gid|si|origIdx|date|roleKey|num)
+      var sa={}, sn={}, pfx=String(g)+'|';
+      try{ Object.keys(scheduleAssignments).forEach(function(k){ if(k.indexOf(pfx)===0) sa[k.slice(pfx.length)]=scheduleAssignments[k]; }); }catch(e){}
+      try{ Object.keys(scheduleShiftNotes).forEach(function(k){ if(k.indexOf(pfx)===0&&scheduleShiftNotes[k]) sn[k.slice(pfx.length)]=1; }); }catch(e){}
+      try{ return JSON.parse(JSON.stringify({name:meta.name, det:det, sa:sa, sn:sn})); }catch(e){ return {name:meta.name, det:{}, sa:{}, sn:{}}; }
     }
     function isObj(x){ return x!==null && typeof x==='object'; }
     function diff(a,b,path,out){
@@ -14686,20 +14728,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function row(){ return (ch.next!==undefined&&ch.next!==null&&typeof ch.next==='object')?ch.next:((typeof ch.prev==='object'&&ch.prev)||{}); }
       var kind='edit'; if(_isNew(ch)) kind='add'; if(_isGone(ch)) kind='delete';
       var last=p[p.length-1];
-      var S=null;
-      if(p[0]==='name'){ S='Renamed the Planning Guide from '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
-      else if(p[1]==='status'){ S='Changed the Status from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+      var S=null, COL=null;
+      if(p[0]==='name'){ S='Changed the Planning Guide name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
+      else if(p[1]==='status'){ S='Changed the Status '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
       else if(p[1]==='district'){ S=(ch.next?('Changed the District to '+_q(ch.next&&ch.next.name||ch.next)):'Cleared the District'); }
-      else if(p[1]==='hubspot'||p[1]==='hubspotDeal'){ S='Changed the HubSpot Deal from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+      else if(p[1]==='hubspot'||p[1]==='hubspotDeal'){ S='Changed the HubSpot Deal '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
       else if(p[1]==='combinedView'){ S=(ch.next?'Enabled':'Disabled')+' the Combined Calendar view'; }
       else if(p[1]==='calendarRows'){
         var cn=calByIdx(p[2]);
         if(p.length===3){ var nm=row().name||cn; S=(kind==='add'?('Added the calendar '+_q(nm)):(kind==='delete'?('Deleted the calendar '+_q(nm)):('Updated the calendar '+_q(nm)))); }
-        else if(last==='name'){ S='Renamed the calendar '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
-        else if(last==='pricePerHour'){ S='Changed Price per Hour for '+_q(cn)+' from '+_money(ch.prev)+' to '+_money(ch.next); }
-        else if(last==='color'){ S='Updated the '+_q(cn)+' calendar color'; kind='edit'; }
+        else if(last==='name'){ S='Changed the calendar name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
+        else if(last==='pricePerHour'){ S='Changed Price per Hour for '+_q(cn)+' '+_money(ch.prev)+' \u2192 '+_money(ch.next); }
+        else if(last==='color'){ S='Updated the '+_q(cn)+' calendar color:'; kind='edit'; COL={prev:ch.prev,next:ch.next}; }
         else if(last==='billable'){ S='Marked '+_q(cn)+' as '+(ch.next?'Billable':'Non-Billable'); }
-        else if(last==='firstDay'||last==='lastDay'){ S='Changed the '+(last==='firstDay'?'First':'Last')+' Day for '+_q(cn)+' from '+_fmtDate(ch.prev)+' to '+_fmtDate(ch.next); }
+        else if(last==='firstDay'||last==='lastDay'){ S='Changed the '+(last==='firstDay'?'First':'Last')+' Day for '+_q(cn)+' '+_fmtDate(ch.prev)+' \u2192 '+_fmtDate(ch.next); }
         else if(p[3]==='mealBreaks'||last==='mealBreaks'){ S='Updated the Meal Break settings for '+_q(cn); }
         else { S='Updated the calendar '+_q(cn); }
       }
@@ -14707,18 +14749,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var rr=row(); var rn=rr.name||roleByKey(rr.key);
         if(p.length===3){ S=(kind==='add'?('Added the role '+_q(rn)):(kind==='delete'?('Deleted the role '+_q(rn)):('Updated the role '+_q(rn)))); }
         else { var rn2=(((det.roles||[])[p[2]]||{}).name)||rn;
-          if(last==='name'){ S='Renamed the role '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          if(last==='name'){ S='Changed the role name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
           else if(last==='isCoach'){ S='Marked '+_q(rn2)+' as '+(ch.next?'a Coach role':'a non-Coach role'); }
-          else if(last==='spc'){ S='Changed Students per Coach for '+_q(rn2)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+          else if(last==='spc'){ S='Changed Students per Coach for '+_q(rn2)+' '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
           else { S='Updated the role '+_q(rn2); } }
       }
       else if(p[1]==='specialDays'){
         var sr=row(); var sn=sr.name||sdName(sr.id);
         if(p.length===3){ S=(kind==='add'?('Added the Special Day '+_q(sn)):(kind==='delete'?('Removed the Special Day '+_q(sn)):('Updated the Special Day '+_q(sn)))); }
         else { var sn2=(((det.specialDays||[])[p[2]]||{}).name)||sn;
-          if(last==='color'){ S='Updated the '+_q(sn2)+' color'; }
+          if(last==='color'){ S='Updated the '+_q(sn2)+' color:'; COL={prev:ch.prev,next:ch.next}; }
           else if(last==='noHours'){ S=(ch.next?'Enabled':'Disabled')+' No Hours for '+_q(sn2); }
-          else if(last==='name'){ S='Renamed the Special Day '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          else if(last==='name'){ S='Changed the Special Day name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
           else { S='Updated the Special Day '+_q(sn2); } }
       }
       else if(p[1]==='siteRows'||p[1]==='siteRowsByCal'){
@@ -14727,10 +14769,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if((byCal&&p.length===4)||(!byCal&&p.length===3)){ S=(kind==='add'?('Added '+_q(sch)+' to the Site Breakdown'):(kind==='delete'?('Removed '+_q(sch)+' from the Site Breakdown'):('Updated '+_q(sch)))); }
         else {
           var m=String(last).match(/^coaches_(\w+)$/);
-          if(m){ var rnm=roleByKey(m[1]); S='Changed the '+rnm+(/coach/i.test(rnm)?'':' Coach')+' count for '+_q(sch)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
-          else if(last==='school'){ S='Renamed the school '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+          if(m){ var rnm=roleByKey(m[1]); S='Changed the '+rnm+(/coach/i.test(rnm)?'':' Coach')+' count for '+_q(sch)+' '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
+          else if(last==='school'){ S='Changed the school '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
           else if(/^pod/i.test(String(last))){ S=(ch.next?('Assigned '+_q(sch)+' to a POD'):('Removed '+_q(sch)+' from its POD')); }
-          else if((det.roles||[]).some(function(r){ return r.key===last; })){ S='Changed the '+roleByKey(last)+' student count for '+_q(sch)+' from '+_fv(ch.prev)+' to '+_fv(ch.next); }
+          else if((det.roles||[]).some(function(r){ return r.key===last; })){ S='Changed the '+roleByKey(last)+' student count for '+_q(sch)+' '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
           else { S='Updated '+_q(sch); }
         }
       }
@@ -14738,13 +14780,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var pr=row(); var pn=pr.name||'a POD';
         if(_isNew(ch)&&typeof ch.next==='object'){ S='Created the POD '+_q(pn); kind='add'; }
         else if(_isGone(ch)&&typeof ch.prev==='object'){ S='Deleted the POD '+_q(pn); kind='delete'; }
-        else if(last==='name'){ S='Renamed the POD '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
-        else if(last==='color'){ S='Updated a POD color'; }
+        else if(last==='name'){ S='Changed the POD name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
+        else if(last==='color'){ S='Updated the '+(pr.name?_q(pr.name)+' ':'')+'POD color:'; COL={prev:ch.prev,next:ch.next}; }
         else { S='Updated the POD assignments'; }
       }
       else if(p[1]==='staffingHoursSlots'){
         var ci=String(p[2]||'').replace(/^c/,''); var cn2=calByIdx(ci); var role=roleByKey(p[3]); var _DAYS={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'}; var day=_DAYS[String(p[4]||'')]||String(p[4]||'');
-        if(last==='start'||last==='end'){ S='Changed the '+day+' '+role+' '+(last==='start'?'Start':'End')+' time for '+_q(cn2)+' from '+_fmtTime(ch.prev)+' to '+_fmtTime(ch.next); }
+        if(last==='start'||last==='end'){ S='Changed the '+day+' '+role+' '+(last==='start'?'Start':'End')+' time for '+_q(cn2)+' '+_fmtTime(ch.prev)+' \u2192 '+_fmtTime(ch.next); }
         else { S='Updated the '+(day?day+' ':'')+role+' Staffing Hours for '+_q(cn2); }
       }
       else if(p[1]==='staffingOptsByCal'||p[1]==='staffingOpts'){
@@ -14759,7 +14801,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var what=(last==='cnt'?'Count':(last==='start'?'Start time':(last==='end'?'End time':'hours')));
         if(kind==='add'&&p.length===3){ S='Set a date-specific '+rl+' override for '+_q(sch2)+' on '+dt+' ('+cnm+')'; }
         else if(kind==='delete'&&p.length===3){ S='Reset the date-specific '+rl+' override for '+_q(sch2)+' on '+dt+' ('+cnm+')'; kind='reset'; }
-        else { S='Changed the date-specific '+rl+' '+what+' for '+_q(sch2)+' on '+dt+(ch.prev!==undefined&&ch.next!==undefined&&typeof ch.prev!=='object'&&typeof ch.next!=='object'?(' from '+_fv(ch.prev)+' to '+_fv(ch.next)):''); }
+        else { var vv=(last==='start'||last==='end')?_fmtTime:_fv; S='Changed the date-specific '+rl+' '+what+' for '+_q(sch2)+' on '+dt+(ch.prev!==undefined&&ch.next!==undefined&&typeof ch.prev!=='object'&&typeof ch.next!=='object'?(' '+vv(ch.prev)+' \u2192 '+vv(ch.next)):''); }
       }
       else if(p[1]==='calExtraShifts'){
         var k2=String(p[2]||'').split('|'); var cne=calById(k2[0]); var dte=_fmtDate(k2[1]);
@@ -14781,35 +14823,69 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var act=se.activity?(' for '+se.activity):'';
           S=(kind==='add'?('Added a session'+act+tspan):(kind==='delete'?('Removed a session'+act):('Updated a session'+act)));
         }
-        else if(last==='start'||last==='end'){ S='Moved a session '+(last==='start'?'Start':'End')+' from '+_fmtTime(ch.prev)+' to '+_fmtTime(ch.next); }
+        else if(last==='start'||last==='end'){ var se2=(det.sessions||[])[p[2]]||{}; S='Changed the '+(se2.activity?_q(se2.activity)+' session ':'session ')+(last==='start'?'Start':'End')+' '+_fmtTime(ch.prev)+' \u2192 '+_fmtTime(ch.next); }
         else if(/staff/i.test(String(last))){ S='Changed the Assigned Staff on a session'; }
-        else if(/activity|type/i.test(String(last))){ S='Changed a session activity from '+_q(_fv(ch.prev))+' to '+_q(_fv(ch.next)); }
+        else if(/activity|type/i.test(String(last))){ S='Changed a session activity '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
         else if(/note/i.test(String(last))){ S='Updated a session note'; }
         else { S='Updated a session'; }
+      }
+      else if(p[0]==='sa'){
+        var sk=String(p[1]||'').split('|');   // si|origIdx|date|roleKey|num
+        var sch3=schoolBySi(sk[0],null), dts=_fmtDate(sk[2]), rl3=roleByKey(sk[3]);
+        function stf(id){ try{ var r=(typeof STAFF!=='undefined'?STAFF:[]).filter(function(x){ return String(x.id)===String(id); })[0]; return (r&&r.n)||'a staff member'; }catch(e){ return 'a staff member'; } }
+        if(kind==='add'){ S='Assigned '+stf(ch.next)+' to the '+dts+' '+rl3+' shift for '+_q(sch3); }
+        else if(kind==='delete'){ S='Removed '+stf(ch.prev)+' from the '+dts+' '+rl3+' shift for '+_q(sch3); kind='delete'; }
+        else { S='Changed the Assigned Staff on the '+dts+' '+rl3+' shift for '+_q(sch3)+' '+stf(ch.prev)+' \u2192 '+stf(ch.next); }
+      }
+      else if(p[0]==='sn'){
+        var nk=String(p[1]||'').split('|');
+        S=(kind==='delete'?'Removed':(kind==='add'?'Added':'Updated'))+' the shift note for the '+_fmtDate(nk[2])+' '+roleByKey(nk[3])+' shift for '+_q(schoolBySi(nk[0],null));
       }
       else if(p[1]==='mealMins'){ S='Updated the Meal Break minutes'; }
       else if(/note/i.test(String(last))){ S='Updated a note'; }
       else { S=(kind==='add'?'Added to':'Updated')+' the Planning Guide details'; kind=(kind==='delete'?'edit':kind); }
-      return {text:S, kind:kind};
+      return {text:S, kind:kind, colors:COL};
     }
     function commit(){
       _t=null;
       if(_gid==null||!_snap) return;
-      try{ if(_pgvCur.mode==='view') { _snap=snapOf(_gid); return; } }catch(e){}
       var now=snapOf(_gid), out=[];
       diff(_snap, now, [], out);
       if(!out.length) return;
+      // merge a session's start+end changing together into one time-range line
+      var bySess={}, merged=[];
+      out.forEach(function(ch){
+        var p=ch.p;
+        if(p[1]==='sessions'&&p.length===4&&(p[3]==='start'||p[3]==='end')){
+          var kk=p[2]; (bySess[kk]=bySess[kk]||{})[p[3]]=ch; return;
+        }
+        merged.push(ch);
+      });
+      Object.keys(bySess).forEach(function(kk){
+        var pr=bySess[kk];
+        if(pr.start&&pr.end){
+          merged.push({p:['det','sessions',kk,'time'],
+            prev:_fmtTime(pr.start.prev)+'\u2013'+_fmtTime(pr.end.prev),
+            next:_fmtTime(pr.start.next)+'\u2013'+_fmtTime(pr.end.next)});
+        } else { if(pr.start) merged.push(pr.start); if(pr.end) merged.push(pr.end); }
+      });
       var det=[], kinds={};
       var snapA=_snap;
-      out.slice(0,40).forEach(function(ch){
-        var L=sentence(ch, now, snapA); kinds[L.kind]=1;
-        det.push({text:L.text, kind:L.kind, raw:{p:ch.p, prev:ch.prev, next:ch.next}});
+      merged.slice(0,40).forEach(function(ch){
+        var L;
+        if(ch.p[1]==='sessions'&&ch.p[3]==='time'){
+          var se3=((now.det||{}).sessions||[])[ch.p[2]]||{};
+          L={text:'Changed the '+(se3.activity?'\u201c'+se3.activity+'\u201d session':'session')+' time '+ch.prev+' \u2192 '+ch.next, kind:'edit', colors:null};
+        } else { L=sentence(ch, now, snapA); }
+        kinds[L.kind]=1;
+        det.push({text:L.text, kind:L.kind, colors:L.colors||null, raw:{p:ch.p, prev:ch.prev, next:ch.next}});
       });
       var kind=kinds.add&&!kinds.edit&&!kinds['delete']?'add':(kinds['delete']&&!kinds.edit&&!kinds.add?'delete':(kinds.reset&&Object.keys(kinds).length===1?'reset':'edit'));
       var action, desc='';
-      if(det.length===1){ action=det[0].text; }
+      var topColors=null;
+      if(det.length===1){ action=det[0].text; topColors=det[0].colors||null; }
       else { action=String(det.length)+' changes saved together'; desc=det.slice(0,2).map(function(x){ return x.text; }).join('  \u00b7  ')+(det.length>2?'  \u2026':''); }
-      push(_gid,{kind:kind, action:action, desc:desc, details:det});
+      push(_gid,{kind:kind, action:action, desc:desc, details:det, colors:topColors});
       _snap=now;
     }
     return {
@@ -18155,6 +18231,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
 
 
+  // ── Admin mode ────────────────────────────────────────────────────────────
+  // Left column: compact Users / Groups / Permissions categories (guide-list
+  // selected styling). Right panel: minimal placeholder per category — the
+  // detailed interfaces come later; no demo data.
+  var ADMIN_CAT_LABEL={users:'Users', groups:'Groups', permissions:'Permissions'};
+  function rAdmin(){
+    if(ADMIN_CATS.indexOf(adminCategory)<0) adminCategory='users';
+    // Admin's left column starts directly with the categories: no New Guide
+    // header and no Search Staff field.
+    $('#staff-col-header').empty().hide().css({minHeight:'',padding:''});
+    $('.staff-search-wrap').hide();
+    var $scroll=$('#staff-list-scroll').empty();
+    ADMIN_CATS.forEach(function(cat){
+      var sel=(cat===adminCategory);
+      var $row=$('<div class="staff-row admin-cat-row">').attr('data-admin-cat',cat)
+        .css({cursor:'pointer', minHeight:'30px', background: sel?'#e8f1ff':''});
+      $row.append($('<div class="staff-info">').append(
+        $('<div class="staff-name">').css(sel?{fontWeight:'700',color:'var(--blue)'}:{}).text(ADMIN_CAT_LABEL[cat])
+      ));
+      $row.on('click',function(){
+        if(adminCategory===cat) return;
+        adminCategory=cat;
+        updateURL(false);
+        rAdmin();
+      });
+      $scroll.append($row);
+    });
+    var $p=$('#admin-panel').empty().css('display','flex').show();
+    $p.append($('<div>').css({fontSize:'17px',fontWeight:'700',color:'var(--tx)'}).text(ADMIN_CAT_LABEL[adminCategory]));
+    $p.append($('<div>').css({border:'1px dashed var(--bd)',borderRadius:'10px',padding:'26px',color:'var(--tx2)',fontSize:'12.5px',background:'var(--bg2)'})
+      .text('The '+ADMIN_CAT_LABEL[adminCategory]+' management interface will be designed here.'));
+  }
   function setPageMode(m){
     // Remember the outgoing mode's current selection so each mode family can restore its last item on return.
     if(selectedGuideId) lastGuideId = selectedGuideId;
@@ -18170,13 +18278,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $('body').toggleClass('planning-mode', m==='planning');
     $('body').toggleClass('staff-schedule-mode', m==='staff_schedule');
     // Hide filter bar in non-schedule modes
-    if(m==='people'||m==='planning'||m==='staff_schedule'||m==='workspace') $('#filter-bar').hide();
+    if(m==='people'||m==='planning'||m==='staff_schedule'||m==='workspace'||m==='admin') $('#filter-bar').hide();
     else $('#filter-bar').show();
     $('#btn-schedule').toggleClass('active',m==='schedule');
     $('#btn-availability').toggleClass('active',m==='availability');
     $('#btn-staff-schedule').toggleClass('active',m==='staff_schedule');
+    $('#btn-admin').toggleClass('active',m==='admin');
     // Show/hide view controls — hidden in people + staff_schedule modes
-    $('.view-toggle,.date-nav').toggle(m!=='people'&&m!=='staff_schedule'&&m!=='workspace');
+    $('.view-toggle,.date-nav').toggle(m!=='people'&&m!=='staff_schedule'&&m!=='workspace'&&m!=='admin');
     $('#summary-bar').toggle(m!=='people'&&m!=='staff_schedule'&&m!=='workspace');
     // Hide people panel when leaving people mode
     if(m!=='people'){
@@ -18200,9 +18309,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(m!=='workspace'){
       $('#workspace-panel').hide().css('display','none');
     }
+    // Admin panel hidden outside admin mode
+    if(m!=='admin'){
+      $('#admin-panel').hide().css('display','none');
+      $('.staff-search-wrap').show();   // Admin is the only mode that hides the shared search field
+    }
     // selectedGuideId drives BOTH Planning and Schedule modes — only clear it when
     // switching to a guide-agnostic mode (People, Availability, or Staff Schedule).
-    if(m==='people'||m==='availability'||m==='staff_schedule'||m==='workspace') selectedGuideId = null;
+    if(m==='people'||m==='availability'||m==='staff_schedule'||m==='workspace'||m==='admin') selectedGuideId = null;
 
     if(m==='availability'){
       // Availability still uses the staff timeline
@@ -18367,6 +18481,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   $('#btn-workspace').on('click',function(){if(pageMode!=='workspace') setPageMode('workspace');});
   $('#btn-planning').on('click',function(){if(pageMode!=='planning') setPageMode('planning');});
   $('#btn-people').on('click',function(){if(pageMode!=='people') setPageMode('people');});
+  $('#btn-admin').on('click',function(){ if(pageMode!=='admin') setPageMode('admin'); });
+  // User menu: placeholder identity until auth exists; Sign Out is inert for now.
+  (function(){
+    var _un='Local User';
+    try{ var u=_pgHist.user(); if(u&&u.name) _un=u.name; }catch(e){}
+    $('#user-name-label').text(_un);
+    $('#user-avatar').text(initials(_un)).css('background', AVATAR_COLORS[Math.abs(_un.length)%AVATAR_COLORS.length]);
+  })();
+  $('#user-menu-btn').on('click',function(e){ e.stopPropagation(); $('#user-menu-dd').toggle(); });
+  $('#user-signout').on('click',function(e){ e.stopPropagation(); $('#user-menu-dd').hide(); /* placeholder: real sign-out arrives with multi-user login */ });
+  $('#user-signout').on('mouseenter',function(){ $(this).css('background','#f1f3f5'); }).on('mouseleave',function(){ $(this).css('background',''); });
+  $(document).on('click.usermenu',function(){ $('#user-menu-dd').hide(); });
   $('#btn-staff-schedule').on('click',function(){if(pageMode!=='staff_schedule') setPageMode('staff_schedule');});
 
   
