@@ -1095,7 +1095,26 @@ $(function(){
   var _dragOrigDow=undefined; // day-of-week of the chip being dragged
   var pageMode='schedule';
   var adminCategory='users';   // Admin mode left-column category (users|groups|permissions)
-  var ADMIN_CATS=['users','groups','permissions']; // 'schedule' or 'availability'
+  var ADMIN_CATS=['users','groups','permissions'];
+  // Admin > Users: stable ids internally; display sorts by last name
+  var ADMIN_USERS=[
+    {id:'1001', n:'Iyob Araia',        email:'', active:'true'},
+    {id:'1002', n:'Jacques Monnot',    email:'', active:'true'},
+    {id:'1003', n:'Carlos Henderson',  email:'', active:'true'},
+    {id:'1004', n:'Hayden Weiss',      email:'', active:'true'},
+    {id:'1005', n:'Jerry James',       email:'', active:'true'},
+    {id:'1006', n:'Karina Araiza',     email:'', active:'true'},
+    {id:'1007', n:'Serina Santiago',   email:'', active:'true'},
+    {id:'1008', n:'Pablo Santiago',    email:'', active:'true'},
+    {id:'1009', n:'Pavel Grigoryants', email:'', active:'true'},
+    {id:'1010', n:'Michael Munoz',     email:'', active:'true'},
+    {id:'1011', n:'Natalie Sylar',     email:'', active:'true'},
+    {id:'1012', n:'Ryan Kahn',         email:'', active:'true'},
+    {id:'1013', n:'Piari King',        email:'', active:'true'},
+    {id:'1014', n:'Manny Caride',      email:'', active:'true'}
+  ];
+  var adminUserId=null;        // selected user (users category only) — rides the URL as user_id
+  var adminUserFilter='';      // live Search Users text // 'schedule' or 'availability'
   var availOverlay=false;  // show availability stripes on schedule blocks
 
   function syncOverlayCheckVisibility(){
@@ -1618,6 +1637,7 @@ $(function(){
       // Workspace is a standalone, user-specific area — no guide/staff/date params ride along with it.
     } else if(pageMode==='admin'){
       params.set('category', ADMIN_CATS.indexOf(adminCategory)>=0 ? adminCategory : 'users');
+      if(adminCategory==='users' && adminUserId) params.set('user_id', adminUserId);
     } else if(pageMode==='people'){
       if(selectedPersonId) params.set('staff_id', selectedPersonId);
     } else if(pageMode==='staff_schedule'){
@@ -1723,6 +1743,8 @@ $(function(){
       pageMode='admin';
       var _ac=params.get('category');
       adminCategory = ADMIN_CATS.indexOf(_ac)>=0 ? _ac : 'users';   // missing or invalid → users
+      var _uid=params.get('user_id');
+      adminUserId = (adminCategory==='users' && _uid && ADMIN_USERS.some(function(u){ return u.id===_uid; })) ? _uid : null;
     } else if(sec==='planning_guides'||sec==='planning'){
       pageMode='planning';
       try{ var _gid=params.get('planning_guide'); if(_gid) selectedGuideId=_gid; }catch(e){}
@@ -3844,9 +3866,9 @@ $(function(){
         var dl=dayLabel(r.ts);
         if(dl!==lastDay){ lastDay=dl; $body.append($('<div>').css({fontSize:'10.5px',fontWeight:'700',color:'#8a929b',textTransform:'uppercase',letterSpacing:'.4px',margin:'14px 0 6px'}).text(dl)); }
         var col=COLORS[r.kind]||'#5f6368';
-        var $row=$('<div>').css({borderLeft:'3px solid '+col,background:'#fbfcfd',border:'1px solid #eef1f4',borderLeftWidth:'3px',borderLeftColor:col,borderRadius:'7px',padding:'8px 10px',marginBottom:'6px'});
+        var $row=$('<div class="pg-hist-row">').css({background:'#fbfcfd',border:'1px solid #eef1f4',borderRadius:'7px',padding:'8px 10px',marginBottom:'6px'});
         var $top=$('<div>').css({display:'flex',alignItems:'center',gap:'7px'});
-        var $ic=$('<span>').css({display:'inline-flex',flexShrink:'0',color:col}).html((_PG_ICONS[ICON[r.kind]||'history']||'').replace(/width="16"/,'width="13"').replace(/height="16"/,'height="13"'));
+        var $ic=$('<span>').css({display:'inline-flex',flexShrink:'0',color:col}).html((_PG_ICONS[r.icon||ICON[r.kind]||'history']||'').replace(/width="16"/,'width="13"').replace(/height="16"/,'height="13"'));
         function circ(colr){ return $('<span>').css({display:'inline-block',width:'10px',height:'10px',borderRadius:'50%',background:String(colr||'#ccc'),border:'1px solid rgba(0,0,0,.18)',verticalAlign:'-1px',margin:'0 1px'}); }
         function withColors($el,txt,cc){ $el.text(txt||''); if(cc){ $el.css({whiteSpace:'nowrap'}); $el.append($('<span>').text(' '),circ(cc.prev),$('<span>').css({color:'#adb5bd'}).text(' \u2192 '),circ(cc.next)); } return $el; }
         var $at=withColors($('<span>').css({fontWeight:'600',fontSize:'12px',color:'#212529',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}), r.action||'', r.colors);
@@ -3860,7 +3882,10 @@ $(function(){
           var $det=$('<div>').css({display:'none',margin:'5px 0 0 20px',borderTop:'1px dashed #e3e7ec',paddingTop:'5px'});
           r.details.forEach(function(dd){
             var $l=$('<div>').css({fontSize:'11px',color:'#495057',padding:'2px 0'});
-            if(dd.text){ withColors($l,'\u2022  '+dd.text, dd.colors); }
+            if(dd.text){
+              withColors($l,'\u2022  '+dd.text, dd.colors);
+              if(dd.icon==='user'){ $l.prepend($('<span>').css({display:'inline-flex',verticalAlign:'-2px',marginRight:'4px',color:'#5f6368'}).html((_PG_ICONS.user||'').replace(/width="16"/,'width="11"').replace(/height="16"/,'height="11"'))); }
+            }
             else { // legacy structured rows from before the plain-English generator
               $l.append($('<span>').css({color:'#6c757d'}).text((dd.label||'')+':  '));
               $l.append($('<span>').css({color:'#8a929b'}).text(dd.prev));
@@ -3890,6 +3915,7 @@ $(function(){
   // styled to match the app's reference: colored where the reference is colored (Excel green, JSON/pushpin purple,
   // Import/Tiles blue, Delete red) and neutral gray otherwise. Each carries data-icon so it is identifiable.
   var _PG_ICONS={
+    user:'<svg data-icon="user" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.5c-2.7 0-5.5 1.35-5.5 3.25V14h11v-1.25c0-1.9-2.8-3.25-5.5-3.25Z"/></svg>',
     excel:'<svg data-icon="excel" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.6" fill="#1e7145"/><path d="M5 5.3l6 5.4M11 5.3l-6 5.4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>',
     json:'<svg data-icon="json" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#f2ecfb" stroke="#7e57c2" stroke-width="1"/><path d="M6.6 7.1c-.9 0-.7.9-.7 1.4 0 .5-.5.6-.5.6s.5.1.5.6c0 .5-.2 1.4.7 1.4M9.4 7.1c.9 0 .7.9.7 1.4 0 .5.5.6.5.6s-.5.1-.5.6c0 .5.2 1.4-.7 1.4" stroke="#7e57c2" stroke-width=".95" stroke-linecap="round" fill="none"/></svg>',
     import:'<svg data-icon="import" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.6h4.8L12 4.8V13.4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.6a1 1 0 0 1 1-1z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M7.5 11.2V6.4M5.7 8.2l1.8-1.8 1.8 1.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -14720,15 +14746,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function _isGone(ch){ return ch.next===undefined; }
     function sentence(ch, snapB, snapA){
       var p=ch.p, det=(snapB&&snapB.det)||{}, det0=(snapA&&snapA.det)||det;
-      function calById(id){ var r=(det.calendarRows||[]).concat(det0.calendarRows||[]).filter(function(x){ return String(x.calId)===String(id); })[0]; return (r&&r.name)||'a calendar'; }
-      function calByIdx(i){ var r=(det.calendarRows||[])[i]||(det0.calendarRows||[])[i]; return (r&&r.name)||('Calendar '+(Number(i)+1)); }
+      function calById(id){ var r=(det.calendarRows||[]).concat(det0.calendarRows||[]).filter(function(x){ return String(x.calId)===String(id); })[0]; return (r&&r.name)||'Unknown Program Calendar'; }
+      function calByIdx(i){ var n=Number(i); if(!isFinite(n)) return 'Unknown Program Calendar'; var r=(det.calendarRows||[])[n]||(det0.calendarRows||[])[n]; if(!r) return 'Unknown Program Calendar'; return r.name||('Calendar '+(n+1)); }
       function roleByKey(k){ var r=(det.roles||[]).concat(det0.roles||[]).filter(function(x){ return x.key===k; })[0]; return (r&&r.name)||String(k||'staff'); }
       function schoolBySi(si, calId){ var rows=(det.siteRowsByCal&&det.siteRowsByCal[String(calId)])||det.siteRows||[]; var r=rows[Number(si)]; if(!r){ rows=(det0.siteRowsByCal&&det0.siteRowsByCal[String(calId)])||det0.siteRows||[]; r=rows[Number(si)]; } return (r&&r.school)||'a school'; }
       function sdName(id){ var r=(det.specialDays||[]).concat(det0.specialDays||[]).filter(function(x){ return String(x.id)===String(id)||String(x.key)===String(id); })[0]; if(r&&r.name) return r.name; return String(id||'').replace(/^sd[-_]?/,'').replace(/[-_]+/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})||'a Special Day'; }
       function row(){ return (ch.next!==undefined&&ch.next!==null&&typeof ch.next==='object')?ch.next:((typeof ch.prev==='object'&&ch.prev)||{}); }
       var kind='edit'; if(_isNew(ch)) kind='add'; if(_isGone(ch)) kind='delete';
       var last=p[p.length-1];
-      var S=null, COL=null;
+      var S=null, COL=null, ICN=null;
       if(p[0]==='name'){ S='Changed the Planning Guide name '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
       else if(p[1]==='status'){ S='Changed the Status '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
       else if(p[1]==='district'){ S=(ch.next?('Changed the District to '+_q(ch.next&&ch.next.name||ch.next)):'Cleared the District'); }
@@ -14785,9 +14811,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         else { S='Updated the POD assignments'; }
       }
       else if(p[1]==='staffingHoursSlots'){
-        var ci=String(p[2]||'').replace(/^c/,''); var cn2=calByIdx(ci); var role=roleByKey(p[3]); var _DAYS={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'}; var day=_DAYS[String(p[4]||'')]||String(p[4]||'');
-        if(last==='start'||last==='end'){ S='Changed the '+day+' '+role+' '+(last==='start'?'Start':'End')+' time for '+_q(cn2)+' '+_fmtTime(ch.prev)+' \u2192 '+_fmtTime(ch.next); }
-        else { S='Updated the '+(day?day+' ':'')+role+' Staffing Hours for '+_q(cn2); }
+        // slot keys: 'c{ci}' (per calendar), 's{si}' / 's{si}c{ci}' (per school), optional 'a'/'b' week suffix
+        var km=String(p[2]||'').match(/^(?:s(\d+))?(?:c(\d+))?([ab])?$/)||[];
+        var _si=km[1], _ci=km[2], _wk=km[3];
+        var cn2=(_ci!=null)?calByIdx(_ci):((det.calendarRows||[]).length===1?calByIdx(0):'Unknown Program Calendar');
+        var schN=(_si!=null)?schoolBySi(_si,(det.calendarRows||[])[_ci]&&(det.calendarRows||[])[_ci].calId):null;
+        var wkSfx=_wk?(' (Week '+_wk.toUpperCase()+')'):'';
+        var role=roleByKey(p[3]); var _DAYS={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'}; var day=_DAYS[String(p[4]||'')]||String(p[4]||'');
+        var inCal=' in '+_q(cn2)+wkSfx;
+        if(last==='cnt'){
+          var what2=(/coach/i.test(role)?'Coach Count':role+' Count');
+          if(_isNew(ch)){ S='Created a Staffing Hours '+what2+' override'+(schN?(' for '+schN):'')+(day?(', '+day):'')+inCal+': '+_fv(ch.next); kind='add'; }
+          else if(_isGone(ch)){ S='Reset the Staffing Hours '+what2+' override'+(schN?(' for '+schN):'')+(day?(', '+day):'')+inCal; kind='reset'; }
+          else { S='Changed the '+day+' '+what2+(schN?(' for '+schN):'')+inCal+': '+_fv(ch.prev)+' \u2192 '+_fv(ch.next); }
+        }
+        else if(last==='start'||last==='end'){
+          S='Changed the Staffing Hours '+(last==='start'?'Start':'End')+' Time'+(schN?(' for '+schN):'')+(day?(', '+day):'')+', '+role+inCal+': '+_fmtTime(ch.prev)+' \u2192 '+_fmtTime(ch.next);
+        }
+        else { S='Updated '+(day?day+' ':'')+role+' Staffing Hours'+(schN?(' for '+schN):'')+inCal; }
       }
       else if(p[1]==='staffingOptsByCal'||p[1]==='staffingOpts'){
         var cn3=calById(p[2]);
@@ -14824,7 +14865,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           S=(kind==='add'?('Added a session'+act+tspan):(kind==='delete'?('Removed a session'+act):('Updated a session'+act)));
         }
         else if(last==='start'||last==='end'){ var se2=(det.sessions||[])[p[2]]||{}; S='Changed the '+(se2.activity?_q(se2.activity)+' session ':'session ')+(last==='start'?'Start':'End')+' '+_fmtTime(ch.prev)+' \u2192 '+_fmtTime(ch.next); }
-        else if(/staff/i.test(String(last))){ S='Changed the Assigned Staff on a session'; }
+        else if(/staff/i.test(String(last))){ S='Changed the Assigned Staff on a session'; ICN='user'; }
         else if(/activity|type/i.test(String(last))){ S='Changed a session activity '+_q(_fv(ch.prev))+' \u2192 '+_q(_fv(ch.next)); }
         else if(/note/i.test(String(last))){ S='Updated a session note'; }
         else { S='Updated a session'; }
@@ -14833,6 +14874,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var sk=String(p[1]||'').split('|');   // si|origIdx|date|roleKey|num
         var sch3=schoolBySi(sk[0],null), dts=_fmtDate(sk[2]), rl3=roleByKey(sk[3]);
         function stf(id){ try{ var r=(typeof STAFF!=='undefined'?STAFF:[]).filter(function(x){ return String(x.id)===String(id); })[0]; return (r&&r.n)||'a staff member'; }catch(e){ return 'a staff member'; } }
+        ICN='user';
         if(kind==='add'){ S='Assigned '+stf(ch.next)+' to the '+dts+' '+rl3+' shift for '+_q(sch3); }
         else if(kind==='delete'){ S='Removed '+stf(ch.prev)+' from the '+dts+' '+rl3+' shift for '+_q(sch3); kind='delete'; }
         else { S='Changed the Assigned Staff on the '+dts+' '+rl3+' shift for '+_q(sch3)+' '+stf(ch.prev)+' \u2192 '+stf(ch.next); }
@@ -14844,7 +14886,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       else if(p[1]==='mealMins'){ S='Updated the Meal Break minutes'; }
       else if(/note/i.test(String(last))){ S='Updated a note'; }
       else { S=(kind==='add'?'Added to':'Updated')+' the Planning Guide details'; kind=(kind==='delete'?'edit':kind); }
-      return {text:S, kind:kind, colors:COL};
+      return {text:S, kind:kind, colors:COL, icon:ICN};
     }
     function commit(){
       _t=null;
@@ -14871,21 +14913,51 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       var det=[], kinds={};
       var snapA=_snap;
+      // staffingHoursSlots subtree adds/removals arrive as whole objects (the
+      // save creates the slot in one write) — expand them to leaf changes so
+      // every line names the school, role, day, and field; skip the empty
+      // start/end scaffolding the save writes alongside a count override.
+      var expanded=[];
+      merged.forEach(function(ch){
+        var isSlots=(ch.p[1]==='staffingHoursSlots');
+        var ov=(ch.next!==undefined&&ch.next!==null&&typeof ch.next==='object')?ch.next:((ch.prev!==null&&typeof ch.prev==='object')?ch.prev:null);
+        if(isSlots && ov && !Array.isArray(ov)){
+          var adding=(ch.prev===undefined);
+          (function walk(o,path){
+            Object.keys(o).forEach(function(k){
+              var v=o[k];
+              if(v!==null&&typeof v==='object'){ walk(v,path.concat([k])); return; }
+              if(v===''||v===undefined||v===null) return;   // scaffolding
+              expanded.push(adding?{p:path.concat([k]),prev:undefined,next:v}:{p:path.concat([k]),prev:v,next:undefined});
+            });
+          })(ov, ch.p.slice());
+          return;
+        }
+        expanded.push(ch);
+      });
+      merged=expanded;
+      var _seen={};
       merged.slice(0,40).forEach(function(ch){
         var L;
         if(ch.p[1]==='sessions'&&ch.p[3]==='time'){
           var se3=((now.det||{}).sessions||[])[ch.p[2]]||{};
-          L={text:'Changed the '+(se3.activity?'\u201c'+se3.activity+'\u201d session':'session')+' time '+ch.prev+' \u2192 '+ch.next, kind:'edit', colors:null};
+          L={text:'Changed the '+(se3.activity?'\u201c'+se3.activity+'\u201d session':'session')+' time '+ch.prev+' \u2192 '+ch.next, kind:'edit', colors:null, icon:null};
         } else { L=sentence(ch, now, snapA); }
+        // one readable line per distinct business change: identical sentences within
+        // a single transaction collapse to one (context-complete sentences keep
+        // different schools / calendars / roles / days distinct by wording)
+        if(_seen[L.text]) return;
+        _seen[L.text]=1;
         kinds[L.kind]=1;
-        det.push({text:L.text, kind:L.kind, colors:L.colors||null, raw:{p:ch.p, prev:ch.prev, next:ch.next}});
+        det.push({text:L.text, kind:L.kind, colors:L.colors||null, icon:L.icon||null, raw:{p:ch.p, prev:ch.prev, next:ch.next}});
       });
       var kind=kinds.add&&!kinds.edit&&!kinds['delete']?'add':(kinds['delete']&&!kinds.edit&&!kinds.add?'delete':(kinds.reset&&Object.keys(kinds).length===1?'reset':'edit'));
       var action, desc='';
       var topColors=null;
-      if(det.length===1){ action=det[0].text; topColors=det[0].colors||null; }
+      var topIcon=null;
+      if(det.length===1){ action=det[0].text; topColors=det[0].colors||null; topIcon=det[0].icon||null; }
       else { action=String(det.length)+' changes saved together'; desc=det.slice(0,2).map(function(x){ return x.text; }).join('  \u00b7  ')+(det.length>2?'  \u2026':''); }
-      push(_gid,{kind:kind, action:action, desc:desc, details:det, colors:topColors});
+      push(_gid,{kind:kind, action:action, desc:desc, details:det, colors:topColors, icon:topIcon});
       _snap=now;
     }
     return {
@@ -18253,15 +18325,339 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $row.on('click',function(){
         if(adminCategory===cat) return;
         adminCategory=cat;
+        adminUserId=null;          // switching away from Users drops user_id from the URL
+        adminUserFilter='';
         updateURL(false);
         rAdmin();
       });
       $scroll.append($row);
     });
     var $p=$('#admin-panel').empty().css('display','flex').show();
+    if(adminCategory==='users'){ rAdminUsers($p); return; }   // no Users heading: the column starts with New User
     $p.append($('<div>').css({fontSize:'17px',fontWeight:'700',color:'var(--tx)'}).text(ADMIN_CAT_LABEL[adminCategory]));
     $p.append($('<div>').css({border:'1px dashed var(--bd)',borderRadius:'10px',padding:'26px',color:'var(--tx2)',fontSize:'12.5px',background:'var(--bg2)'})
       .text('The '+ADMIN_CAT_LABEL[adminCategory]+' management interface will be designed here.'));
+  }
+  // ── Admin > Users: user list + controls on the left, selected-user details
+  // (blank for now — the detailed interface comes later) on the right ──
+  function _adminUserLast(n){ var w=String(n||'').trim().split(/\s+/); return (w[w.length-1]||'').toLowerCase(); }
+  function _adminUsersSorted(){
+    return ADMIN_USERS.slice().sort(function(a,b){
+      var la=_adminUserLast(a.n), lb=_adminUserLast(b.n);
+      return la<lb?-1:(la>lb?1:(a.n<b.n?-1:1));
+    });
+  }
+  function rAdminUsers($p){
+    if(adminUserId && !ADMIN_USERS.some(function(u){ return u.id===adminUserId; })) adminUserId=null;
+    var $wrap=$('<div>').css({display:'flex',gap:'16px',flex:'1',minHeight:'0',alignItems:'stretch'});
+    // left: New User + Search Users + the list (Staff-mode control styling)
+    var $left=$('<div>').css({width:'250px',flexShrink:'0',display:'flex',flexDirection:'column',gap:'8px',minHeight:'0'});
+    var $newBtn=$('<div id="admin-new-user">').css({
+      display:'flex',alignItems:'center',gap:'7px',padding:'5px 10px',
+      cursor:'pointer',marginBottom:'0',userSelect:'none',
+      transition:'opacity .15s'
+    });
+    var $nuIcon=$('<div>').css({display:'flex',alignItems:'center'}).html('<svg width="16" height="16" viewBox="0 0 28 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="7" r="4.5" stroke="#1a73e8" stroke-width="1.6" fill="none"/><path d="M2 22c0-4.7 4-8.5 9-8.5s9 3.8 9 8.5" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M23 4v6M20 7h6" stroke="#1a73e8" stroke-width="1.7" stroke-linecap="round"/></svg>');
+    var $nuLbl=$('<span>').css({fontSize:'12px',fontWeight:'500',color:'#1a1a2e'}).text('New User');
+    $newBtn.append($nuIcon,$nuLbl)
+      .on('mouseenter',function(){$(this).css('opacity','0.7');})
+      .on('mouseleave',function(){$(this).css('opacity','1');})
+      .on('click',function(){ /* placeholder — the create-user flow arrives with the real Users interface */ });
+    var $searchWrap=$('<div>').css({padding:'0'});
+    var $search=$('<input type="text" class="staff-search" id="admin-user-search" placeholder="Search Users" autocomplete="off"/>').val(adminUserFilter);
+    $searchWrap.append($search);
+    var $list=$('<div id="admin-user-list">').css({flex:'1',minHeight:'0',overflowY:'auto',display:'flex',flexDirection:'column'});
+    function renderList(){
+      $list.empty();
+      var q=String(adminUserFilter||'').trim().toLowerCase();
+      var us=_adminUsersSorted().filter(function(u){ return !q || u.n.toLowerCase().indexOf(q)>=0; });
+      if(!us.length){
+        $list.append($('<div class="staff-no-results">').text('No matching users found.'));
+        return;
+      }
+      us.forEach(function(u){
+        var ai=ADMIN_USERS.indexOf(u);
+        var sel=(u.id===adminUserId);
+        var $row=$('<div class="staff-row admin-user-row">').attr('data-user-id',u.id)
+          .css({cursor:'pointer', minHeight:'40px', background: sel?'#e8f1ff':''});
+        var $av=$('<div class="staff-avatar">').text(initials(u.n)).css('background',AVATAR_COLORS[ai%AVATAR_COLORS.length]);
+        $row.append($av);
+        var $idLine=$('<div style="font-size:10px;color:var(--tx2);margin-top:1px;line-height:1;">').text('ID: '+u.id);
+        if(u.active==='false') $idLine.append($('<span class="staff-id-inactive-dot">'));
+        $row.append($('<div class="staff-info">').append(
+          $('<div class="staff-name">').css(sel?{fontWeight:'700',color:'var(--blue)'}:{}).text(u.n),
+          $idLine
+        ));
+        $row.on('click',function(){
+          if(adminUserId===u.id) return;
+          adminUserId=u.id;
+          updateURL(false);
+          renderList();
+          renderDetails();
+        });
+        $list.append($row);
+      });
+    }
+    $search.on('input',function(){ adminUserFilter=$(this).val(); renderList(); });
+    renderList();
+    $left.append($newBtn,$searchWrap,$list);
+    // right: selected-user details — mirrors the Staff details card
+    var $details=$('<div id="admin-user-details">').css({flex:'1',minHeight:'0',border:'1px solid var(--bd2)',borderRadius:'10px',background:'#fff',overflowY:'auto'});
+    var uEditing=false;
+    var _pend=null;        // pending profile while editing: {n,email,active,perms:[{key,exp}]}
+    var _permExpand={};    // dropdown group expand state — survives re-renders in this visit
+    function renderDetails(){
+      $details.empty();
+      uEditing=false; _pend=null;
+      var u=ADMIN_USERS.filter(function(x){ return x.id===adminUserId; })[0];
+      if(!u) return;
+      $details.append(buildUserCard(u));
+    }
+    // ── Permissions catalog: STABLE keys; labels may change without breaking saves ──
+    var PERM_CATALOG=[
+      {scope:'planning_guides', label:'Planning Guides', perms:['full_access','view','create','edit','delete','status','lock','export','import','history']},
+      {scope:'shifts', label:'Shifts', perms:['full_access','view','edit_sessions','assign_staff']},
+      {scope:'staff', label:'Staff', perms:['full_access','view','create','edit','delete']},
+      {scope:'admin', label:'Admin', perms:['full_access'], subs:[
+        {scope:'admin.users', label:'Users', perms:['full_access','view','permissions','create','edit','delete']}
+      ]}
+    ];
+    var PERM_LBL={full_access:'Full Access',view:'View',create:'Create',edit:'Edit','delete':'Delete',status:'Status',lock:'Lock','export':'Export','import':'Import',history:'History',edit_sessions:'Edit Sessions',assign_staff:'Assign Staff',permissions:'Permissions'};
+    var PERM_ORDER=(function(){ var o=[]; PERM_CATALOG.forEach(function(c){ c.perms.forEach(function(p){ o.push(c.scope+'.'+p); }); (c.subs||[]).forEach(function(sg){ sg.perms.forEach(function(p){ o.push(sg.scope+'.'+p); }); }); }); return o; })();
+    function permLabel(key){ var p=key.split('.').pop(); return PERM_LBL[p]||p; }
+    function buildUserCard(u){
+      var ai=ADMIN_USERS.indexOf(u);
+      var avatarBg=AVATAR_COLORS[ai%AVATAR_COLORS.length];
+      var orig={n:u.n, email:u.email||'', active:(u.active!=='false')?'true':'false', perms:JSON.stringify(u.permissions||[])};
+      var cur=uEditing?_pend:{n:u.n, email:u.email||'', active:orig.active, perms:(u.permissions||[])};
+      var $wrap=$('<div>').css({maxWidth:'560px',padding:'16px'});
+
+      // ── Header (Staff recipe: avatar · name + ID · status · buttons) ──
+      var $hdr=$('<div class="d-flex align-items-center gap-3 mb-3">');
+      var $av=$('<div class="staff-avatar flex-shrink-0">').css({
+        width:'46px',height:'46px',fontSize:'17px',background:avatarBg,
+        borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+        color:'#fff',fontWeight:'700',boxShadow:'0 2px 8px rgba(0,0,0,.18)',flexShrink:'0'
+      }).text(initials(u.n));
+      var $info=$('<div class="flex-grow-1 min-width-0">').append(
+        $('<div class="fw-semibold text-dark lh-sm" style="font-size:14px;">').text(u.n),
+        $('<div class="text-muted" style="font-size:11px;margin-top:1px;">').html('ID&nbsp;<strong>'+u.id+'</strong>')
+      );
+      // status — Staff interaction: read-only in view, click-to-toggle in Edit (pending until Update)
+      var isActive=(cur.active!=='false');
+      var _uToggleId='user-toggle-'+u.id;
+      var $statusWrap=$('<div class="staff-status-toggle ms-1">');
+      var $chk=$('<input type="checkbox" class="staff-active-chk">').prop('checked',isActive).attr('id',_uToggleId).prop('disabled',!uEditing).css(!uEditing?{'pointer-events':'none','opacity':'0.85'}:{});
+      var $statusLbl=$('<label class="staff-status-label">').attr('for',_uToggleId).text(isActive?'Active':'Inactive').addClass(isActive?'active-label':'inactive-label');
+      $chk.on('change',function(){
+        var a=$(this).prop('checked');
+        if(uEditing&&_pend){ _pend.active=a?'true':'false'; }
+        $statusLbl.text(a?'Active':'Inactive').removeClass('active-label inactive-label').addClass(a?'active-label':'inactive-label');
+        refreshSave();
+      });
+      $statusWrap.append($chk,$statusLbl);
+
+      var $cancelBtn=$('<button class="btn btn-sm btn-outline-secondary flex-shrink-0 user-cancel-btn" style="font-size:11px;padding:3px 10px;">').text('Cancel').toggle(uEditing);
+      var $saveBtn=$('<button class="btn btn-sm btn-success flex-shrink-0 user-save-btn" style="font-size:11px;padding:3px 10px;">').text('✓ Update').hide();
+      var $editBtn=$('<button class="btn btn-sm btn-outline-secondary flex-shrink-0 user-edit-btn" style="font-size:11px;padding:3px 10px;">').text('Edit').toggle(!uEditing);
+      $hdr.append($av,$info,$statusWrap,$cancelBtn,$saveBtn,$editBtn);
+      $wrap.append($hdr);
+
+      // ── Field helpers (Staff recipe) ──
+      function label(txt){
+        return $('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:3px;">').text(txt);
+      }
+      function viewVal(val){
+        return $('<div style="font-size:12.5px;color:'+(val?'#212529':'#adb5bd')+';min-height:20px;">').text(val||'');
+      }
+      function refreshSave(){
+        if(!uEditing||!_pend){ $saveBtn.hide(); return; }
+        _pend.n=String($wrap.find('[data-key="userName"]').val()||_pend.n);
+        _pend.email=String($wrap.find('[data-key="email"]').val()||'');
+        var dirty=(_pend.n!==orig.n)||(_pend.email!==orig.email)||(_pend.active!==orig.active)||(JSON.stringify(_pend.perms)!==orig.perms);
+        $saveBtn.toggle(dirty);
+      }
+      var $card=$('<div class="card border-0 shadow-sm rounded-2 mb-2">');
+      var $hd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+      $hd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#0d6efd;">').text('General'));
+      var $body=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
+      var $nameCell=$('<div>').append(label('Full Name'));
+      var $emailCell=$('<div>').append(label('Email'));
+      if(uEditing){
+        var $nameInp=$('<input type="text" class="form-control form-control-sm" style="font-size:12px;" data-key="userName">').val(cur.n);
+        var $nameFb=$('<div class="invalid-feedback name-feedback" style="display:none;font-size:10px;">').text('Full Name is required.');
+        $nameInp.on('input',function(){ $(this).removeClass('is-invalid'); $nameFb.hide(); refreshSave(); });
+        $nameCell.append($nameInp,$nameFb);
+        var $emailInp=$('<input type="text" class="form-control form-control-sm" style="font-size:12px;" data-key="email">').val(cur.email);
+        var $fb=$('<div class="invalid-feedback email-feedback" style="display:none;font-size:10px;">').text('Please enter a valid email address.');
+        $emailInp.on('input',function(){ $(this).removeClass('is-invalid'); $fb.hide(); refreshSave(); });
+        $emailCell.append($emailInp,$fb);
+      } else {
+        $nameCell.append(viewVal(cur.n));
+        $emailCell.append(viewVal(cur.email));
+      }
+      $body.append($nameCell,$emailCell);
+      $card.append($hd,$body);
+      $wrap.append($card);
+
+      // ── Permissions (cert-list recipe; pending until Update) ──
+      var today=new Date(); today.setHours(0,0,0,0);
+      function permExpired(exp){ if(!exp) return false; var d=new Date(exp+'T00:00:00'); return !isNaN(d)&&d<today; }
+      var $permSec=$('<div id="user-perm-section" class="card border-0 shadow-sm rounded-2 mb-2">');
+      var $phd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
+      $phd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#6c757d;">').text('Permissions'));
+      var $pbody=$('<div class="px-3 py-2">');
+      $permSec.append($phd,$pbody);
+
+      var $permList=$('<div id="user-perm-list" class="d-flex flex-column gap-1">');
+      var $addWrap=null,$addInp=null,$permDd=null;
+      function hasPerm(key){ return cur.perms.some(function(p){ return p.key===key; }); }
+      function addPerm(key){
+        if(hasPerm(key)) return;                                  // no duplicates
+        cur.perms.push({key:key, exp:''});
+        cur.perms.sort(function(a,b){ return PERM_ORDER.indexOf(a.key)-PERM_ORDER.indexOf(b.key); });   // dropdown order
+        renderPermArea(); refreshSave();
+      }
+      function removePerm(key){
+        for(var x=cur.perms.length-1;x>=0;x--){ if(cur.perms[x].key===key) cur.perms.splice(x,1); }
+        renderPermArea(); refreshSave();
+      }
+      function permRow(p,indent){
+        var expired=permExpired(p.exp);
+        var bg=expired?'#ffebee':'#fff8e1', col=expired?'#c62828':'#f57f17', bord=expired?'#ef9a9a':'#ffe082';
+        var $row=$('<div class="d-inline-flex align-items-center rounded-pill gap-2 user-perm-row" data-perm-key="'+p.key+'" style="align-self:flex-start;background:'+bg+';border:1px solid '+bord+';padding:3px 8px 3px 12px;'+(indent?'margin-left:16px;':'')+'">');
+        $row.append($('<span style="font-size:11px;font-weight:600;color:'+col+';white-space:nowrap;">').text(permLabel(p.key)));
+        if(uEditing||p.exp){
+          $row.append($('<span style="font-size:10px;color:'+col+';opacity:0.5;">').text('·'));
+          $row.append($('<span style="font-size:10px;color:'+col+';opacity:0.8;white-space:nowrap;">').text('Exp. date'));
+        }
+        if(uEditing){
+          var $dp=mkDatePicker(p.exp||'',function(v){ p.exp=v||''; renderPermArea(); refreshSave(); },{width:'100px',inputCss:{fontSize:'10px',padding:'1px 6px',borderColor:col,background:'rgba(0,0,0,.04)'}});
+          $row.append($dp);
+        } else if(p.exp){
+          $row.append($('<span style="font-size:10px;color:'+col+';padding:0 4px;">').text(p.exp));
+        }
+        if(expired){
+          $row.append($('<span style="font-size:9px;font-weight:700;color:#c62828;background:#ffcdd2;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em;">').text('Expired'));
+        }
+        if(uEditing){
+          var $rm=$('<button type="button" class="user-perm-rm" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:'+col+';font-size:14px;opacity:0.7;">').text('×');
+          $rm.on('click',function(){ removePerm(p.key); });
+          $row.append($rm);
+        }
+        return $row;
+      }
+      function renderPermList(){
+        $permList.empty();
+        var any=false;
+        PERM_CATALOG.forEach(function(c){
+          var direct=cur.perms.filter(function(p){ return c.perms.indexOf(p.key.replace(c.scope+'.',''))>=0 && p.key.indexOf(c.scope+'.')===0 && p.key.split('.').length===c.scope.split('.').length+1; });
+          var subBlocks=(c.subs||[]).map(function(sg){
+            return {sg:sg, items:cur.perms.filter(function(p){ return p.key.indexOf(sg.scope+'.')===0; })};
+          }).filter(function(b){ return b.items.length; });
+          if(!direct.length && !subBlocks.length) return;          // no empty categories
+          any=true;
+          $permList.append($('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#495057;margin-top:6px;">').text(c.label));
+          direct.forEach(function(p){ $permList.append(permRow(p,false)); });
+          subBlocks.forEach(function(b){
+            $permList.append($('<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6c757d;margin:4px 0 0 16px;">').text(b.sg.label));
+            b.items.forEach(function(p){ $permList.append(permRow(p,true)); });
+          });
+        });
+        if(!any && !uEditing){
+          $permList.append($('<span style="font-size:12px;color:#adb5bd;">').text('No permissions assigned'));
+        }
+        if(!any && uEditing){
+          $permList.append($('<span style="font-size:12px;color:#adb5bd;">').text('No permissions added yet'));
+        }
+      }
+      function ddLeaf(key,lbl,indent){
+        var $l=$('<label class="d-flex align-items-center gap-2" style="padding:3px 10px 3px '+(indent?34:22)+'px;font-size:11.5px;cursor:pointer;margin:0;">');
+        var $cb=$('<input type="checkbox" class="perm-dd-chk" data-perm-key="'+key+'" style="cursor:pointer;">').prop('checked',hasPerm(key));
+        $cb.on('change',function(){ if($(this).prop('checked')) addPerm(key); else removePerm(key); });
+        $l.append($cb,$('<span>').text(lbl));
+        return $l;
+      }
+      function ddGroupHeader(scope,lbl,indent){
+        var open=!!_permExpand[scope];
+        var $h=$('<div class="perm-dd-group" data-perm-scope="'+scope+'" style="padding:4px 10px 4px '+(indent?22:10)+'px;font-size:'+(indent?'10.5px':'11px')+';font-weight:700;'+(indent?'':'text-transform:uppercase;letter-spacing:.05em;')+'color:#495057;cursor:pointer;background:#f8f9fb;border-top:1px solid #eef1f4;display:flex;align-items:center;gap:6px;">');
+        $h.append($('<span style="font-size:9px;transition:transform .12s;'+(open?'transform:rotate(90deg);':'')+'">').text('▶'), $('<span>').text(lbl));
+        $h.on('click',function(){ _permExpand[scope]=!_permExpand[scope]; buildPermDd($addInp?$addInp.val():''); });
+        return $h;
+      }
+      function buildPermDd(query){
+        if(!$permDd) return;
+        $permDd.empty();
+        var q=String(query||'').toLowerCase().trim();
+        PERM_CATALOG.forEach(function(c){
+          var leafMatch=function(sc,lbl2){ return !q || c.label.toLowerCase().indexOf(q)>=0 || lbl2.toLowerCase().indexOf(q)>=0 || sc.toLowerCase().indexOf(q)>=0; };
+          var direct=c.perms.map(function(p){ return {key:c.scope+'.'+p, lbl:PERM_LBL[p]||p}; }).filter(function(e){ return leafMatch(e.key,e.lbl); });
+          var subs=(c.subs||[]).map(function(sg){
+            var items=sg.perms.map(function(p){ return {key:sg.scope+'.'+p, lbl:PERM_LBL[p]||p}; }).filter(function(e){ return !q || c.label.toLowerCase().indexOf(q)>=0 || sg.label.toLowerCase().indexOf(q)>=0 || e.lbl.toLowerCase().indexOf(q)>=0; });
+            return {sg:sg, items:items};
+          }).filter(function(b){ return b.items.length; });
+          if(!direct.length && !subs.length) return;
+          var open=q?true:!!_permExpand[c.scope];                   // searching auto-expands matches
+          $permDd.append(ddGroupHeader(c.scope,c.label,false));
+          if(open){
+            direct.forEach(function(e){ $permDd.append(ddLeaf(e.key,e.lbl,false)); });
+            subs.forEach(function(b){
+              var subOpen=q?true:!!_permExpand[b.sg.scope];
+              $permDd.append(ddGroupHeader(b.sg.scope,b.sg.label,true));
+              if(subOpen) b.items.forEach(function(e){ $permDd.append(ddLeaf(e.key,e.lbl,true)); });
+            });
+          }
+        });
+        if(!$permDd.children().length){
+          $permDd.append($('<div style="padding:6px 10px;font-size:11px;color:#adb5bd;">').text('No matching permissions'));
+        }
+      }
+      function renderPermArea(){
+        renderPermList();
+        buildPermDd($addInp?$addInp.val():'');
+      }
+      if(uEditing){
+        $addInp=$('<input type="text" class="form-control form-control-sm mb-1" id="user-perm-add" placeholder="Add Permission" autocomplete="off" style="font-size:12px;">');
+        $permDd=$('<div class="list-group" id="user-perm-dd" style="max-height:240px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:200;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
+        $addWrap=$('<div style="position:relative;z-index:100;">').append($addInp,$permDd);
+        $addInp.on('focus click',function(e){ e.stopPropagation(); buildPermDd($addInp.val()); $permDd.show(); });
+        $addInp.on('input',function(){ buildPermDd($addInp.val()); $permDd.show(); });
+        $permDd.on('click',function(e){ e.stopPropagation(); });   // selections keep the dropdown open
+        $wrap.on('click',function(e){ if(!$(e.target).closest($addWrap).length) $permDd.hide(); });
+        $pbody.append($addWrap);
+      }
+      $pbody.append($permList);
+      renderPermList();
+      if(uEditing) buildPermDd('');
+      $wrap.append($permSec);
+
+      $editBtn.on('click',function(){
+        _pend={n:u.n, email:u.email||'', active:orig.active, perms:JSON.parse(JSON.stringify(u.permissions||[]))};
+        uEditing=true;
+        $details.empty().append(buildUserCard(u));
+      });
+      $cancelBtn.on('click',function(){
+        uEditing=false; _pend=null;                 // discard everything: fields, status, permissions, dates
+        $details.empty().append(buildUserCard(u));
+      });
+      $saveBtn.on('click',function(){
+        var nv=String($wrap.find('[data-key="userName"]').val()||'').trim();
+        var ev=String($wrap.find('[data-key="email"]').val()||'').trim();
+        if(!nv){ $wrap.find('[data-key="userName"]').addClass('is-invalid').focus(); $wrap.find('.name-feedback').show(); return; }
+        if(ev && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ev)){ $wrap.find('[data-key="email"]').addClass('is-invalid').focus(); $wrap.find('.email-feedback').show(); return; }
+        var badDate=cur.perms.some(function(p){ return p.exp && isNaN(new Date(p.exp+'T00:00:00')); });
+        if(badDate) return;                          // date fields flag themselves via the picker
+        u.n=nv; u.email=ev; u.active=_pend.active;   // in-place: same id, no duplicates
+        u.permissions=JSON.parse(JSON.stringify(cur.perms));
+        uEditing=false; _pend=null;
+        renderList();
+        $details.empty().append(buildUserCard(u));
+      });
+      return $wrap;
+    }
+    renderDetails();
+    $wrap.append($left,$details);
+    $p.append($wrap);
   }
   function setPageMode(m){
     // Remember the outgoing mode's current selection so each mode family can restore its last item on return.
@@ -18482,6 +18878,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   $('#btn-planning').on('click',function(){if(pageMode!=='planning') setPageMode('planning');});
   $('#btn-people').on('click',function(){if(pageMode!=='people') setPageMode('people');});
   $('#btn-admin').on('click',function(){ if(pageMode!=='admin') setPageMode('admin'); });
+  try{ window._pgAdmin={users:ADMIN_USERS}; }catch(e){}   // debug/test seam, mirrors window._pgHist
   // User menu: placeholder identity until auth exists; Sign Out is inert for now.
   (function(){
     var _un='Local User';
