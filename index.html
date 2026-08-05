@@ -15380,8 +15380,50 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $cardHd=null; // header removed
     var $cardBody=$('<div class="px-3 py-3" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
 
+    // ── State + District share one row (col 1); State sits first, compact ──
+    var PG_STATES=[{code:'CA',name:'California'},{code:'TX',name:'Texas'}];
+    function pgStateName(code){ var st=PG_STATES.filter(function(x){return x.code===code;})[0]; return (st||PG_STATES[0]).name; }
+    // saved as the abbreviation; missing or unknown values default to CA
+    var _pgState=(function(){ var v=getGuideDetail(g.id).state; return PG_STATES.some(function(x){return x.code===v;})?v:'CA'; })();
+    var $geoRow=$('<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">');
+    var $stateField=$('<div style="flex:0 0 auto;">');
+    $stateField.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text('State'));
+    function buildStateField(){
+      var $f=$('<div style="position:relative;width:130px;">');
+      var $inp=$('<input type="text" class="form-control form-control-sm pg-state-input" autocomplete="off" style="font-size:12px;">').val(pgStateName(_pgState));
+      var $dd=$('<div class="list-group pg-state-dd" style="max-height:160px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:9999;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);background:#fff;">');
+      var _hideT=null;
+      function buildDd(q){
+        $dd.empty();
+        var qlo=String(q||'').toLowerCase().trim();
+        PG_STATES.filter(function(st){ return !qlo||st.name.toLowerCase().indexOf(qlo)>=0||st.code.toLowerCase().indexOf(qlo)>=0; })
+          .forEach(function(st){
+            var $item=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 12px'});
+            $item.append($('<span class="fw-semibold me-1">').text(st.code));
+            $item.append($('<span class="text-muted" style="font-size:11px;">').text('— '+st.name));
+            $item.on('mousedown',function(e){
+              e.preventDefault();
+              if(_hideT){clearTimeout(_hideT);_hideT=null;}
+              _pgState=st.code;
+              setGuideDetail(g.id,'state',st.code);   // abbreviation only ('CA' / 'TX')
+              $f.replaceWith(buildStateField());
+            });
+            $dd.append($item);
+          });
+        $dd.toggle($dd.children().length>0);
+      }
+      $inp.on('focus',function(){ $(this).select(); buildDd(''); });
+      $inp.on('input',function(){ buildDd($(this).val()); });
+      // typing never commits: blur restores the saved selection, so values
+      // outside the list are impossible
+      $inp.on('blur',function(){ _hideT=setTimeout(function(){ $dd.hide(); $inp.val(pgStateName(_pgState)); },200); });
+      $f.append($inp,$dd);
+      return $f;
+    }
+    $stateField.append(buildStateField());
+
     // District single-select field
-    var $distField=$('<div>');  // col 1
+    var $distField=$('<div style="flex:1 1 220px;min-width:200px;">');
     $distField.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text('District'));
 
     var _pgDist = getGuideDetail(g.id).district || null; // {name, abbr} or null
@@ -15452,7 +15494,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $cardBody.append($hubspotField);
 
     $distField.append(buildDistrictField());
-    $cardBody.append($distField);
+    $geoRow.append($stateField,$distField);
+    $cardBody.append($geoRow);
 
     $card.append($cardBody);
     $wrap.append($card);
@@ -18425,6 +18468,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var PERM_LBL={full_access:'Full Access',view:'View',create:'Create',edit:'Edit','delete':'Delete',status:'Status',lock:'Lock','export':'Export','import':'Import',history:'History',edit_sessions:'Edit Sessions',assign_staff:'Assign Staff',permissions:'Permissions'};
     var PERM_ORDER=(function(){ var o=[]; PERM_CATALOG.forEach(function(c){ c.perms.forEach(function(p){ o.push(c.scope+'.'+p); }); (c.subs||[]).forEach(function(sg){ sg.perms.forEach(function(p){ o.push(sg.scope+'.'+p); }); }); }); return o; })();
     function permLabel(key){ var p=key.split('.').pop(); return PERM_LBL[p]||p; }
+    // muted type accents — label color only, never the whole row
+    var PERM_COLORS={full_access:'#7a5ea8', view:'#4a7fb5', create:'#4e9a63', edit:'#c08a3e', 'delete':'#c05a5a'};
+    function permColor(key){ return PERM_COLORS[key.split('.').pop()]||'#5f6368'; }
     function buildUserCard(u){
       var ai=ADMIN_USERS.indexOf(u);
       var avatarBg=AVATAR_COLORS[ai%AVATAR_COLORS.length];
@@ -18524,24 +18570,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       function permRow(p,indent){
         var expired=permExpired(p.exp);
-        var bg=expired?'#ffebee':'#fff8e1', col=expired?'#c62828':'#f57f17', bord=expired?'#ef9a9a':'#ffe082';
-        var $row=$('<div class="d-inline-flex align-items-center rounded-pill gap-2 user-perm-row" data-perm-key="'+p.key+'" style="align-self:flex-start;background:'+bg+';border:1px solid '+bord+';padding:3px 8px 3px 12px;'+(indent?'margin-left:16px;':'')+'">');
-        $row.append($('<span style="font-size:11px;font-weight:600;color:'+col+';white-space:nowrap;">').text(permLabel(p.key)));
+        // neutral chrome; the TYPE accent lives on the label alone. Expired rows
+        // keep the cert-style warning treatment — the only time color spreads.
+        var bg=expired?'#ffebee':'#f6f7f9', bord=expired?'#ef9a9a':'#e3e6ea';
+        var lblCol=expired?'#c62828':permColor(p.key);
+        var mut=expired?'#c62828':'#8a9099';
+        var $row=$('<div class="d-inline-flex align-items-center rounded-pill gap-2 user-perm-row" data-perm-key="'+p.key+'" style="align-self:flex-start;background:'+bg+';border:1px solid '+bord+';padding:3px 8px 3px 12px;'+((uEditing&&indent)?'margin-left:16px;':'')+'">');
+        $row.append($('<span class="perm-name" style="font-size:11px;font-weight:600;color:'+lblCol+';white-space:nowrap;">').text(permLabel(p.key)));
         if(uEditing||p.exp){
-          $row.append($('<span style="font-size:10px;color:'+col+';opacity:0.5;">').text('·'));
-          $row.append($('<span style="font-size:10px;color:'+col+';opacity:0.8;white-space:nowrap;">').text('Exp. date'));
+          $row.append($('<span style="font-size:10px;color:'+mut+';opacity:0.6;">').text('·'));
+          $row.append($('<span style="font-size:10px;color:'+mut+';white-space:nowrap;">').text('Exp. date'));
         }
         if(uEditing){
-          var $dp=mkDatePicker(p.exp||'',function(v){ p.exp=v||''; renderPermArea(); refreshSave(); },{width:'100px',inputCss:{fontSize:'10px',padding:'1px 6px',borderColor:col,background:'rgba(0,0,0,.04)'}});
+          var $dp=mkDatePicker(p.exp||'',function(v){ p.exp=v||''; renderPermArea(); refreshSave(); },{width:'100px',inputCss:{fontSize:'10px',padding:'1px 6px'}});
           $row.append($dp);
         } else if(p.exp){
-          $row.append($('<span style="font-size:10px;color:'+col+';padding:0 4px;">').text(p.exp));
+          $row.append($('<span style="font-size:10px;color:'+(expired?'#c62828':'#6c757d')+';padding:0 4px;">').text(p.exp));
         }
         if(expired){
           $row.append($('<span style="font-size:9px;font-weight:700;color:#c62828;background:#ffcdd2;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em;">').text('Expired'));
         }
         if(uEditing){
-          var $rm=$('<button type="button" class="user-perm-rm" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:'+col+';font-size:14px;opacity:0.7;">').text('×');
+          var $rm=$('<button type="button" class="user-perm-rm" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:#8a9099;font-size:14px;opacity:0.8;">').text('×');
           $rm.on('click',function(){ removePerm(p.key); });
           $row.append($rm);
         }
@@ -18550,6 +18600,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function renderPermList(){
         $permList.empty();
         var any=false;
+        function rowSink(indent){
+          // view mode: pills flow inline per group; edit mode: one per line (the
+          // date picker and × need the room)
+          if(uEditing) return {add:function($r){ $permList.append($r); }};
+          var $inline=$('<div class="d-flex flex-wrap perm-inline" style="gap:4px;'+(indent?'margin-left:16px;':'')+'">');
+          $permList.append($inline);
+          return {add:function($r){ $inline.append($r); }};
+        }
         PERM_CATALOG.forEach(function(c){
           var direct=cur.perms.filter(function(p){ return c.perms.indexOf(p.key.replace(c.scope+'.',''))>=0 && p.key.indexOf(c.scope+'.')===0 && p.key.split('.').length===c.scope.split('.').length+1; });
           var subBlocks=(c.subs||[]).map(function(sg){
@@ -18558,29 +18616,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(!direct.length && !subBlocks.length) return;          // no empty categories
           any=true;
           $permList.append($('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#495057;margin-top:6px;">').text(c.label));
-          direct.forEach(function(p){ $permList.append(permRow(p,false)); });
+          if(direct.length){
+            var sink=rowSink(false);
+            direct.forEach(function(p){ sink.add(permRow(p,false)); });
+          }
           subBlocks.forEach(function(b){
             $permList.append($('<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6c757d;margin:4px 0 0 16px;">').text(b.sg.label));
-            b.items.forEach(function(p){ $permList.append(permRow(p,true)); });
+            var ssink=rowSink(true);
+            b.items.forEach(function(p){ ssink.add(permRow(p,true)); });
           });
         });
         if(!any && !uEditing){
           $permList.append($('<span style="font-size:12px;color:#adb5bd;">').text('No permissions assigned'));
         }
-        if(!any && uEditing){
-          $permList.append($('<span style="font-size:12px;color:#adb5bd;">').text('No permissions added yet'));
-        }
       }
       function ddLeaf(key,lbl,indent){
-        var $l=$('<label class="d-flex align-items-center gap-2" style="padding:3px 10px 3px '+(indent?34:22)+'px;font-size:11.5px;cursor:pointer;margin:0;">');
+        var $l=$('<label class="d-flex align-items-center gap-2" style="padding:2px 10px 2px '+(indent?28:18)+'px;font-size:11.5px;cursor:pointer;margin:0;white-space:nowrap;">');
         var $cb=$('<input type="checkbox" class="perm-dd-chk" data-perm-key="'+key+'" style="cursor:pointer;">').prop('checked',hasPerm(key));
         $cb.on('change',function(){ if($(this).prop('checked')) addPerm(key); else removePerm(key); });
-        $l.append($cb,$('<span>').text(lbl));
+        $l.append($cb,$('<span style="color:'+permColor(key)+';">').text(lbl));
         return $l;
       }
       function ddGroupHeader(scope,lbl,indent){
         var open=!!_permExpand[scope];
-        var $h=$('<div class="perm-dd-group" data-perm-scope="'+scope+'" style="padding:4px 10px 4px '+(indent?22:10)+'px;font-size:'+(indent?'10.5px':'11px')+';font-weight:700;'+(indent?'':'text-transform:uppercase;letter-spacing:.05em;')+'color:#495057;cursor:pointer;background:#f8f9fb;border-top:1px solid #eef1f4;display:flex;align-items:center;gap:6px;">');
+        var $h=$('<div class="perm-dd-group" data-perm-scope="'+scope+'" style="padding:3px 10px 3px '+(indent?18:8)+'px;font-size:'+(indent?'10.5px':'11px')+';font-weight:700;'+(indent?'':'text-transform:uppercase;letter-spacing:.05em;')+'color:#495057;cursor:pointer;background:#f8f9fb;border-top:1px solid #eef1f4;display:flex;align-items:center;gap:5px;white-space:nowrap;">');
         $h.append($('<span style="font-size:9px;transition:transform .12s;'+(open?'transform:rotate(90deg);':'')+'">').text('▶'), $('<span>').text(lbl));
         $h.on('click',function(){ _permExpand[scope]=!_permExpand[scope]; buildPermDd($addInp?$addInp.val():''); });
         return $h;
@@ -18618,12 +18677,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       if(uEditing){
         $addInp=$('<input type="text" class="form-control form-control-sm mb-1" id="user-perm-add" placeholder="Add Permission" autocomplete="off" style="font-size:12px;">');
-        $permDd=$('<div class="list-group" id="user-perm-dd" style="max-height:240px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:200;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
+        $permDd=$('<div class="list-group" id="user-perm-dd" style="max-height:240px;overflow-y:auto;display:none;position:absolute;left:0;min-width:200px;max-width:300px;width:max-content;z-index:200;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
         $addWrap=$('<div style="position:relative;z-index:100;">').append($addInp,$permDd);
         $addInp.on('focus click',function(e){ e.stopPropagation(); buildPermDd($addInp.val()); $permDd.show(); });
         $addInp.on('input',function(){ buildPermDd($addInp.val()); $permDd.show(); });
+        $addInp.on('keydown',function(e){ if(e.key==='Escape'){ $permDd.hide(); } });
         $permDd.on('click',function(e){ e.stopPropagation(); });   // selections keep the dropdown open
-        $wrap.on('click',function(e){ if(!$(e.target).closest($addWrap).length) $permDd.hide(); });
+        // outside click, Esc anywhere, or focus moving to another control all close it
+        $(document).off('.userpermdd')
+          .on('click.userpermdd',function(e){
+            if(!document.contains($addWrap[0])){ $(document).off('.userpermdd'); return; }
+            if(!$(e.target).closest($addWrap).length) $permDd.hide();
+          })
+          .on('keydown.userpermdd',function(e){
+            if(!document.contains($addWrap[0])){ $(document).off('.userpermdd'); return; }
+            if(e.key==='Escape') $permDd.hide();
+          })
+          .on('focusin.userpermdd',function(e){
+            if(!document.contains($addWrap[0])){ $(document).off('.userpermdd'); return; }
+            if(!$(e.target).closest($addWrap).length) $permDd.hide();
+          });
         $pbody.append($addWrap);
       }
       $pbody.append($permList);
