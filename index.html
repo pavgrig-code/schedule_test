@@ -9342,6 +9342,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $copyToBtn.on('mouseleave',function(){$(this).css({borderColor:'#dee2e6',color:'#6c757d'});});
           }
 
+          // Clear button — EVERY editable table, immediately after Copy to, in the same header
+          // idiom. Cautionary on hover (amber, not the delete red: it clears values, it does not
+          // delete the table). Never built while the guide is locked — no disabled version.
+          var $clearBtn=null;
+          if(_pgvCur.mode!=='view'){
+            $clearBtn=$('<button type="button" class="sf-clear-btn">').css({
+              background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
+              padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
+              display:'inline-flex',alignItems:'center',fontWeight:'500',
+              marginLeft:'6px',flexShrink:'0',whiteSpace:'nowrap'
+            }).text('Clear');
+            $clearBtn.on('mouseenter',function(){$(this).css({borderColor:'#e8b878',color:'#b35c00'});});
+            $clearBtn.on('mouseleave',function(){$(this).css({borderColor:'#dee2e6',color:'#6c757d'});});
+          }
+
           // Per-variation sub-header (School / Week) — lighter than the calendar header, shown
           // only when this calendar is split by School or Alternate Weeks. The aggregate table needs
           // no sub-header (the calendar header suffices); its Copy to control sits in that header.
@@ -9375,9 +9390,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $hdr.append($wkSeg);
             }
             if($copyToBtn) $hdr.append($copyToBtn);
+            if($clearBtn) $hdr.append($clearBtn);
             _calSec.$section.append($hdr);
           } else {
             if($copyToBtn) _calSec.$hdr.append($copyToBtn);
+            if($clearBtn) _calSec.$hdr.append($clearBtn);
           }
           var cFn=combo.pod
             ? (function(list,csr){ return function(){
@@ -9639,6 +9656,71 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $dd.on('click',function(e){ e.stopPropagation(); });
             $dd.addClass('sf-copyto-dd');
           })(combo, shData, $copyToBtn, _comboResults.length-1);
+
+          // ── Clear behaviour — confirmation first, then one atomic transaction ──
+          if($clearBtn) (function(myIdx, tCombo){
+            // Administrator-facing table identity: calendar tables carry the calendar's colour
+            // circle in the confirmation; pods theirs; schools read as their name.
+            var _nm, _circ=null;
+            if(tCombo.pod){ _nm='POD '+tCombo.pod.name; _circ=tCombo.pod.color||null; }
+            else if(tCombo.si!==null){ var _sr=tCombo.sRow; _nm=(_sr&&String(_sr.school||_sr.schoolAbbr||'').trim())||('School '+(tCombo.si+1)); }
+            else if(tCombo.calRow){ _nm=(tCombo.calRow.name&&tCombo.calRow.name.trim())||('Calendar '+(tCombo.ci+1)); _circ=tCombo.calRow.color||'#ffffff'; }
+            else { _nm='Staffing Hours'; }
+            if(tCombo.wk) _nm+=' \u2013 Week '+(tCombo.wk==='a'?'A':'B');
+
+            $clearBtn.on('click',function(e){
+              e.stopPropagation();
+              $('.sf-clear-confirm').remove();   // single owner in <body>
+              var $ov=$('<div class="sf-clear-confirm">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
+              var $box=$('<div>').css({background:'#fff',borderRadius:'10px',padding:'22px 26px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'280px',maxWidth:'400px',fontFamily:'inherit'});
+              var $ttl=$('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529',display:'flex',alignItems:'center',flexWrap:'wrap',gap:'0 6px'});
+              $ttl.append($('<span>').text('Clear Staffing Hours for'));
+              if(_circ) $ttl.append($('<span class="sf-clear-circle">').css({display:'inline-block',width:'11px',height:'11px',borderRadius:'50%',background:_circ,border:'1px solid rgb(180,180,180)',flexShrink:'0'}));
+              $ttl.append($('<span>').text(_nm+'?'));
+              $box.append($ttl);
+              $box.append($('<div>').css({fontSize:'12px',color:'#6c757d',marginTop:'8px'}).text('Every Start and End time in this table will be cleared.'));
+              var $btns=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'16px'});
+              var $cancel=$('<button type="button" class="sf-clear-cancel">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'6px',padding:'6px 16px',cursor:'pointer',fontSize:'12px',fontWeight:'600',color:'#495057'}).text('Cancel');
+              // cautionary, not the delete red — the table itself is not being removed
+              var $ok=$('<button type="button" class="sf-clear-go">').css({background:'#e8590c',border:'none',borderRadius:'6px',padding:'6px 16px',cursor:'pointer',fontSize:'12px',fontWeight:'600',color:'#fff'}).text('Clear');
+              $cancel.on('click',function(){ $ov.remove(); });                         // no changes
+              $ov.on('click',function(ev){ if($(ev.target).is($ov)) $ov.remove(); });  // backdrop = cancel
+              $ok.on('click',function(){
+                $ov.remove();
+                var tgt=_comboResults[myIdx]; if(!tgt) return;
+                try{ _pgUndo.begin(g.id); }catch(_u){}          // the whole clear is one transaction
+                var _fmt2=window._PICKER_FMT||function(v){return v;};
+                var _changed=false;
+                ROLES.forEach(function(role){
+                  var rd=tgt.shData[role.key]; if(!rd) return;
+                  Object.keys(rd).forEach(function(dk){
+                    var o=rd[dk]; if(!o||typeof o!=='object') return;
+                    if(o.start){ o.start=''; _changed=true; }
+                    if(o.end){ o.end=''; _changed=true; }
+                    if(o.brk){ delete o.brk; _changed=true; }   // a break cannot outlive its times
+                    // count overrides (.cnt) and every other key are deliberately preserved
+                    var pp=tgt.res.pickers;
+                    if(pp&&pp[role.key]&&pp[role.key][dk]){
+                      if(pp[role.key][dk].start) pp[role.key][dk].start.find('input').val('');
+                      if(pp[role.key][dk].end) pp[role.key][dk].end.find('input').val('');
+                    }
+                  });
+                });
+                tgt.res.recalc();
+                setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                try{ refreshSummary(g); }catch(_e){}
+                if(_changed){
+                  try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Cleared Start and End times for '+_nm,desc:''}); }catch(_u){}
+                  try{ _pgUndo.offer(g.id,{head:'Staffing Hours cleared for ',lead:_nm,tail:'.'}); }catch(_u){}
+                } else {
+                  try{ _pgUndo.cancel(); }catch(_u){}           // an empty table shows no notification and logs nothing
+                }
+              });
+              $btns.append($cancel,$ok); $box.append($btns);
+              $ov.append($box); $('body').append($ov);
+              setTimeout(function(){ $cancel.focus(); },0);
+            });
+          })(_comboResults.length-1, combo);
         });
 
         $section[0]._recalcAll=function(){
@@ -15664,7 +15746,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     apply();
     return apply;
   }
-  var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Copy To|Options|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
+  var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Copy To|Options|Clear|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
   function _pgvStripEditAffordances(root){ try{ $(root).find('.sb-cell-dots, .sb-cell-menu').remove(); }catch(e){} }
   function _pgvDocTransform(root){
     var $R=$(root);
