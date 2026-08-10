@@ -8266,6 +8266,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
+                    var _fld=isE?'End Time':'Start Time';
+                    try{ _pgUndo.begin(g.id); }catch(_u){}   // the whole vertical copy is one transaction
                     var _counts=getCounts();
                     ROLES.forEach(function(r2){
                       if(!sh[r2.key]||!sh[r2.key][dk]) return;
@@ -8280,6 +8282,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     });
                     updateAllHours($tbody);
                     setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' across '+dayLbl,desc:''}); }catch(_u){}
+                    try{ _pgUndo.offer(g.id,{text:_fld+' copied across '+dayLbl+'.'}); }catch(_u){}
                   });
                 // Option 2: Copy to {Role} on weekdays
                 var WEEKDAYS=['mon','tue','wed','thu','fri'];
@@ -8298,6 +8302,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
+                    var _fld=isE?'End Time':'Start Time';
+                    try{ _pgUndo.begin(g.id); }catch(_u){}   // one transaction across the weekdays
                     WEEKDAYS.forEach(function(wdk){
                       if(!sh[rk]||!sh[rk][wdk]) return;
                       if(isE) sh[rk][wdk].end=curVal; else sh[rk][wdk].start=curVal;
@@ -8309,6 +8315,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     });
                     updateAllHours($tbody);
                     setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' to '+roleLbl+' on weekdays',desc:''}); }catch(_u){}
+                    try{ _pgUndo.offer(g.id,{text:_fld+' copied across weekdays.'}); }catch(_u){}
                   });
                 // Option 3: Copy to all roles — targets based on source day
                 var $item3=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
@@ -8316,6 +8324,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
+                    var _fld=isE?'End Time':'Start Time';
+                    try{ _pgUndo.begin(g.id); }catch(_u){}   // every role and weekday in one transaction
                     var _cts=getCounts();
                     ROLES.forEach(function(r2){
                       if(!sh[r2.key]) return;
@@ -8331,6 +8341,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     });
                     updateAllHours($tbody);
                     setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                    try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' to all roles on weekdays',desc:''}); }catch(_u){}
+                    try{ _pgUndo.offer(g.id,{text:_fld+' copied to all roles and weekdays.'}); }catch(_u){}
                   });
                 $stMenu.append($item,$item2,$item3);
                 var br=$dots[0].getBoundingClientRect();
@@ -8784,9 +8796,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       function mI(lb,cb){ return $('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
                       function doR(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
                       var _c=getCountsFn();
-                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ ROLES.forEach(function(r2){ if(!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
-                      $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(srcBrkU) shData[rk][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[rk][wdk].brk; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); }));
-                      $stMn.append(mI('Copy to all on weekdays',function(){ var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(srcBrkU) shData[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][wdk].brk; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); }));
+                      $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ var _fld=isE?'End Time':'Start Time'; try{ _pgUndo.begin(g.id); }catch(_u){} ROLES.forEach(function(r2){ if(!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' across '+dLbl,desc:''}); }catch(_u){} try{ _pgUndo.offer(g.id,{text:_fld+' copied across '+dLbl+'.'}); }catch(_u){} }));
+                      $stMn.append(mI('Copy to '+rLbl+' on weekdays (horizontally)',function(){ var _fld=isE?'End Time':'Start Time'; try{ _pgUndo.begin(g.id); }catch(_u){} WD.forEach(function(wdk){ if(!shData[rk]||!shData[rk][wdk]) return; if(isE) shData[rk][wdk].end=cv; else shData[rk][wdk].start=cv; if(srcBrkU) shData[rk][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[rk][wdk].brk; if(_p[rk]&&_p[rk][wdk]){var $pp=_p[rk][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' to '+rLbl+' on weekdays',desc:''}); }catch(_u){} try{ _pgUndo.offer(g.id,{text:_fld+' copied across weekdays.'}); }catch(_u){} }));
+                      $stMn.append(mI('Copy to all on weekdays',function(){ var _fld=isE?'End Time':'Start Time'; try{ _pgUndo.begin(g.id); }catch(_u){} var _c2=getCountsFn(); ROLES.forEach(function(r2){ if(!shData[r2.key]) return; _allT.forEach(function(wdk){ if(!shData[r2.key][wdk]) return; if(isE) shData[r2.key][wdk].end=cv; else shData[r2.key][wdk].start=cv; if(srcBrkU) shData[r2.key][wdk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][wdk].brk; if(_p[r2.key]&&_p[r2.key][wdk]){var $pp=_p[r2.key][wdk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); }); doR(); try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' to all roles on weekdays',desc:''}); }catch(_u){} try{ _pgUndo.offer(g.id,{text:_fld+' copied to all roles and weekdays.'}); }catch(_u){} }));
                       var br=$dt[0].getBoundingClientRect(); $stMn.css({top:(br.bottom+4)+'px',left:Math.max(4,Math.min(br.right,window.innerWidth-200))+'px'}).show();
                       setTimeout(function(){$(document).on('click.'+_mnUid,closeMn);},0);
                     });
@@ -10320,6 +10332,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       $applyBtn.on('click',function(e){
         e.stopPropagation();
+        try{ _pgUndo.begin(g.id); }catch(_u){}   // the whole apply is one transaction
         // Commit the draft to the real markers
         var _mk=String(_amCalId)+'|'+dateKey;
         if(!markers[_mk]) markers[_mk]={schools:{}};
@@ -10328,6 +10341,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(!Object.keys(markers[_mk].schools).length) delete markers[_mk];
         refreshCell($td,dateKey,inRange,false);
         refreshSummary(g);  // Special Day markers change staffing hours → keep Summary in sync
+        try{
+          var _ids={}; Object.keys(_draft).forEach(function(k){ if(_draft[k]) _ids[_draft[k]]=1; });
+          var _idk=Object.keys(_ids), _md=_pgUndoFmtMD(dateKey);
+          var _d;
+          if(_idk.length===1){ var _sd=getSdById(g.id,_idk[0]); _d={lead:((_sd&&String(_sd.name||'').trim())||'Special Day'),tail:' applied to '+_md+'.'}; }
+          else if(_idk.length===0){ _d={text:'Special Days cleared for '+_md+'.'}; }
+          else { _d={text:'Special Days updated for '+_md+'.'}; }
+          _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:(_d.text||(_d.lead+_d.tail)).replace(/\.$/,''),desc:''});
+          _pgUndo.offer(g.id,_d);
+        }catch(_u){}
         closeCtx();
       });
       $btnRow.append($closeBtn,$clearBtn,$applyBtn);
@@ -10527,6 +10550,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
       $applyBtn.on('click',function(e){
         e.stopPropagation();
+        try{ _pgUndo.begin(g.id); }catch(_u){}   // every calendar's change on this date is one transaction
         Object.keys(_draft).forEach(function(ck){
           var _mk=ck+'|'+dateKey;
           if(!markers[_mk]) markers[_mk]={schools:{}};
@@ -10537,6 +10561,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $cs=$('#cal-section-'+g.id);
         if($cs.length && $cs[0]._updateHours) $cs[0]._updateHours();  // SD-aware carriers + summed cell
         refreshSummary(g);
+        try{
+          var _ids={}; Object.keys(_draft).forEach(function(ck){ Object.keys(_draft[ck]).forEach(function(k){ if(_draft[ck][k]) _ids[_draft[ck][k]]=1; }); });
+          var _idk=Object.keys(_ids), _md=_pgUndoFmtMD(dateKey);
+          var _d;
+          if(_idk.length===1){ var _sd=getSdById(g.id,_idk[0]); _d={lead:((_sd&&String(_sd.name||'').trim())||'Special Day'),tail:' applied to '+_md+'.'}; }
+          else if(_idk.length===0){ _d={text:'Special Days cleared for '+_md+'.'}; }
+          else { _d={text:'Special Days updated for '+_md+'.'}; }
+          _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:(_d.text||(_d.lead+_d.tail)).replace(/\.$/,''),desc:''});
+          _pgUndo.offer(g.id,_d);
+        }catch(_u){}
         closeCtx();
       });
       $btnRow.append($closeBtn,$clearBtn,$applyBtn);
@@ -13827,6 +13861,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $applyBtn.on('click',function(ev){
           ev.stopPropagation();
           if(_pick===undefined){ closeMulti(); return; }
+          try{ _pgUndo.begin(g.id); }catch(_u){}   // every selected cell is one transaction
           targets.forEach(function(t){
             var mk=String(t.calId)+'|'+t.dateKey;
             if(_pick===null){ if(markers[mk]&&markers[mk].schools){ t.schoolIdxs.forEach(function(si){ delete markers[mk].schools[String(si)]; }); if(!Object.keys(markers[mk].schools).length) delete markers[mk]; } }
@@ -13835,6 +13870,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           closeMulti(); clearSel();
           var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal);   // re-render cells (markers/labels/bg) + hours
           refreshSummary(g);
+          try{
+            var _dset={}; targets.forEach(function(t){ _dset[t.dateKey]=1; });
+            var _dk=Object.keys(_dset), _n=_dk.length;
+            var _where=(_n===1)?_pgUndoFmtMD(_dk[0]):(_n+' dates');
+            var _d;
+            if(_pick===null){ _d={text:'Special Days removed from '+_where+'.'}; }
+            else { var _sd=getSdById(g.id,_pick); _d={lead:((_sd&&String(_sd.name||'').trim())||'Special Day'),tail:' applied to '+_where+'.'}; }
+            _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:(_d.text||(_d.lead+_d.tail)).replace(/\.$/,''),desc:''});
+            _pgUndo.offer(g.id,_d);
+          }catch(_u){}
         });
         $btnRow.append($closeBtn,$clearBtn,$applyBtn);
         $mMenu.append($btnRow);
@@ -15415,6 +15460,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     };
   })();
   try{ window._pgUndo=_pgUndo; }catch(e){}   // test/debug handle, mirrors window._pgHist
+  // "2026-08-12" → "Aug 12" for Special Day notifications (hoisted; shared by the calendar apply sites)
+  function _pgUndoFmtMD(k){ var p=String(k||'').split('-'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (M[(parseInt(p[1],10)||1)-1]||'')+' '+(parseInt(p[2],10)||''); }
   // dirty-signal: any editing interaction in the planning panel schedules a diff
   (function(){
     function maybe(){ try{ var p=document.getElementById('planning-panel'); if(p&&p.style.display!=='none'&&p.children.length&&_pgvCur.mode!=='view') _pgHist.schedule(); }catch(e){} }
