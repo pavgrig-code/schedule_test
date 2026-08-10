@@ -7804,6 +7804,73 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     _sfDet._sfByCalMigrated=true;
 
+    // ── Initialize newly created child tables from the latest calendar-level values ──
+    // When Separate by School / by POD / Alternate Weeks A/B is turned on, each new child
+    // slot is seeded ONCE from the nearest existing parent (school split -> the calendar
+    // slot; week B -> week A), so it inherits the latest Start/End and Count values. Slots
+    // that already exist are never touched, so child-specific edits survive, and disabling
+    // then re-enabling a mode restores the previously saved child data because its keys
+    // were never deleted. The whole pass runs before the tables render, so the user never
+    // sees a mixture of old and new values.
+    (function seedSfChildSlots(){
+      try{
+        var store=_sfDet.staffingHoursSlots||(_sfDet.staffingHoursSlots={});
+        // Only slots that existed BEFORE this pass count as user overrides — slots we create
+        // here are seeds, not overrides, and must not feed each other.
+        var preExisting={}; Object.keys(store).forEach(function(k){ preExisting[k]=true; });
+        var calRows=_sfDet.calendarRows||[];
+        if(!calRows.length) return;
+        calRows.forEach(function(cr,ci){
+          // separation is a PER-CALENDAR setting; the global staffingOpts is not the source
+          var co=calStaffOpts(g, cr.calId)||{};
+          if(!(co.bySchool||co.byPods||co.alternateWeeks)) return;
+          var wks=co.alternateWeeks?['a','b']:[''];
+          var rows=siteRowsFor(g, cr.calId)||[];
+          wks.forEach(function(wk){
+            var calKey='c'+ci+(wk||'');
+            var parent=store[calKey];
+            if((!parent||!Object.keys(parent).length) && wk==='b') parent=store['c'+ci+'a'];
+            if(!parent||!Object.keys(parent).length) parent=_sfDet.staffingHours;
+            if(!parent||!Object.keys(parent).length) return;
+            if(wk==='b' && (!store[calKey]||!Object.keys(store[calKey]).length)){
+              store[calKey]=JSON.parse(JSON.stringify(parent));
+            }
+            if(!(co.bySchool||co.byPods)) return;
+            // Build the child keys the tables actually read: staffSuffixFor resolves a POD
+            // grouping ('p<id>') for schools assigned to one and 's<si>' for standalone
+            // schools, so PODs and un-podded schools are both covered.
+            var seen={};
+            rows.forEach(function(_r,si){
+              var pfx=staffSuffixFor(g, cr.calId, si);
+              if(!pfx) return;
+              var key=pfx+'c'+ci+(wk||'');
+              if(seen[key]) return; seen[key]=true;                      // one seed per grouping
+              if(store[key] && Object.keys(store[key]).length) return;   // never overwrite
+              // Start/End come from the calendar parent; COUNTS prefer a genuine
+              // school/POD-specific override saved before this pass.
+              var seeded=JSON.parse(JSON.stringify(parent));
+              var ownPrefix=pfx+'c';
+              var ownSlots=Object.keys(store).filter(function(k){
+                return preExisting[k] && k.indexOf(ownPrefix)===0 && store[k] && Object.keys(store[k]).length;
+              });
+              if(ownSlots.length){
+                var pref=store[ownSlots[0]];
+                if(wk==='b' && store[pfx+'c'+ci+'a']) pref=store[pfx+'c'+ci+'a'];
+                Object.keys(seeded).forEach(function(rk){
+                  Object.keys(seeded[rk]||{}).forEach(function(dk){
+                    var ov=shCntOv(pref, rk, dk);
+                    if(ov!=null) seeded[rk][dk].cnt=String(ov);
+                  });
+                });
+              }
+              store[key]=seeded;
+            });
+          });
+        });
+        setGuideDetail(g.id,'staffingHoursSlots',store);
+      }catch(e){}
+    })();
+
     if(!guideDetails[String(g.id)].staffingHoursA) guideDetails[String(g.id)].staffingHoursA={};
     if(!guideDetails[String(g.id)].staffingHoursB) guideDetails[String(g.id)].staffingHoursB={};
     var _shMain=guideDetails[String(g.id)].staffingHours;
@@ -8066,6 +8133,46 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     $section.on('remove',function(){ $optsDD.remove(); $viewDD.remove(); closeViewDD(); $(document).off('mousedown._sopts'); if(_optsRaf){cancelAnimationFrame(_optsRaf);_optsRaf=null;} });
     $section.append($hd);
+
+    // Collapse the whole Staffing Hours area. Collapsed, the Filter action is REMOVED from
+    // the header (not disabled) and replaced by a divider + a compact colour-coded list of
+    // every Program Calendar with its separation mode. Display-only: no data, no History.
+    (function(){
+      // the staffing content is appended straight onto $section, so the "body" is every
+      // child except the header, resolved live at toggle time
+      var $bodyWrap={ css:function(o){ $section.children().not($hd).css(o); } };
+      var _apply=attachSectionCollapse({
+        key:'sf|'+g.id, $hd:$hd, $body:$bodyWrap, label:'Staffing Hours',
+        summary:function($sum){
+          var _det=guideDetails[String(g.id)]||{};
+          var _rows=_det.calendarRows||[];
+          $sum.append($('<span style="opacity:.5;padding:0 2px;">').text('|'));
+          _rows.forEach(function(cr,ci){
+            // separation options are PER CALENDAR, not global
+            var _o=calStaffOpts(g, cr.calId)||{};
+            var bits=[];
+            if(_o.bySchool) bits.push('by School');
+            if(_o.byPods) bits.push('by POD');
+            if(_o.alternateWeeks) bits.push('Alternate Weeks A/B');
+            var nm=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
+            var $item=$('<span style="display:inline-flex;align-items:center;gap:4px;margin-left:12px;">');
+            $item.append($('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(cr.color||'#ffffff')+';border:1px solid rgba(0,0,0,.25);">'));
+            $item.append($('<span>').text(nm+(bits.length?(' ('+bits.join(' \u00b7 ')+')'):'')));
+            $sum.append($item);
+          });
+        }
+      });
+      // the Filter slot disappears with the body rather than sitting disabled
+      var _origApply=_apply;
+      _apply=function(){ _origApply(); $filterSlot.toggle(!_pgSecCollapse['sf|'+g.id]); };
+      $hd.find('.pg-sec-toggle').off('click').on('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        _pgSecCollapse['sf|'+g.id]=!_pgSecCollapse['sf|'+g.id];
+        _apply();
+      });
+      _apply();
+      $section.__sfApply=_apply;   // re-assert after the body is appended
+    })();
 
     var $scroll=$('<div style="overflow-x:auto;">');
     var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
@@ -8346,6 +8453,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tbl.append($tbody,$tfoot);
     $scroll.append($tbl);
     $section.append($scroll);
+    try{ if($section.__sfApply) setTimeout($section.__sfApply,0); }catch(e){}
 
     // ── Expose base recalc ──
     $section[0]._recalcAll = function(){ updateAllHours($tbody); };
@@ -8916,6 +9024,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }
             function close(){ $ov.remove(); }
             function doSave(){
+              try{ _pgUndo.begin(g.id); }catch(_u){}
               rowsState.forEach(function(r){
                 var key=('s'+r.si)+((_cCi!=null)?('c'+_cCi):'')+(_cWk||'');
                 if(!_slots[key]) _slots[key]={};
@@ -8927,6 +9036,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               close();
               updU($tbU);
               setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+              // the notification reads the change itself: one count becomes "Monday Coach Count: 2 → 3",
+              // several become a school count, and a save that wrote no value shows nothing at all
+              try{ _pgUndo.offer(g.id,{auto:true}); }catch(_u){}
             }
             function tryClose(){
               if(!isDirty()){ close(); return; }
@@ -9454,11 +9566,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 // Copy srcShData → each matching target slot
                 var ALL_DAYS=DAYS.map(function(d){return d.k;});
                 var _fmt=window._PICKER_FMT||function(v){return v;};
+                var _tgtN=0;
+                try{ _pgUndo.begin(g.id); }catch(_u){}   // every selected table is written in one transaction
                 _comboResults.forEach(function(tgt){
                   var tc=tgt.combo;
                   var pairOk=!!selLeaf[tc.ci+'|'+(tc.podKey?tc.podKey:(tc.si===null?'':tc.si))];
                   var wkOk=(!tc.wk)||selWk.indexOf(tc.wk)>=0;
                   if(!pairOk||!wkOk) return;
+                  _tgtN++;
 
                   // Copy start/end for every role and every day — no count guard
                   ROLES.forEach(function(role){
@@ -9490,6 +9605,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
                 // Refresh calendar section hours
                 setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+                try{ _pgUndo.offer(g.id,{text:'Staffing Hours copied to '+_tgtN+' table'+(_tgtN===1?'':'s')+'.'}); }catch(_u){}
               });
 
               $btns.append($rstBtn,$copyBtn);
@@ -9547,6 +9663,45 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       return MSHORT[sel.m]+' '+sel.d+', '+sel.y;
     }
     function toISO(y,m,d){ return y+'-'+(m+1<10?'0':'')+(m+1)+'-'+(d<10?'0':'')+d; }
+    // Flexible manual entry (opts.typeable). Accepts 8/3/2026, 2026-8-3, 3-8-2026,
+    // 3-Aug-2026, Aug 3, 2026 and their leading-zero forms. Returns ISO or '' when the
+    // text is invalid or genuinely ambiguous, so the caller can restore the last value.
+    function parseLoose(txt){
+      var t=String(txt||'').trim().replace(/\s+/g,' ').replace(/,/g,'');
+      if(!t) return '';
+      function mIdx(name){
+        var lo=String(name).toLowerCase().slice(0,3);
+        for(var i=0;i<12;i++){ if(MSHORT[i].toLowerCase()===lo) return i; }
+        return -1;
+      }
+      function mk(y,m,d){
+        if(!(y>=1000&&y<=9999)||m<0||m>11||d<1||d>31) return '';
+        var dt=new Date(y,m,d);
+        if(dt.getFullYear()!==y||dt.getMonth()!==m||dt.getDate()!==d) return '';   // rejects Feb 30 etc.
+        return toISO(y,m,d);
+      }
+      var m1;
+      // Mon D YYYY  ("Aug 3 2026")
+      if((m1=t.match(/^([A-Za-z]{3,9}) (\d{1,2}) (\d{4})$/))){
+        var mi=mIdx(m1[1]); return mi<0?'':mk(+m1[3],mi,+m1[2]);
+      }
+      // D-Mon-YYYY  ("3-Aug-2026", "03-Aug-2026")
+      if((m1=t.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3,9})[-\/ ](\d{4})$/))){
+        var mi2=mIdx(m1[2]); return mi2<0?'':mk(+m1[3],mi2,+m1[1]);
+      }
+      // YYYY-M-D  (ISO-ish, year first)
+      if((m1=t.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/))){
+        return mk(+m1[1],+m1[2]-1,+m1[3]);
+      }
+      // M/D/YYYY or D-M-YYYY: slashes read US month-first; dashes read day-first
+      if((m1=t.match(/^(\d{1,2})([-\/])(\d{1,2})[-\/](\d{4})$/))){
+        var a=+m1[1], b=+m1[3], y=+m1[4], dash=(m1[2]==='-');
+        var mo=dash?b:a, dy=dash?a:b;
+        if(mo>12 && dy<=12){ var sw=mo; mo=dy; dy=sw; }   // only one reading is valid
+        return mk(y,mo-1,dy);
+      }
+      return '';
+    }
 
     var _sel=parseSel(_val);
     var _now=new Date(); _now.setHours(0,0,0,0);
@@ -9559,7 +9714,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       fontSize:'12px',padding:'3px 8px',outline:'none',cursor:'pointer',
       boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',
       width:opts.width||'130px'
-    },opts.inputCss||{})).val(fmtDisp(_val)).attr('placeholder',opts.placeholder||'Select date').attr('readonly',true);
+    },opts.inputCss||{})).val(fmtDisp(_val)).attr('placeholder',opts.placeholder||'Select date').attr('readonly',!opts.typeable);
+    if(opts.typeable){
+      $inp.css({cursor:'text'});
+      var commitTyped=function(){
+        var raw=$inp.val();
+        if(String(raw||'').trim()===''){
+          if(_val!==''){ _val=''; if(onChange) onChange(''); }
+          $inp.val(''); return;
+        }
+        var iso=parseLoose(raw);
+        if(!iso){ $inp.val(fmtDisp(_val)); return; }   // invalid/ambiguous: restore, never commit junk
+        var changed=(iso!==_val);
+        _val=iso; _sel=parseSel(_val); _vy=_sel.y; _vm=_sel.m;
+        $inp.val(fmtDisp(_val));                       // always normalize to "Aug 3, 2026"
+        if(changed && onChange) onChange(_val);
+      };
+      $inp.on('keydown',function(e){
+        if(e.key==='Enter'){ e.preventDefault(); commitTyped(); $popup.hide(); }
+        else if(e.key==='Escape'){ $inp.val(fmtDisp(_val)); $popup.hide(); }
+      });
+      $inp.on('blur',function(){ setTimeout(commitTyped,150); });
+    }
 
     var $popup=$('<div>').css({
       position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dadce0',
@@ -11161,9 +11337,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _xsDialog('Delete this Extra Shift?',[
         {label:'Cancel'},
         {label:'Delete',primary:true,danger:true,fn:function(){
+          try{ _pgUndo.begin(o.gObj.id); }catch(_u){}
           deleteExtraShift(o.gObj.id,o.calId,o.dateKey,shift.id);
           updateCalendarHours(); refreshSummary(o.gObj);
           _repinRebuild();
+          try{ _pgUndo.offer(o.gObj.id,{text:'Extra Shift removed.'}); }catch(_u){}
         }}
       ]);
     }
@@ -14681,7 +14859,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $container[0].__pgCalc={ calendars:_guideCalc, totals:{ hours:Math.round(_guideCalc.reduce(function(a,c){return a+c.totalHours;},0)*100)/100, amount:Math.round(_guideCalc.reduce(function(a,c){return a+c.amount;},0)*100)/100 } };
     return $container;
   }
-  function refreshSummary(g){ var $s=$('#summary-section-'+g.id); if($s.length) $s.replaceWith(buildSummarySection(g)); _maybeRefreshCombined(g); }
+  function refreshSummary(g){ var $s=$('#summary-section-'+g.id); if($s.length) $s.replaceWith(buildSummarySection(g)); _maybeRefreshCombined(g); pgCalcCellsRefresh(g); }
 
   // ── Planning Guide View/Edit mode ──
   // Mode is remembered per guide (localStorage; keyed per-user once the backend
@@ -14971,6 +15149,272 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     };
   })();
   try{ window._pgHist=_pgHist; }catch(e){}   // test/debug handle
+
+  // ── Undo notifications ──────────────────────────────────────────────────────
+  // A compact Gmail-style snackbar offered after a COMPLETED Planning Guide change that
+  // the browser's own Command/Ctrl+Z cannot reverse: schools added or removed, bulk
+  // Copy To, POD create / delete / assignment, bulk Staffing Hours and Program Calendar
+  // changes, deleted Extra Shifts, mass role / calendar updates. Presentation-only
+  // actions (opening a popup, filtering, collapsing, switching display mode, selecting
+  // rows, opening History or a breakdown) never call in here, so they cannot raise one.
+  //
+  // begin(gid) is called immediately BEFORE the mutation and offer(gid, desc) once it has
+  // completed. begin() records the guide's exact state as a string; Undo parses that back
+  // in a single write and re-renders the guide, so a transaction is always reversed whole
+  // — never half-restored, never duplicated. offer() stays silent when nothing actually
+  // changed, so a save that writes no values shows no notification.
+  var _pgUndo=(function(){
+    var _timeout=9000;            // Gmail-ish; 8-10s. Configurable via _pgUndo.timeout().
+    var MAXLEAD=32;               // primary identifying text kept before the ellipsis
+    var _pre=null;                // snapshot from begin(), consumed by the next offer()
+    var _cur=null;                // the live notification {gid, snap, full, timer}
+    var _DAYS={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'};
+
+    function _guide(gid){ try{ return (PLANNING_GUIDES||[]).filter(function(x){ return String(x.id)===String(gid); })[0]||null; }catch(e){ return null; } }
+
+    // The guide's complete state, serialized. Everything an undoable action can touch lives
+    // in guideDetails, but the shift-level assignment / note maps are keyed outside it, so
+    // this guide's slice of them rides along and a restore can never leave them stranded.
+    function snapStr(gid){
+      var k=String(gid), g=_guide(k), sa={}, sn={}, pfx=k+'|';
+      try{ Object.keys(scheduleAssignments).forEach(function(x){ if(x.indexOf(pfx)===0) sa[x]=scheduleAssignments[x]; }); }catch(e){}
+      try{ Object.keys(scheduleShiftNotes).forEach(function(x){ if(x.indexOf(pfx)===0) sn[x]=scheduleShiftNotes[x]; }); }catch(e){}
+      try{ return JSON.stringify({det:(guideDetails[k]||{}), name:(g?g.name:null), sa:sa, sn:sn}); }catch(e){ return null; }
+    }
+    function changed(pre){ if(!pre||pre.str==null) return false; return snapStr(pre.gid)!==pre.str; }
+
+    // One write per store. The detail tree is replaced outright rather than patched, so a
+    // multi-record transaction cannot come back partially applied or leave duplicates behind.
+    function restore(pre){
+      var s; try{ s=JSON.parse(pre.str); }catch(e){ return false; }
+      var k=String(pre.gid);
+      guideDetails[k]=s.det||{};
+      var g=_guide(k); if(g&&s.name!=null) g.name=s.name;
+      var pfx=k+'|';
+      try{
+        Object.keys(scheduleAssignments).forEach(function(x){ if(x.indexOf(pfx)===0) delete scheduleAssignments[x]; });
+        Object.keys(s.sa||{}).forEach(function(x){ scheduleAssignments[x]=s.sa[x]; });
+      }catch(e){}
+      try{
+        Object.keys(scheduleShiftNotes).forEach(function(x){ if(x.indexOf(pfx)===0) delete scheduleShiftNotes[x]; });
+        Object.keys(s.sn||{}).forEach(function(x){ scheduleShiftNotes[x]=s.sn[x]; });
+      }catch(e){}
+      return true;
+    }
+    // Every dependent area is recomputed by rebuilding the guide from the restored data —
+    // the same full re-render an import uses — so totals, summaries, filters, sessions and
+    // staffing can never be left showing the undone values.
+    function rerender(gid){
+      var g=_guide(gid); if(!g) return;
+      var p=document.getElementById('planning-panel');
+      if(!p||p.style.display==='none'||!p.children.length) return;   // guide not on screen: data is restored, nothing to redraw
+      var st=[p.scrollTop||0, (window.pageYOffset||0)];
+      try{ showGuideDetail(g); }catch(e){}
+      try{ if(typeof _pgRefreshList==='function') _pgRefreshList(); }catch(e){}
+      var p2=document.getElementById('planning-panel'); if(p2) p2.scrollTop=st[0];
+      try{ window.scrollTo(0,st[1]); }catch(e){}
+    }
+
+    // ── Description ──────────────────────────────────────────────────────────
+    // Short and administrator-facing: what just happened, in the words the History
+    // record uses. Never an internal id, a raw object, a property name, or undefined/null.
+    function txt(v){
+      var s=(v==null)?'':String(v);
+      if(/^(undefined|null|NaN|\[object Object\])$/i.test(s.trim())) return '';
+      return s.replace(/\s+/g,' ');            // runs collapse; the edge spacing is meaningful
+    }
+    function txtT(v){ return txt(v).trim(); }
+    function clip(s){
+      s=txt(s);
+      if(s.length<=MAXLEAD) return s;
+      var cut=s.slice(0,MAXLEAD), sp=cut.lastIndexOf(' ');
+      if(sp>=20) cut=cut.slice(0,sp);
+      return cut.replace(/[\s,;:.\u2013\u2014-]+$/,'')+'\u2026';
+    }
+    function fullText(o){
+      if(o.text) return txtT(o.text);
+      if(o.colors) return txtT(o.lead)+' changed.';
+      return txt(o.head)+txtT(o.lead)+txt(o.tail);
+    }
+    function dot(c){
+      return $('<span class="pg-undo-dot">').css({
+        display:'inline-block',width:'10px',height:'10px',borderRadius:'50%',
+        background:(txtT(c)||'#ffffff'),border:'1px solid rgba(255,255,255,.55)',
+        flex:'0 0 auto',boxSizing:'border-box',verticalAlign:'middle'
+      });
+    }
+    function renderDesc($d,o){
+      if(o.colors){
+        // the actual previous and new colors, compact and vertically aligned; they survive
+        // even when the label beside them has been shortened
+        $d.append($('<span class="pg-undo-text">').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0'}).text(clip(o.lead)+':'));
+        $d.append(dot(o.colors.prev));
+        $d.append($('<span class="pg-undo-arrow">').css({flex:'0 0 auto',opacity:'.75'}).text('\u2192'));
+        $d.append(dot(o.colors.next));
+        return;
+      }
+      var body=o.text?txtT(o.text):(txt(o.head)+clip(o.lead)+txt(o.tail));
+      $d.append($('<span class="pg-undo-text">').css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:'0'}).text(body));
+    }
+
+    // ── Automatic description ────────────────────────────────────────────────
+    // For saves that write per-school values, the notification reads the change itself
+    // rather than a hand-written summary: one changed count becomes "Monday Coach Count:
+    // 2 -> 3", one changed color becomes its two circles, several become a school count.
+    // Nothing describable means nothing was really modified — and no notification.
+    function leafDiff(a,b,path,out){
+      if(out.length>40||a===b) return;
+      var ao=(a!==null&&typeof a==='object'), bo=(b!==null&&typeof b==='object');
+      if(!ao||!bo||Array.isArray(a)!==Array.isArray(b)){ out.push({p:path.slice(),prev:a,next:b}); return; }
+      var ks={}; Object.keys(a).forEach(function(k){ ks[k]=1; }); Object.keys(b).forEach(function(k){ ks[k]=1; });
+      Object.keys(ks).forEach(function(k){ leafDiff(a[k],b[k],path.concat([k]),out); });
+    }
+    // A whole slot written in one go arrives as an object; expand it to its real leaves and
+    // drop the empty start/end scaffolding a count save writes alongside the value.
+    function expand(ch,out){
+      var ov=(ch.next!==undefined&&ch.next!==null&&typeof ch.next==='object')?ch.next
+            :((ch.prev!==null&&typeof ch.prev==='object')?ch.prev:null);
+      if(!ov||Array.isArray(ov)){ if(ch.prev!==''||ch.next!=='') out.push(ch); return; }
+      var adding=(ch.prev===undefined);
+      (function walk(o,path){
+        Object.keys(o).forEach(function(k){
+          var v=o[k];
+          if(v!==null&&typeof v==='object'){ walk(v,path.concat([k])); return; }
+          if(v===''||v===undefined||v===null) return;
+          out.push(adding?{p:path.concat([k]),prev:undefined,next:v}:{p:path.concat([k]),prev:v,next:undefined});
+        });
+      })(ov, ch.p.slice());
+    }
+    function roleLabel(gid,key){
+      try{
+        var rs=getRoles(gid)||[];
+        for(var i=0;i<rs.length;i++){ if(rs[i].key===key) return txtT(pgRoleName(rs[i],rs))||'Staff'; }
+      }catch(e){}
+      return 'Staff';
+    }
+    function describeAuto(pre,gid){
+      var before; try{ before=(JSON.parse(pre.str)||{}).det||{}; }catch(e){ return null; }
+      var raw=[]; leafDiff(before,(guideDetails[String(gid)]||{}),[],raw);
+      var ch=[]; raw.forEach(function(c){ expand(c,ch); });
+      if(!ch.length) return null;
+
+      if(ch.length===1){
+        var c=ch[0], p=c.p, last=p[p.length-1];
+        if(last==='cnt'&&p[0]==='staffingHoursSlots'){
+          var lbl=(_DAYS[String(p[3]||'')]||'')+' '+roleLabel(gid,p[2])+' Count';
+          if(c.prev===undefined) return {lead:txtT(lbl),tail:' set to '+txtT(c.next)+'.'};
+          if(c.next===undefined) return {lead:txtT(lbl),tail:' reset.'};
+          return {lead:txtT(lbl),tail:': '+txtT(c.prev)+' \u2192 '+txtT(c.next)+'.'};
+        }
+        if(last==='color'&&c.prev!==undefined&&c.next!==undefined) return {lead:'Color',colors:{prev:c.prev,next:c.next}};
+        return null;
+      }
+      // several counts in one save: name the day and role once, then how many schools moved
+      var days={},roles={},slots={},allCnt=true;
+      ch.forEach(function(c){
+        var p=c.p;
+        if(p[p.length-1]!=='cnt'||p[0]!=='staffingHoursSlots'){ allCnt=false; return; }
+        slots[p[1]]=1; roles[p[2]]=1; days[p[3]]=1;
+      });
+      if(!allCnt) return null;
+      var dk=Object.keys(days), rk=Object.keys(roles), n=Object.keys(slots).length;
+      if(dk.length!==1||rk.length!==1||!n) return null;
+      return {lead:(_DAYS[dk[0]]||'')+' '+roleLabel(gid,rk[0])+' Count',
+              tail:' updated for '+n+' school'+(n===1?'':'s')+'.'};
+    }
+
+    // ── Notification ─────────────────────────────────────────────────────────
+    function styles(){
+      if(document.getElementById('pg-undo-css')) return;
+      try{
+        var st=document.createElement('style'); st.id='pg-undo-css';
+        st.textContent=
+          '.pg-undo-btn:hover{background:rgba(138,180,248,.16);}'+
+          '.pg-undo-btn:focus-visible,.pg-undo-close:focus-visible{outline:2px solid #8ab4f8;outline-offset:1px;}'+
+          '.pg-undo-close:hover{color:#fff;}';
+        (document.head||document.documentElement).appendChild(st);
+      }catch(e){}
+    }
+    function dismiss(){
+      if(_cur&&_cur.timer){ try{ clearTimeout(_cur.timer); }catch(e){} }
+      _cur=null;
+      try{ $('body > .pg-undo-snack').remove(); }catch(e){}   // one owner: the snackbar is never duplicated in <body>
+    }
+    function doUndo(){
+      var c=_cur; if(!c) return;
+      dismiss();                                    // the opportunity ends the moment it is taken
+      try{ _pgHist.flushNow(); }catch(e){}          // the original action keeps its History record
+      if(!restore(c)) return;
+      try{ _pgHist.begin(c.gid); }catch(e){}        // rebaseline: the restore logs nothing automatic
+      try{ _pgHist.evt(c.gid,{kind:'undo',action:'Undo: '+c.full,desc:''}); }catch(e){}
+      rerender(c.gid);
+    }
+    function show(pre,o){
+      dismiss(); styles();
+      var full=fullText(o)||'Change undone.';
+      // Solid, app-styled, lower-left, above tables / menus / Planning Guide content but
+      // deliberately below the centered dialogs, so it stays visible without blocking work.
+      var $s=$('<div class="pg-undo-snack pg-view-ok" role="status" aria-live="polite">').css({
+        position:'fixed',left:'24px',bottom:'24px',zIndex:'1000003',
+        display:'flex',alignItems:'center',gap:'12px',
+        background:'#212529',color:'#fff',fontSize:'13px',fontWeight:'500',lineHeight:'1.35',
+        padding:'9px 10px 9px 16px',borderRadius:'8px',boxShadow:'0 6px 22px rgba(16,24,40,.30)',
+        maxWidth:'440px',boxSizing:'border-box'
+      }).attr('title',full);
+      var $d=$('<span class="pg-undo-desc">').css({display:'flex',alignItems:'center',gap:'5px',flex:'1 1 auto',minWidth:'0',overflow:'hidden'});
+      renderDesc($d,o);
+      // Undo and the close control are never truncated and are reachable from the keyboard.
+      var $u=$('<button type="button" class="pg-undo-btn">').text('Undo')
+        .attr({title:'Undo this change','aria-label':'Undo: '+full})
+        .css({flex:'0 0 auto',border:'none',background:'transparent',color:'#8ab4f8',
+              fontSize:'13px',fontWeight:'700',cursor:'pointer',padding:'3px 8px',borderRadius:'5px',fontFamily:'inherit'})
+        .on('click',function(e){ e.preventDefault(); e.stopPropagation(); doUndo(); });
+      var $x=$('<button type="button" class="pg-undo-close">').html('&#215;')
+        .attr({title:'Dismiss','aria-label':'Dismiss notification'})
+        .css({flex:'0 0 auto',border:'none',background:'transparent',color:'#adb5bd',
+              fontSize:'16px',fontWeight:'700',lineHeight:'1',cursor:'pointer',padding:'2px 6px',borderRadius:'5px',fontFamily:'inherit'})
+        .on('click',function(e){ e.preventDefault(); e.stopPropagation(); dismiss(); });
+      $s.append($d).append($u).append($x);
+      $('body').append($s);
+      // Expiry only ends the offer — it never undoes anything on its own.
+      _cur={gid:pre.gid, str:pre.str, full:full, timer:setTimeout(function(){ dismiss(); },_timeout)};
+    }
+
+    return {
+      // Snapshot the guide immediately before an undoable mutation.
+      begin:function(gid){ try{ if(gid==null) return; _pre={gid:String(gid), str:snapStr(gid)}; }catch(e){ _pre=null; } },
+      // Drop a snapshot whose action was abandoned.
+      cancel:function(){ _pre=null; },
+      // Offer Undo for the completed mutation. Silent when the snapshot is missing or when
+      // no Planning Guide value actually changed.
+      offer:function(gid,o){
+        try{
+          o=o||{};
+          var pre=_pre; _pre=null;
+          if(!pre||pre.str==null||pre.gid!==String(gid)) return false;
+          if(!changed(pre)) return false;
+          var d=o;
+          if(o.auto){ d=describeAuto(pre,gid)||((o.text||o.lead)?o:null); }
+          if(!d) return false;
+          show(pre,d);
+          return true;
+        }catch(e){ return false; }
+      },
+      // Leaving the guide retires an offer that belonged to it.
+      guideChanged:function(gid){
+        try{
+          if(_pre&&_pre.gid!==String(gid)) _pre=null;
+          if(_cur&&_cur.gid!==String(gid)) dismiss();
+        }catch(e){}
+      },
+      dismiss:dismiss,
+      undo:doUndo,
+      pending:function(){ return _cur?{gid:_cur.gid,text:_cur.full}:null; },
+      timeout:function(ms){ if(ms!=null&&isFinite(ms)&&ms>0) _timeout=Number(ms); return _timeout; },
+      _clip:clip   // test/debug: the truncation rule on its own
+    };
+  })();
+  try{ window._pgUndo=_pgUndo; }catch(e){}   // test/debug handle, mirrors window._pgHist
   // dirty-signal: any editing interaction in the planning panel schedules a diff
   (function(){
     function maybe(){ try{ var p=document.getElementById('planning-panel'); if(p&&p.style.display!=='none'&&p.children.length&&_pgvCur.mode!=='view') _pgHist.schedule(); }catch(e){} }
@@ -15031,9 +15475,153 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $(this).replaceWith(this.checked?_pgvChk():$('<span class="pgv-blank">'));
     });
   }
+  // Program Calendars collapse state: display-only, per guide id, held in memory for
+  // the session so it never touches guideDetails and never writes a History entry.
+  var _pgCalCollapse={};
+  // Students-section collapse per Site Breakdown table (guideId|calId). Display-only:
+  // never written to guideDetails, so no data change, no History, no JSON/Excel export.
+  var _sbStuCollapse={};
+  // Authoritative per-calendar figures, published BY the Program Summary as it renders.
+  // Keyed guideId|calId → {site, unalloc, total}. The Program Calendars table only reads
+  // these, so the calculated columns can never drift from the Summary.
+  // The Program Summary exposes its calculated snapshot on the returned fragment
+  // (__pgCalc.calendars: {calId, staffingHours, unallocatedHours, totalHours, ...}). The
+  // JSON export already reuses it, so reading the same snapshot keeps the Program Calendars
+  // calculated columns on ONE calculation path that cannot drift from the Summary.
+  function pgCalcSnapshot(g){
+    try{
+      var $s=buildSummarySection(g);
+      return ($s && $s[0] && $s[0].__pgCalc && $s[0].__pgCalc.calendars) ? $s[0].__pgCalc.calendars : [];
+    }catch(e){ return []; }
+  }
+  // Fill/refresh the Program Calendars calculated cells from the Summary snapshot.
+  // Called after the table renders AND from refreshSummary, so the columns track the
+  // Summary immediately whenever any dependency changes.
+  function pgCalcCellsRefresh(g){
+    try{
+      var snap=pgCalcSnapshot(g);
+      var map={site:'staffingHours', unalloc:'unallocatedHours', total:'totalHours', amount:'amount'};
+      // Guide totals come from the SAME snapshot already fetched above — summing it is
+      // exactly what the Summary does, and it avoids building the Summary a second time.
+      try{
+        if(snap && snap.length){
+          var _h=0,_a=0;
+          snap.forEach(function(c){ _h+=(parseFloat(c.totalHours)||0); _a+=(parseFloat(c.amount)||0); });
+          $('td.pg-cal-total-hours').text(pgFmtHours(Math.round(_h*100)/100));
+          $('td.pg-cal-total-amount').text(pgFmtAmt(Math.round(_a*100)/100));
+        } else {
+          $('td.pg-cal-total-hours').text('\u2014');
+          $('td.pg-cal-total-amount').text('\u2014');
+        }
+      }catch(e){}
+      $('td.pg-cal-calc').each(function(){
+        var $td=$(this), calId=$td.attr('data-calc-cal'), kind=$td.attr('data-calc-kind');
+        var rec=pgCalCalcGet(snap, calId);
+        var v=rec?rec[map[kind]]:null;
+        $td.text((v==null||!isFinite(v))?'\u2014':(kind==='amount'?pgFmtAmt(v):pgFmtHours(v)));
+      });
+    }catch(e){}
+  }
+  // Hover "..." copy menu for Site Breakdown role cells. One transaction, one History entry.
+  function sbOpenCopyMenu($anchor, roleKey, srcRow, srcIdx){
+    $('.sb-cell-menu').remove();
+    var api=$anchor.data('sbCopyApi'); if(!api) return;
+    var $m=$('<div class="sb-cell-menu">').css({
+      position:'fixed', zIndex:'100000', background:'#fff', border:'1px solid #dee2e6',
+      borderRadius:'6px', boxShadow:'0 4px 14px rgba(0,0,0,.16)', padding:'4px 0',
+      fontSize:'11.5px', minWidth:'220px', maxWidth:'340px'
+    });
+    function item(label, fn){
+      var $i=$('<div>').css({padding:'5px 12px', cursor:'pointer', whiteSpace:'nowrap',
+        overflow:'hidden', textOverflow:'ellipsis', display:'flex', alignItems:'center', gap:'6px'});
+      $i.on('mouseenter',function(){ $(this).css('background','#f2f6fb'); })
+        .on('mouseleave',function(){ $(this).css('background',''); });
+      var _done=false;
+      $i.on('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        if(_done) return; _done=true;          // one execution per open, no double-click repeats
+        try{ fn(); }finally{ $m.remove(); }
+      });
+      $i.append(label);
+      return $i;
+    }
+    api.build(item, $m);
+    $('body').append($m);
+    var r=$anchor[0].getBoundingClientRect();
+    var top=r.bottom+4, left=Math.min(r.left, window.innerWidth-$m.outerWidth()-8);
+    if(top+$m.outerHeight()>window.innerHeight) top=Math.max(4, r.top-$m.outerHeight()-4);
+    $m.css({top:top+'px', left:Math.max(4,left)+'px'});
+    $(document).off('.sbcellmenu')
+      .on('click.sbcellmenu',function(){ $('.sb-cell-menu').remove(); $(document).off('.sbcellmenu'); })
+      .on('keydown.sbcellmenu',function(e){ if(e.key==='Escape'){ $('.sb-cell-menu').remove(); $(document).off('.sbcellmenu'); } });
+    $m.on('click',function(e){ e.stopPropagation(); });
+  }
+  function pgFmtAmt(n){
+    var v=Math.round((isFinite(n)?n:0)*100)/100, neg=v<0; v=Math.abs(v);
+    var pr=v.toFixed(2).split('.');
+    pr[0]=pr[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    return (neg?'-$':'$')+pr[0]+'.'+pr[1];
+  }
+  function pgFmtHours(n){
+    var r=Math.round((isFinite(n)?n:0)*100)/100;
+    var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+    return s+' hrs';
+  }
+  function pgCalCalcGet(snap, calId){
+    if(!snap||!snap.length||calId==null) return null;
+    for(var i=0;i<snap.length;i++){ if(String(snap[i].calId)===String(calId)) return snap[i]; }
+    return null;
+  }
+  // Display name for a Staff Role. Blank / whitespace-only / null / undefined all fall back
+  // to "Role {N}" using the role's CURRENT 1-based order, so the label re-numbers itself when
+  // roles are added, deleted or reordered. The stable role id/key stays the identifier and the
+  // placeholder is never written back into the data.
+  function pgRoleName(role, roles){
+    var n=(role && role.name!=null) ? String(role.name).trim() : '';
+    if(n) return n;
+    var idx=-1;
+    if(roles && roles.length){
+      idx=roles.indexOf(role);
+      if(idx<0 && role && role.key!=null){
+        for(var i=0;i<roles.length;i++){ if(roles[i] && roles[i].key===role.key){ idx=i; break; } }
+      }
+    }
+    return 'Role '+(idx<0?1:idx+1);           // order in the Staff Roles table
+  }
+  // same display-only treatment for the other collapsible guide sections, keyed
+  // guideId|section (and guideId|site|calId per Site Breakdown)
+  var _pgSecCollapse={};
+  // Reusable collapse control: same icon, spacing and width behaviour as Program
+  // Calendars. The body stays LAID OUT (height 0, hidden) so the header keeps its width.
+  function attachSectionCollapse(opts){
+    var key=opts.key, $hd=opts.$hd, $body=opts.$body, label=opts.label, summary=opts.summary;
+    $hd.addClass('d-flex align-items-center').css({gap:'6px'});
+    $hd.children().first().css({whiteSpace:'nowrap',flex:'0 0 auto'});
+    var $sum=$('<span class="pg-sec-summary" aria-hidden="true" style="display:none;flex:1 1 auto;min-width:0;max-width:560px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;color:var(--tx2, #6c757d);pointer-events:none;user-select:none;">');
+    var $tg=$('<button type="button" class="pg-sec-toggle pg-view-ok" style="margin-left:auto;flex:0 0 auto;background:none;border:none;padding:0 2px;line-height:1;cursor:pointer;color:#6c757d;font-size:10px;">');
+    $hd.append($sum,$tg);
+    function apply(){
+      var col=!!_pgSecCollapse[key];
+      // height:0 keeps the element laid out (so the header width is unchanged) but its
+      // margins/padding would still leave a gap under the header — zero them too.
+      if(col) $body.css({height:'0',overflow:'hidden',visibility:'hidden',marginTop:'0',marginBottom:'0',paddingTop:'0',paddingBottom:'0'});
+      else $body.css({height:'',overflow:'',visibility:'',marginTop:'',marginBottom:'',paddingTop:'',paddingBottom:''});
+      if(col && summary){ $sum.empty(); summary($sum); }
+      $sum.toggle(col && !!summary);
+      $tg.html(col?'&#8964;&#8964;':'&#8963;&#8963;')   // ⌄⌄ expand / ⌃⌃ collapse
+        .attr('title',(col?'Expand ':'Collapse ')+label)
+        .attr('aria-label',(col?'Expand ':'Collapse ')+label)
+        .attr('aria-expanded',col?'false':'true');
+    }
+    $tg.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgSecCollapse[key]=!_pgSecCollapse[key]; apply(); });
+    apply();
+    return apply;
+  }
   var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Copy To|Options|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
+  function _pgvStripEditAffordances(root){ try{ $(root).find('.sb-cell-dots, .sb-cell-menu').remove(); }catch(e){} }
   function _pgvDocTransform(root){
     var $R=$(root);
+    _pgvStripEditAffordances($R);   // hover copy "..." never appears in locked View
     _pgvReplaceFields($R);
     $R.find('button,[role=button]').each(function(){
       if(this.id==='pg-actions-pill'||this.closest('.pg-view-ok')) return;
@@ -15159,6 +15747,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
   function showGuideDetail(g){
     try{ _pgHist.flushNow(); }catch(e){}
+    try{ _pgUndo.guideChanged(g.id); }catch(e){}   // an Undo offer belongs to the guide it was raised on
     // outer slot: the staffing render assigns this; the Roles table's Students-per-Coach
     // handler lives in a sibling closure and could never see the nested declaration (it threw).
     var debouncedRefreshTable=function(){};
@@ -15385,11 +15974,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function pgStateName(code){ var st=PG_STATES.filter(function(x){return x.code===code;})[0]; return (st||PG_STATES[0]).name; }
     // saved as the abbreviation; missing or unknown values default to CA
     var _pgState=(function(){ var v=getGuideDetail(g.id).state; return PG_STATES.some(function(x){return x.code===v;})?v:'CA'; })();
-    var $geoRow=$('<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">');
+    var $geoRow=$('<div style="display:flex;gap:16px;flex-wrap:nowrap;align-items:flex-start;">');   // State + District stay on one row at every width
     var $stateField=$('<div style="flex:0 0 auto;">');
     $stateField.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text('State'));
     function buildStateField(){
-      var $f=$('<div style="position:relative;width:130px;">');
+      var $f=$('<div style="position:relative;width:120px;">');
       var $inp=$('<input type="text" class="form-control form-control-sm pg-state-input" autocomplete="off" style="font-size:12px;">').val(pgStateName(_pgState));
       var $dd=$('<div class="list-group pg-state-dd" style="max-height:160px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:9999;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);background:#fff;">');
       var _hideT=null;
@@ -15423,7 +16012,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $stateField.append(buildStateField());
 
     // District single-select field
-    var $distField=$('<div style="flex:1 1 220px;min-width:200px;">');
+    var $distField=$('<div style="flex:1 1 auto;min-width:260px;">');
     $distField.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text('District'));
 
     var _pgDist = getGuideDetail(g.id).district || null; // {name, abbr} or null
@@ -15432,10 +16021,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $f=$('<div style="position:relative;">');
       if(_pgDist){
         // Show selected district chip with change/clear
-        var $chip=$('<div class="d-inline-flex align-items-center rounded-pill gap-2" style="background:#e8f4fd;color:#0a6ebd;border:1px solid #b8dff5;font-size:12px;font-weight:500;padding:4px 10px 4px 12px;">');
+        var $chip=$('<div class="d-inline-flex align-items-center rounded-pill gap-2" style="background:#e8f4fd;color:#0a6ebd;border:1px solid #b8dff5;font-size:12px;font-weight:500;padding:4px 10px 4px 12px;white-space:nowrap;">');
         $chip.append($('<span class="fw-semibold">').text(_pgDist.abbr));
         $chip.append($('<span style="opacity:.7;">').text('·'));
-        $chip.append($('<span>').text(_pgDist.name));
+        $chip.append($('<span style="white-space:nowrap;">').text(_pgDist.name));
         var $clrBtn=$('<button type="button" style="background:none;border:none;padding:0 0 0 4px;cursor:pointer;color:#0a6ebd;font-size:14px;opacity:0.7;line-height:1;">').text('×');
         $clrBtn.on('click',function(){
           _pgDist=null;
@@ -15510,12 +16099,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var ROLE_PRESET_DEFAULTS={'CWC':{isCoach:true,spc:20}};
     var $rolesSection=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;">');
     var $rolesHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
-    $rolesHd.append($('<span class="fw-bold text-dark" style="font-size:12px;">').text('Staff Roles'));
+    $rolesHd.append($('<span class="fw-bold text-dark" style="font-size:12px;white-space:nowrap;">').text('Staff Roles'));
     $rolesSection.append($rolesHd);
 
     var rolesThStyle={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
     var rolesTdStyle={border:'1px solid #dee2e6',padding:'2px 3px',verticalAlign:'middle'};
 
+    var _roleRebuildTimer=null;
+    // Students per Coach is typed, so debounce; this rebuilds EVERY Site Breakdown card
+    // (debouncedRefreshTable is a single outer slot each card reassigns, so it only ever
+    // refreshed the last-rendered one). The roles table is not rebuilt, so focus is kept.
+    function debouncedRebuildFromRoles(){
+      if(_roleRebuildTimer) clearTimeout(_roleRebuildTimer);
+      _roleRebuildTimer=setTimeout(function(){ _roleRebuildTimer=null; rebuildAllFromRoles(); },260);
+    }
     function rebuildAllFromRoles(){
       // Rebuild Site Breakdown (all per-calendar cards) in place. renderCalGroupsSection lives in this
       // (showGuideDetail) scope; refreshTable is private to each buildSiteCard and not reachable here.
@@ -15611,7 +16208,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if($(this).val()!==v)$(this).val(v);
             guideRoles[capturedRi].spc=parseInt(v)||0;
             saveRoles();
+            // Students are derived as coaches x Students-per-Coach, so the stored student
+            // values go stale the moment spc changes. Recompute them for this role across
+            // EVERY calendar's Site Breakdown before re-rendering, so each school's role
+            // value and its Students Total update immediately (and restore exactly when the
+            // old spc is typed back).
+            (function(){
+              try{
+                var _role=guideRoles[capturedRi]; if(!_role) return;
+                var _spc=parseInt(_role.spc)||0;
+                var _ck='coaches_'+_role.key;
+                var _d=guideDetails[String(g.id)]||{};
+                var _lists=[];
+                if(_d.siteRows) _lists.push(_d.siteRows);
+                if(_d.siteRowsByCal) Object.keys(_d.siteRowsByCal).forEach(function(k){ _lists.push(_d.siteRowsByCal[k]); });
+                _lists.forEach(function(rows){
+                  (rows||[]).forEach(function(row){
+                    if(!row) return;
+                    var _c=parseInt(row[_ck]);
+                    if(!isFinite(_c)) return;            // no coach count -> nothing derived
+                    row[_role.key]=(_spc>0 && _c>0) ? String(_c*_spc) : '';
+                  });
+                });
+                if(_d.siteRows) setGuideDetail(g.id,'siteRows',_d.siteRows);
+                if(_d.siteRowsByCal) setGuideDetail(g.id,'siteRowsByCal',_d.siteRowsByCal);
+              }catch(e){}
+            })();
             debouncedRefreshTable();
+            debouncedRebuildFromRoles();   // every Site Breakdown recalculates, not just one
           });
           $cb.on('change',function(){
             guideRoles[capturedRi].isCoach=$(this).prop('checked');
@@ -15632,9 +16256,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $delBtn.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});});
         $delBtn.on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
         (function(ri2){$delBtn.on('click',function(){
+          try{ _pgUndo.begin(g.id); }catch(_u){}
+          var _rnm=pgRoleName(guideRoles[ri2]||{},guideRoles);
           if(guideRoles.length===1){ guideRoles[0]={key:guideRoles[0].key,name:'',isCoach:false,spc:0}; }
           else { guideRoles.splice(ri2,1); }
           saveRoles(); refreshRolesTable(); rebuildAllFromRoles();
+          try{ _pgUndo.offer(g.id,{lead:_rnm,tail:' removed.'}); }catch(_u){}
         });})(ri);
         $delTd.append($delBtn); $tr.append($delTd);
 
@@ -15651,6 +16278,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $addRoleBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 12px;">').text('+ Add Role');
     $rolesTblWrap.append($addRoleBtn);
     $rolesSection.append($rolesTblWrap);
+    attachSectionCollapse({
+      key:g.id+'|roles', $hd:$rolesHd, $body:$rolesTblWrap, label:'Staff Roles',
+      summary:function($t){
+        var names=(guideRoles||[]).map(function(r,i){ return (r.name&&r.name.trim())?r.name.trim():('Role '+(i+1)); });
+        if(!names.length) return;                                  // no roles: title only
+        $t.append($('<span>').text((names.length>1?' ('+names.length+')':'')+': '+names.join(', ')));
+      }
+    });
 
     function refreshRolesTable(){
       $rolesTblContent.remove();
@@ -15676,7 +16311,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var SD_COLORS=['rgb(212,237,218)','rgb(255,243,205)','rgb(226,244,247)','rgb(247,239,226)','#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688','#4caf50','#ffeb3b','#ffc107','#ff9800'];
     var $sdSection=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;">');
     var $sdHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
-    $sdHd.append($('<span class="fw-bold text-dark" style="font-size:12px;">').text('Special Days'));
+    $sdHd.append($('<span class="fw-bold text-dark" style="font-size:12px;white-space:nowrap;">').text('Special Days'));
     $sdSection.append($sdHd);
 
     var sdThStyle={border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'};
@@ -15822,9 +16457,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $delBtn.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});});
         $delBtn.on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
         (function(ri2){$delBtn.on('click',function(){
+          try{ _pgUndo.begin(g.id); }catch(_u){}
+          var _snm=String((specialDays[ri2]&&specialDays[ri2].name)||'').trim()||'Special Day';
           if(specialDays.length===1){ specialDays[0]={id:specialDays[0].id,name:'',color:'#ffffff',noHours:false}; }
           else { specialDays.splice(ri2,1); }
           saveSpecialDays(); refreshSdTable(); rebuildFromSpecialDays();
+          try{ _pgUndo.offer(g.id,{lead:_snm,tail:' removed.'}); }catch(_u){}
         });})(ri);
         $delTd.append($delBtn); $tr.append($delTd);
         $tbody.append($tr);
@@ -15837,6 +16475,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var $addSdBtn=$('<button type="button" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:2px 10px;margin:8px 12px;">').text('+ Add Special Day');
     $sdTblWrap.append($addSdBtn);
     $sdSection.append($sdTblWrap);
+    attachSectionCollapse({ key:g.id+'|specialdays', $hd:$sdHd, $body:$sdTblWrap, label:'Special Days' });
 
     function refreshSdTable(){
       $sdTblContent.remove(); $sdTblContent=buildSdTable();
@@ -15853,8 +16492,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // ── Calendar Setup section ──
     var $calSetupSection=$('<div class="card border-0 shadow-sm rounded-2 mt-2" style="overflow:visible;width:fit-content;">');
-    var $calSetupHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
-    $calSetupHd.append($('<span class="fw-bold text-dark" style="font-size:12px;">').text('Program Calendars'));
+    var $calSetupHd=$('<div class="px-3 py-2 d-flex align-items-center" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;gap:6px;">');
+    $calSetupHd.append($('<span class="fw-bold text-dark" style="font-size:12px;white-space:nowrap;flex:0 0 auto;">').text('Program Calendars'));
+    // collapsed-only summary: informational, never interactive, never overlaps the toggle
+    var $calSummary=$('<span class="pg-cal-summary" aria-hidden="true" style="display:none;flex:1 1 auto;min-width:0;max-width:560px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;color:var(--tx2, #6c757d);pointer-events:none;user-select:none;">');
+    $calSetupHd.append($calSummary);
+    var $calToggle=$('<button type="button" class="pg-cal-toggle pg-view-ok" style="margin-left:auto;flex:0 0 auto;background:none;border:none;padding:0 2px;line-height:1;cursor:pointer;color:#6c757d;font-size:10px;">');
+    $calSetupHd.append($calToggle);
     $calSetupSection.append($calSetupHd);
 
     // Init calendarRows in guideDetails
@@ -15970,13 +16614,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $thead=$('<thead>');
       var $htr=$('<tr>');
-      [['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'130px'}],['Last Day',{minWidth:'130px'}],['Price/Hr',{minWidth:'96px'}],['Meal Breaks',{}],['Del',{width:'36px'}]].forEach(function(pair){
+      [['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Meal Breaks',{}],['Price/Hr',{minWidth:'74px'}],['Total, Site Schedule',{minWidth:'92px',textAlign:'right'}],['Unallocated Hours',{minWidth:'86px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['Amount',{minWidth:'92px',textAlign:'right'}],['Del',{width:'36px'}]].forEach(function(pair){
         $htr.append($('<th>').css(Object.assign({},csThStyle,pair[1])).text(pair[0]));
       });
       $thead.append($htr);
       $tbl.append($thead);
 
       var $tbody=$('<tbody>');
+      try{ ensureGuideEntityIds(g); }catch(e){}   // calId must exist before the calculated cells key off it
+      var _calcSnap=pgCalcSnapshot(g);            // authoritative Summary figures, read once
       calendarRows.forEach(function(row,ri){
         var $tr=$('<tr>');
         // Color picker cell
@@ -16011,10 +16657,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $opt.on('mouseleave',function(){ if(!isSelected) $(this).css({border:'1px solid rgb(210,210,210)','box-shadow':'none'}); });
               $opt.on('click',function(e){
                 e.stopPropagation();
+                var _wasC=calendarRows[capturedRi].color;
+                var _cLbl=(String(calendarRows[capturedRi].name||'').trim()||('Calendar '+(capturedRi+1)))+' color';
+                try{ _pgUndo.begin(g.id); }catch(_u){}
                 calendarRows[capturedRi].color=c;
                 saveCalendarRows();
                 $circle.css('background',c);
                 popClose();
+                try{ _pgUndo.offer(g.id,{lead:_cLbl,colors:{prev:_wasC,next:c}}); }catch(_u){}
                 updateCalHeaders();
                 updateStaffingHeaders();
                 updateSiteHeaders(); updateUnschedHeaders();
@@ -16146,8 +16796,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           validateCalRow(ri,$fdPicker,$ldPicker);
           rebuildCalSection();
           rebuildStaffingSection();
-        },{width:'120px'});
+        },{width:'96px',typeable:true,placeholder:'Aug 3, 2026'});
         $fdTd.append($fdPicker);
+        addCalCopy($fdTd, ri, 'First Day',
+          function(row){ return row?row.firstDay:''; },
+          function(row,val){ if(row.firstDay===val) return false; row.firstDay=val; return true; });
         $tr.append($fdTd);
 
         // Last Day cell
@@ -16158,15 +16811,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           validateCalRow(ri,$fdPicker,$ldPicker);
           rebuildCalSection();
           rebuildStaffingSection();
-        },{width:'120px'});
+        },{width:'96px',typeable:true,placeholder:'Aug 3, 2026'});
         $ldTd.append($ldPicker);
+        addCalCopy($ldTd, ri, 'Last Day',
+          function(row){ return row?row.lastDay:''; },
+          function(row,val){ if(row.lastDay===val) return false; row.lastDay=val; return true; });
         $tr.append($ldTd);
 
         // Price per Hour cell — per-calendar editable currency (tied to this row / Calendar ID), defaults to $86
         var $ppTd=$('<td>').css(Object.assign({},csTdStyle,{minWidth:'96px',padding:'2px 4px'}));
         var $ppWrap=$('<div>').css({display:'flex',alignItems:'center',gap:'1px',borderRadius:'4px',border:'1px solid #dde3ea',background:'#f7f9fc',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',padding:'0 5px'});
         $ppWrap.append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'var(--tx2)',flexShrink:'0'}).text('$'));
-        var $ppInp=$('<input type="text" inputmode="decimal" autocomplete="off">').css({width:'58px',border:'none',background:'transparent',fontSize:'11px',outline:'none',padding:'3px 1px',color:'#212529'}).val(row.pricePerHour||'86.00');
+        var $ppInp=$('<input type="text" inputmode="decimal" autocomplete="off">').css({width:'46px',border:'none',background:'transparent',fontSize:'11px',outline:'none',padding:'3px 1px',color:'#212529'}).val(row.pricePerHour||'86.00');
         (function(ppRi){
           $ppInp.on('input',function(){
             var v=$(this).val().replace(/[^0-9.]/g,'');
@@ -16191,7 +16847,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         })(ri);
         $ppWrap.append($ppInp);
         $ppTd.append($ppWrap);
-        $tr.append($ppTd);
+        addCalCopy($ppTd, ri, 'Price/Hr',
+          function(row){ return row?String(row.pricePerHour==null?'':row.pricePerHour):''; },
+          function(row,val){ if(String(row.pricePerHour==null?'':row.pricePerHour)===val) return false; row.pricePerHour=val; return true; });
+        // (Price/Hr is appended after Meal Breaks — see the calculated columns below)
 
         // Meal Breaks cell — per-calendar. Checkbox + live label. Checked = Billable (full hours);
         // unchecked = Non-Billable (the formula meal break is deducted from this calendar's Staffing
@@ -16276,7 +16935,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         (function(gRi){ $nbGear.on('click',function(e){ e.stopPropagation(); e.preventDefault(); openNBSettings(calendarRows[gRi], this); }); })(ri);
         $bilCell.append($nbGear);
         $bilTd.append($bilCell);
+        // the whole Meal Break configuration travels, not just the checkbox
+        addCalCopy($bilTd, ri, 'Meal Breaks',
+          function(row){ return row?{billable:!!row.billable, nb:row.nbBreaks?JSON.parse(JSON.stringify(row.nbBreaks)):null}:null; },
+          function(row,val){
+            if(!val) return false;
+            var same=(!!row.billable===!!val.billable) && JSON.stringify(row.nbBreaks||null)===JSON.stringify(val.nb||null);
+            if(same) return false;
+            row.billable=!!val.billable;
+            if(val.nb) row.nbBreaks=JSON.parse(JSON.stringify(val.nb)); else delete row.nbBreaks;
+            return true;
+          });
         $tr.append($bilTd);
+        $tr.append($ppTd);
+
+        // Read-only calculated columns, straight from the Program Summary's own figures
+        // (pgCalCalcGet) — no second calculation path, so they cannot drift.
+        (function(capturedCalId){
+          var _cc=pgCalCalcGet(_calcSnap, capturedCalId);
+          var _map={site:'staffingHours', unalloc:'unallocatedHours', total:'totalHours'};
+          function calcTd(kind){
+            var $td=$('<td class="pg-cal-calc">')
+              .attr('data-calc-cal', String(capturedCalId))
+              .attr('data-calc-kind', kind)
+              .css(Object.assign({},csTdStyle,{textAlign:'right',whiteSpace:'nowrap',padding:'4px 10px',color:'#212529'}));
+            var v=_cc?_cc[_map[kind]]:null;
+            $td.text((v==null||!isFinite(v))?'\u2014':(kind==='amount'?pgFmtAmt(v):pgFmtHours(v)));   // module-level formatters
+            return $td;
+          }
+          $tr.append(calcTd('site'), calcTd('unalloc'), calcTd('total'), calcTd('amount'));
+          setTimeout(function(){ pgCalcCellsRefresh(g); },0);   // fill once the table is attached
+        })((calendarRows[ri]&&calendarRows[ri].calId)!=null?calendarRows[ri].calId:row.calId);
         // Del button cell — matches Site Breakdown style
         var $delTd=$('<td>').css(Object.assign({},csTdStyle,{textAlign:'center',width:'46px',background:'#fafafa',padding:'4px 6px',verticalAlign:'middle',whiteSpace:'nowrap'}));
         var $delBtn=$('<button type="button" title="Delete row">').text('Del').css({
@@ -16287,6 +16976,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $delBtn.on('mouseenter',function(){$(this).css({background:'#ff4d4f',borderColor:'#ff4d4f',color:'#fff'});});
         $delBtn.on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
         (function(ri2){$delBtn.on('click',function(){
+          try{ _pgUndo.begin(g.id); }catch(_u){}
+          var _cnm=String((calendarRows[ri2]&&calendarRows[ri2].name)||'').trim()||('Calendar '+(ri2+1));
           if(calendarRows.length===1){
             calendarRows[0]={name:'',firstDay:'',lastDay:'',color:'#ffffff',pricePerHour:'86.00',billable:true};
           } else {
@@ -16297,15 +16988,99 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           rebuildCalSection();
           rebuildStaffingSection();
           $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection());
+          try{ _pgUndo.offer(g.id,{lead:_cnm,tail:' removed.'}); }catch(_u){}
         });})(ri);
         $delTd.append($delBtn);
         $tr.append($delTd);
 
         $tbody.append($tr);
       });
+
+      // ── Planning Guide total row: mirrors the Summary's guide total row ──
+      (function(){
+        var nCal=(calendarRows||[]).length;
+        var hs=[]; $tbl.find('thead th').each(function(){ hs.push($(this).text()); });
+        var iTot=hs.indexOf('Total'), iAmt=hs.indexOf('Amount');
+        if(iTot<0||iAmt<0) return;
+        var $tr=$('<tr class="pg-cal-total-row">');
+        var base={border:'1px solid #dee2e6',padding:'5px 10px',fontSize:'11px',background:'#f0f4f8',fontWeight:'700',color:'#212529'};
+        $tr.append($('<td>').attr('colspan',iTot).css(Object.assign({},base,{textAlign:'left'}))
+          .text('Planning Guide ('+nCal+' program'+(nCal===1?'':'s')+')'));
+        $tr.append($('<td class="pg-cal-total-hours">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
+        $tr.append($('<td class="pg-cal-total-amount">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
+        for(var k=iAmt+1;k<hs.length;k++) $tr.append($('<td>').css(base));
+        $tbl.append($('<tfoot>').append($tr));   // footer, not a body row
+      })();
+
       $tbl.append($tbody);
       $scroll.append($tbl);
       return $scroll;
+    }
+
+    // ── "..." copy control for Program Calendar columns (Staffing-Hours styling) ──
+    // Reveals on cell hover in the upper-right, never covering or shifting the field, and
+    // offers one option: copy this cell's value down the same column for every calendar.
+    // ONE portal node for the whole app: this runs on every guide-detail rebuild, so
+    // creating a fresh menu here would leak a body node per render (t5 caught exactly that).
+    var $calCopyMenu=$('body > .pg-cal-copy-menu').first();
+    if(!$calCopyMenu.length){
+      $calCopyMenu=$('<div class="sf-action-menu pg-cal-copy-menu">').css({
+        position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',
+        borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',
+        display:'none',fontSize:'12px'
+      });
+      $('body').append($calCopyMenu);
+    }
+    function closeCalCopyMenu(){ $calCopyMenu.hide(); $(document).off('click._pgcalcopy'); }
+    function addCalCopy($td, ri, colLabel, readVal, applyVal){
+      if(_pgvCur.mode==='view') return;            // locked View stays entirely read-only
+      $td.css({position:'relative'});
+      var $dots=$('<div class="pg-cal-copy-dots">').css({
+        position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#adb5bd',
+        cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',
+        userSelect:'none',lineHeight:'1',zIndex:'5'
+      }).text('\u2026');
+      $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});})
+           .on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
+      $td.on('mouseenter',function(){ $dots.show(); }).on('mouseleave',function(){ $dots.hide(); });
+      $dots.on('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        closeCalCopyMenu(); $calCopyMenu.empty();
+        var rows=calendarRows||[];
+        var n=rows.length;
+        var $item=$('<div>').css({padding:'6px 10px',cursor:'pointer',whiteSpace:'nowrap',borderRadius:'4px'})
+          .text('Copy to '+colLabel+' across all program calendars ('+n+')')
+          .on('mouseenter',function(){$(this).css('background','#f0f6ff');})
+          .on('mouseleave',function(){$(this).css('background','');})
+          .on('click',function(ev){
+            ev.stopPropagation();
+            closeCalCopyMenu();
+            try{ _pgUndo.begin(g.id); }catch(e2){}   // one transaction down the whole column
+            var val=readVal(rows[ri]);
+            var hit=0;
+            rows.forEach(function(row,i){
+              if(!row) return;
+              if(applyVal(row, val, i)) hit++;     // returns true only when it actually changed
+            });
+            saveCalendarRows();
+            try{ refreshCalSetupTable(); }catch(e2){}   // rebuild THIS table, not just its neighbours
+            try{ _pgHist.begin(g.id); }catch(e2){}   // ONE bulk record, not one per calendar
+            try{ _pgHist.evt(g.id,{ kind:'edit',
+              action:'Copied '+colLabel+' across '+n+' Program Calendar'+(n===1?'':'s'),
+              desc:(val==null||val==='')?'':String(val) }); }catch(e2){}
+            rebuildCalSection();
+            try{ refreshSummary(g); }catch(e2){}
+            try{ rebuildStaffingSection(); }catch(e2){}
+            $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection());
+            try{ _pgUndo.offer(g.id,{lead:colLabel,tail:' copied to '+n+' program calendar'+(n===1?'':'s')+'.'}); }catch(e2){}
+          });
+        $calCopyMenu.append($item);
+        var r=$dots[0].getBoundingClientRect();
+        var lft=Math.min(r.left, window.innerWidth-320);
+        $calCopyMenu.css({top:(r.bottom+4)+'px',left:Math.max(4,lft)+'px'}).show();
+        setTimeout(function(){ $(document).on('click._pgcalcopy',closeCalCopyMenu); },0);
+      });
+      $td.append($dots);
     }
 
     function validateCalRow(ri,$fdPicker,$ldPicker){
@@ -16406,6 +17181,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $csTableWrap.append($addCalBtn);
     $calSetupSection.append($csTableWrap);
 
+    // ── Collapse / expand (display only: no data change, no History entry) ──
+    function buildCalSummary(){
+      $calSummary.empty();
+      var rows=calendarRows||[];
+      var lead=(rows.length>1?' ('+rows.length+')':'')+': ';   // count only when more than one
+      $calSummary.append($('<span>').text(lead));
+      rows.forEach(function(r,i){
+        if(i) $calSummary.append($('<span>').text('\u2003'));   // spacing, not commas
+        var col=r.color||'#ffffff';
+        $calSummary.append($('<span draggable="false" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;background:'+col+';border:1px solid rgba(0,0,0,.25);">'));
+        $calSummary.append($('<span draggable="false">').text((r.name&&r.name.trim())?r.name.trim():('Calendar '+(i+1))));
+      });
+    }
+    function applyCalCollapse(){
+      var collapsed=!!_pgCalCollapse[String(g.id)];
+      // keep the section's width identical in both states: the table still lays out
+      // (so width:fit-content measures the same) but takes no height and is hidden
+      if(collapsed) $csTableWrap.css({height:'0',overflow:'hidden',visibility:'hidden'});
+      else $csTableWrap.css({height:'',overflow:'',visibility:''});
+      if(collapsed) buildCalSummary();
+      $calSummary.toggle(collapsed);
+      $calToggle.html(collapsed?'&#8964;&#8964;':'&#8963;&#8963;')   // ⌄⌄ expand / ⌃⌃ collapse
+        .attr('title', collapsed?'Expand Program Calendars':'Collapse Program Calendars')
+        .attr('aria-label', collapsed?'Expand Program Calendars':'Collapse Program Calendars')
+        .attr('aria-expanded', collapsed?'false':'true');
+    }
+    $calToggle.on('click',function(e){
+      e.preventDefault(); e.stopPropagation();
+      _pgCalCollapse[String(g.id)]=!_pgCalCollapse[String(g.id)];
+      applyCalCollapse();
+    });
+    applyCalCollapse();
+
     function refreshCalSetupTable(){
       $csTableContent.remove();
       $csTableContent=buildCalSetupTable();
@@ -16426,7 +17234,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     // ── Site Breakdown section (one card per Program Calendar; rows keyed by Calendar ID) ──
     function buildSiteCard(calId, calLabel, calColor, isPrimary){
-    var $section=$('<div class="card shadow-sm rounded-2 mt-2 site-cal-card" style="overflow:visible;width:fit-content;min-width:100%;border:1px solid #e9ecef;border-left:3px solid '+(calColor||'#ffffff')+';">').attr('data-site-cal',String(calId));
+    var $section=$('<div class="card shadow-sm rounded-2 mt-2 site-cal-card" style="overflow:visible;width:fit-content;max-width:100%;border:1px solid #e9ecef;border-left:3px solid '+(calColor||'#ffffff')+';">').attr('data-site-cal',String(calId));
 
     // Section header — "Site Breakdown" + this calendar's color circle and name
     var $secHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;display:flex;align-items:center;flex-wrap:wrap;">');
@@ -16490,7 +17298,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $opt=$('<div class="sb-pod-color-opt">').css({width:'22px',height:'22px',background:c2,border:isSel?'1.5px solid #bbb':'1px solid rgb(210,210,210)',borderRadius:'50%',cursor:'pointer'});
         if(isSel) $opt.css('box-shadow','inset 0 0 0 2px rgba(0,0,0,0.18)');
         $opt.on('mouseenter',function(){ if(!isSel) $(this).css('border','1.5px solid #999'); }).on('mouseleave',function(){ if(!isSel) $(this).css('border','1px solid rgb(210,210,210)'); });
-        $opt.on('click',function(e){ e.stopPropagation(); pod.color=c2; savePods(); $anchor.css('background',c2); $pop.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing(); });
+        $opt.on('click',function(e){
+          e.stopPropagation();
+          var _was=pod.color;
+          try{ _pgUndo.begin(g.id); }catch(_u){}
+          pod.color=c2; savePods(); $anchor.css('background',c2); $pop.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing();
+          try{ _pgUndo.offer(g.id,{lead:(String(pod.name||'').trim()||'POD')+' color',colors:{prev:_was,next:c2}}); }catch(_u){}
+        });
         $grid.append($opt);
       });
       $pop.append($grid); $('body').append($pop);
@@ -16542,8 +17356,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         refreshButtons();   // recompute _updOn: non-blank + unique name, and actually dirty
         if(!_updOn) return false;
         var nm=String(pend.name||'').trim();
+        try{ _pgUndo.begin(g.id); }catch(_u){}
+        var _dropped=orig.ids.length-pend.ids.length;
         pod.name=nm; pod.schoolIds=pend.ids.slice();
         savePods(); $ov.remove(); refreshTable(); refreshSummary(g); _podRefreshStaffing();
+        try{ _pgUndo.offer(g.id, (_dropped>0)
+          ? {head:_dropped+' school'+(_dropped===1?'':'s')+' removed from ',lead:nm,tail:'.'}
+          : {lead:nm,tail:' updated.'}); }catch(_u){}
         return true;
       }
       function _podTryClose(){
@@ -16629,7 +17448,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function circle(color){ return $('<span class="sb-pod-circle">').css({display:'inline-block',width:'12px',height:'12px',borderRadius:'50%',background:color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}); }
       function item(){ return $('<div>').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 6px',borderRadius:'5px',cursor:'pointer',color:'#212529'}).on('mouseenter',function(){$(this).css('background','#eef2f7');}).on('mouseleave',function(){$(this).css('background','transparent');}); }
       function cap(s){ s=String(s||''); return s? s.charAt(0).toUpperCase()+s.slice(1) : s; }
-      function assign(pod){ podAssignSchools(pods, selIds, pod); savePods(); _sbPodMenuClose(); _sbPodSelClear(); refreshTable(); refreshSummary(g); _podRefreshStaffing(); }
+      function assign(pod, undoDesc){
+        var _n=selIds.length;
+        try{ _pgUndo.begin(g.id); }catch(e){}   // membership moves several rows at once
+        podAssignSchools(pods, selIds, pod); savePods(); _sbPodMenuClose(); _sbPodSelClear(); refreshTable(); refreshSummary(g); _podRefreshStaffing();
+        try{ _pgUndo.offer(g.id, undoDesc || (pod
+          ? {head:_n+' school'+(_n===1?'':'s')+' assigned to ',lead:pod.name,tail:'.'}
+          : {text:_n+' school'+(_n===1?'':'s')+' removed from their PODs.'})); }catch(e){}
+      }
       // ── Inline pod editing ── One pod row at a time can be in edit mode (editingId); opening Edit on
       // another pod discards the previous unsaved edit. Edit mode swaps the name for a focused text field,
       // adds the app's inline "×" delete control, and shows Cancel / Unassign Schools / Update under the row.
@@ -16663,7 +17489,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $bar.append($cancelB);
             if(cnt>0){
               $bar.append(smallBtn('Unassign Schools',false).addClass('sb-pod-edit-unassign').css('color','#b26a00').on('click',function(e){
-                e.stopPropagation(); p.schoolIds=[]; editingId=null; _podAfterDataChange(); rebuild();   // unassign and leave edit mode
+                e.stopPropagation();
+                try{ _pgUndo.begin(g.id); }catch(_u){}
+                var _un=(p.schoolIds||[]).length;
+                p.schoolIds=[]; editingId=null; _podAfterDataChange(); rebuild();   // unassign and leave edit mode
+                try{ _pgUndo.offer(g.id,{head:_un+' school'+(_un===1?'':'s')+' removed from ',lead:p.name,tail:'.'}); }catch(_u){}
               }));
             }
             $bar.append($updateB);
@@ -16682,8 +17512,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $del.on('click',function(e){
               e.stopPropagation();
               showConfirmPopup('Delete \u201c'+p.name+'\u201d?','Delete',true,function(){
+                try{ _pgUndo.begin(g.id); }catch(_u){}
+                var _pn=p.name;
                 var ix=pods.indexOf(p); if(ix>=0) pods.splice(ix,1);   // schools become unassigned; their rows stay
                 editingId=null; _podAfterDataChange(); rebuild();
+                try{ _pgUndo.offer(g.id,{lead:_pn,tail:' deleted.'}); }catch(_u){}
               }, $('<div>').css({fontSize:'12px',color:'#495057'}).text('Schools assigned to this pod will become unassigned.'));
               // canceling the confirmation stays in edit mode and changes nothing
             });
@@ -16709,7 +17542,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var ex=null; pods.forEach(function(p){ if(p.name.toLowerCase()===nm.toLowerCase()) ex=p; });
             var pod=ex||{ id:_genEntityId('pod_'), name:nm, color:newColor, schoolIds:[] };
             if(!ex) pods.push(pod);
-            assign(pod);
+            assign(pod, ex?null:{lead:nm,tail:' created.'});
           });
           $list.append($cr);
         }
@@ -17007,21 +17840,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _podStretchList.forEach(function(st){ _podStretchStart[st.start]=st; for(var i=st.start+1;i<=st.end;i++) _podRowCovered[i]=true; });
 
       var $scroll=$('<div style="overflow-x:auto;">');
-      var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+      // content-based width: the table hugs its columns, so collapsing Students shrinks it by
+      // exactly the removed columns and expanding restores only what they need. Anything wider
+      // than the viewport scrolls horizontally rather than compressing values.
+      var $tbl=$('<table>').css({borderCollapse:'collapse',width:'max-content',fontSize:'11px'});
 
       // Header rows
       var $thead=$('<thead>');
 
       // Row 1: group headers
       var $hr1=$('<tr>');
+      var _stuKey=String(g.id)+'|'+String(calId);
+      var _stuCollapsed=!!_sbStuCollapse[_stuKey];
+      // display-only re-render of THIS card only: values come straight back from data
+      function _stuRerender(){ $section.replaceWith(buildSiteCard(calId, calLabel, calColor, isPrimary)); }
       var headers1=[
         {label:'#', colspan:1, rowspan:2},
-        {label:'School Name', colspan:1, rowspan:2, textAlign:'left'},
-        {label:'# of Students', colspan:_coachRoles.length},
-        {label:'Total', html:'Total<br># of Students Per Site', colspan:1, rowspan:2},
+        {label:'School Name', colspan:1, rowspan:2, textAlign:'left'}
+      ];
+      if(_stuCollapsed){
+        headers1.push({label:'', colspan:1, rowspan:2, isStuCollapsed:true});
+      } else {
+        headers1.push({label:'# of Students', colspan:_coachRoles.length, isStuGroup:true});
+        headers1.push({label:'Total', html:'Total<br># of Students Per Site', colspan:1, rowspan:2});
+      }
+      headers1=headers1.concat([
         {label:'# of Coaches', colspan:_coachRoles.length},
         {label:'Total', html:'Total<br># of Coaches Per Site', colspan:1, rowspan:2}
-      ];
+      ]);
       if(_podOn) headers1.unshift({label:'Pod', colspan:1, rowspan:2, isPod:true});   // dedicated Pod column, left of #
       if(_nonCoachRoles.length){
         headers1.push({label:'# of Specialized Staff', colspan:_nonCoachRoles.length});
@@ -17031,6 +17877,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       headers1.forEach(function(h){
         var $th=$('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:h.textAlign||'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:h.html?'normal':'nowrap'});
         if(h.isPod) $th.css({width:'1px',whiteSpace:'nowrap',padding:'5px 4px'});
+        if(h.isStuGroup){
+          // Identical to the "# of Coaches" grouped header: the th keeps the shared base
+          // css above (padding, background, colour, weight, size, borders, alignment).
+          // The only difference is the chevron, carried in an inline wrapper so the cell
+          // box and text metrics stay the same.
+          if(h.colspan>1) $th.attr('colspan',h.colspan);
+          if(h.rowspan>1) $th.attr('rowspan',h.rowspan);
+          var $lbl=$('<span>').text(h.label);
+          var $cv=$('<button type="button" class="sb-stu-toggle" title="Collapse Students" aria-label="Collapse Students" aria-expanded="true" style="flex:0 0 auto;background:none;border:none;padding:0 0 0 6px;line-height:1;cursor:pointer;color:#6c757d;font-size:11px;letter-spacing:-1px;">').html('&#187;&#171;');
+          $cv.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+          $cv.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _sbStuCollapse[_stuKey]=true; _stuRerender(); });
+          $th.empty().append($('<span style="display:inline-flex;align-items:center;">').append($lbl,$cv));
+          $hr1.append($th); return;
+        }
+        if(h.isStuCollapsed){
+          // the narrow column standing in for the whole Students section
+          if(h.colspan>1) $th.attr('colspan',h.colspan);
+          if(h.rowspan>1) $th.attr('rowspan',h.rowspan);
+          $th.css({width:'1px',padding:'4px 2px',verticalAlign:'top'});
+          var $cv2=$('<button type="button" class="sb-stu-toggle" title="Expand Students" aria-label="Expand Students" aria-expanded="false" style="background:none;border:none;padding:0;line-height:1;cursor:pointer;color:#6c757d;font-size:11px;letter-spacing:-1px;">').html('&#171;&#187;');
+          $cv2.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+          $cv2.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _sbStuCollapse[_stuKey]=false; _stuRerender(); });
+          $th.empty().append($cv2);
+          $hr1.append($th); return;
+        }
         if(h.html) $th.html(h.html); else $th.text(h.label);
         if(h.colspan>1)$th.attr('colspan',h.colspan);
         if(h.rowspan>1)$th.attr('rowspan',h.rowspan);
@@ -17040,9 +17911,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Row 2: sub-headers (coach names × 2 for students+coaches, then non-coach names)
       var $hr2=$('<tr>');
-      _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(r.name||r.key)); });
-      _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(r.name||r.key)); });
-      _nonCoachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(r.name||r.key)); });
+      if(!_stuCollapsed) _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
+      _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
+      _nonCoachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
       $thead.append($hr2);
       $tbl.append($thead);
 
@@ -17092,7 +17963,98 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             updateTotalRow($tbody);
             updateTotalRow($tbody);
           });
-          return $td.append($inp);
+          $td.append($inp);
+          // Hover-only "..." copy menu — multi-school Site Breakdowns only, Edit mode only.
+          if(siteRows.length>1 && _pgvCur.mode!=='view'){
+            // side-by-side, never over the value (matches the Staffing Hours "..."): the cell
+            // becomes a flex row and the trigger keeps a reserved slot, so revealing it on
+            // hover shifts neither the input nor the column width.
+            $td.css({position:'relative'});
+            $td.contents().wrapAll($('<div class="sb-cell-flex">').css({
+              display:'flex', alignItems:'center', gap:'2px', width:'100%'
+            }));
+            $td.find('.sb-cell-flex > input').css({flex:'1 1 auto', minWidth:'0'});
+            var $dots=$('<button type="button" class="sb-cell-dots">').css({
+              flex:'0 0 auto', width:'12px', opacity:'0',
+              background:'none', border:'none', padding:'0', lineHeight:'1',
+              cursor:'pointer', color:'#6c757d', fontSize:'11px', transition:'opacity .12s'
+            }).html('&#8943;');
+            $td.on('mouseenter',function(){ $dots.css('opacity','1'); })
+               .on('mouseleave',function(){ $dots.css('opacity','0'); });
+            (function(capKey, capRow, capIdx){
+              $dots.data('sbCopyApi', { build:function(item, $m){
+                var _roles=getRoles(g.id);
+                var _role=_roles.filter(function(x){ return x.key===capKey; })[0]
+                       || _roles.filter(function(x){ return capKey.indexOf(x.key)>=0; })[0];
+                var roleName=_role?pgRoleName(_role,_roles):capKey;
+                var val=String(capRow[capKey]==null?'':capRow[capKey]);
+                var _det=guideDetails[String(g.id)]||{};
+                var calRows=_det.calendarRows||[];
+                var thisCal=calRows.filter(function(cr){ return String(cr.calId)===String(calId); })[0];
+                var calName=(thisCal&&thisCal.name&&thisCal.name.trim())||'Calendar';
+                // real school rows only: no blanks, no totals, no POD labels
+                var schools=siteRows.filter(function(x){ return x && String(x.school||'').trim()!==''; });
+                var n1=schools.length;   // real schools only — never count empty placeholder rows
+
+                var $lbl1=$('<span>').append(
+                  $('<span>').text('Copy to '+roleName+' in all schools ('+n1+') '),
+                  $('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+((thisCal&&thisCal.color)||'#ffffff')+';border:1px solid rgba(0,0,0,.25);">'),
+                  $('<span>').text(' '+calName));
+                $m.append(item($lbl1, function(){
+                  var hit=0;
+                  try{ _pgUndo.begin(g.id); }catch(e){}   // one transaction across every school
+                  var live=siteRowsFor(g, calId) || siteRows;   // never write back a stale array
+                  var srcVal=String((live[capIdx]&&live[capIdx][capKey]!=null)?live[capIdx][capKey]:val);
+                  live.forEach(function(row,idx){
+                    if(idx===capIdx) return;                   // source keeps its own value
+                    if(!row || String(row.school||'').trim()==='') return;
+                    row[capKey]=srcVal; hit++;
+                  });
+                  saveSiteRows();
+                  _stuRerender();
+                  try{ refreshSummary(g); }catch(e){}
+                  try{ _pgHist.begin(g.id); }catch(e){}   // swallow the automatic save-diff
+                  try{ _pgHist.evt(g.id, { kind:'edit',
+                    action:'Copied '+roleName+' to all schools',
+                    desc:calName+' \u00b7 '+hit+' schools \u00b7 value '+srcVal }); }catch(e){}
+                  try{ _pgUndo.offer(g.id,{lead:roleName,tail:' copied to '+hit+' school'+(hit===1?'':'s')+'.'}); }catch(e){}
+                }));
+
+                if(calRows.length>1){
+                  var total=0;
+                  calRows.forEach(function(cr){
+                    var rows=(cr.calId===calId)?siteRows:(((_det.siteRowsByCal||{})[String(cr.calId)])||[]);
+                    rows.forEach(function(x){ if(x && String(x.school||'').trim()!=='') total++; });
+                  });
+                  $m.append(item($('<span>').text('Copy to '+roleName+' in all calendars'), function(){
+                    var hit=0;
+                    try{ _pgUndo.begin(g.id); }catch(e){}   // one transaction across every calendar
+                    calRows.forEach(function(cr){
+                      var rows=(String(cr.calId)===String(calId))?siteRows:(((_det.siteRowsByCal||{})[String(cr.calId)])||[]);
+                      rows.forEach(function(x){
+                        if(!x || String(x.school||'').trim()==='') return;
+                        x[capKey]=val; hit++;                    // stable role KEY, never the label
+                      });
+                    });
+                    saveSiteRows();
+                    try{ renderCalGroupsSection && $('#calgroups-section-'+g.id).replaceWith(renderCalGroupsSection()); }catch(e){ _stuRerender(); }
+                    try{ refreshSummary(g); }catch(e){}
+                    try{ _pgHist.begin(g.id); }catch(e){}   // swallow the automatic save-diff
+                    try{ _pgHist.evt(g.id, { kind:'edit',
+                      action:'Copied '+roleName+' across all calendars',
+                      desc:hit+' schools \u00b7 value '+val }); }catch(e){}
+                    try{ _pgUndo.offer(g.id,{lead:roleName,tail:' copied to all calendars.'}); }catch(e){}
+                  }));
+                }
+              }});
+            })(key, r, ri);
+            $dots.on('click',function(e){
+              e.preventDefault(); e.stopPropagation();
+              sbOpenCopyMenu($dots, key, r, ri);
+            });
+            $td.find('.sb-cell-flex').append($dots);
+          }
+          return $td;
         }
 
         // School name
@@ -17177,7 +18139,78 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // Position relative to input on open
             function positionDd(){
               var rect=$inp[0].getBoundingClientRect();
-              $dd.css({top:(rect.bottom+2)+'px',left:rect.left+'px',width:Math.max(rect.width,260)+'px'});
+              // The search field keeps its own width. The RESULTS list is at least as wide as
+              // the School Name column and grows to fit the longest visible name, so names
+              // never wrap. width:max-content does the growing; min-width sets the floor and
+              // max-width keeps it on screen.
+              var cellW=0;
+              try{ cellW=$nameTd[0].getBoundingClientRect().width||0; }catch(e){}
+              var floor=Math.max(rect.width, cellW, 260);
+              var room=Math.max(200, window.innerWidth-rect.left-12);
+              $dd.css({
+                top:(rect.bottom+2)+'px', left:rect.left+'px',
+                width:'max-content', minWidth:floor+'px', maxWidth:room+'px'
+              });
+            }
+            // ── Multi-select helpers: membership is read straight from siteRows, and
+            // add/remove reuse the existing single-add and row-delete behaviour. ──
+            function sbHasSchool(cds){
+              var rows=siteRowsFor(g, calId)||siteRows||[];
+              return rows.some(function(x){ return x && !x.deleted && String(x.schoolCds||'')===String(cds); });
+            }
+            function sbSyncDdChecks(){
+              try{
+                $dd.find('input[type=checkbox]').each(function(){
+                  var c=$(this).attr('data-cds');
+                  if(c!=null) $(this).prop('checked', sbHasSchool(c));
+                });
+              }catch(e){}
+            }
+            function sbToggleSchool(sc, add){
+              var rows=siteRowsFor(g, calId)||siteRows;
+              if(!rows) return;
+              try{ _pgUndo.begin(g.id); }catch(e){}   // adding or removing a school is not a Command/Ctrl+Z edit
+              if(add){
+                // reuse the single-school add: fill the first empty row, else append one
+                var target=null;
+                for(var i=0;i<rows.length;i++){ if(rows[i] && !rows[i].deleted && !rows[i].school){ target=rows[i]; break; } }
+                if(!target){ target={school:''}; rows.push(target); }
+                target.school=sc.name; target.schoolCds=sc.cds; target.schoolAbbr=sc.abbr;
+                // keep a trailing empty row so the search box (and this list) survive
+                if(!rows.some(function(x){ return x && !x.deleted && !x.school; })) rows.push({school:''});
+              } else {
+                for(var j=rows.length-1;j>=0;j--){
+                  if(rows[j] && String(rows[j].schoolCds||'')===String(sc.cds)){ rows.splice(j,1); break; }
+                }
+                if(!rows.length) rows.push({school:''});
+              }
+              saveSiteRows();
+              try{ _pgHist.begin(g.id); }catch(e){}      // one clear record, no rerender dupes
+              try{ _pgHist.evt(g.id,{ kind:'edit',
+                action:(add?'Added \u201c':'Removed \u201c')+sc.name+(add?'\u201d to ':'\u201d from ')+(calLabel||'Site Breakdown'),
+                desc:sc.abbr||'' }); }catch(e){}
+              try{ _pgUndo.offer(g.id, add?{head:'School ',lead:sc.name,tail:' added.'}
+                                          :{lead:sc.name,tail:' removed.'}); }catch(e){}
+              // Rebuilding the table destroys this portalled list (the row's input is
+              // replaced), so re-open it on the new row's search box with the SAME query.
+              // The user sees one continuous list with the checkboxes re-derived from the
+              // updated Site Breakdown.
+              var _q=null; try{ _q=$inp.val(); }catch(e){}
+              try{ refreshTable(); }catch(e){ try{ _stuRerender(); }catch(e2){} }
+              try{ refreshSummary(g); }catch(e){}
+              setTimeout(function(){
+                try{
+                  // $tbody belongs to the OLD table (refreshTable replaces $tableContent),
+                  // so look in the wrapper that survives the rebuild.
+                  var $all=$tableWrap.find('input[placeholder*="chool"]');
+                  var $next=$all.filter(function(){ return !$(this).val(); }).first();
+                  if(!$next.length) $next=$all.last();
+                  if($next.length){
+                    $next.trigger('focus');
+                    if(_q!=null){ $next.val(_q); $next.trigger('input'); }
+                  }
+                }catch(e){}
+              },0);
             }
             function buildSchoolDd(q){
               $dd.empty();
@@ -17207,13 +18240,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var distName=abbrToDistrict[abbr]||abbr;
                 $dd.append($('<div>').css({fontSize:'9px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.07em',padding:'6px 10px 3px',color:'#6c757d',background:'#f8f9fa',borderBottom:'1px solid #e9ecef',position:'sticky',top:'0'}).text(distName+' ('+abbr+')'));
                 groups[abbr].forEach(function(s){
-                  var $item=$('<div>').css({padding:'5px 14px',fontSize:'12px',cursor:'pointer',color:'#212529'})
-                    .text(s.name)
+                  var $item=$('<div>').css({padding:'5px 14px',fontSize:'12px',cursor:'pointer',color:'#212529',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap'})
                     .on('mouseenter',function(){$(this).css('background','#f0f6ff');})
-                    .on('mouseleave',function(){$(this).css('background','');})
+                    .on('mouseleave',function(){$(this).css('background','');});
+                  // Checkbox state is DERIVED from the current Site Breakdown every render —
+                  // never a separate source of truth — so it stays right no matter how a
+                  // school was added or removed (search, row delete, import, another flow).
+                  var $cb=$('<input type="checkbox">').css({cursor:'pointer',flex:'0 0 auto',margin:'0',width:'13px',height:'13px',accentColor:'#0d6efd'})
+                    .attr('data-cds', String(s.cds))
+                    .prop('checked', sbHasSchool(s.cds));
+                  $item.append($cb, $('<span style="flex:1 1 auto;white-space:nowrap;">').text(s.name));
+                  $cb.on('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); sbToggleSchool(s, !$cb.prop('checked')); });
+                  $item
                     .on('mousedown',function(e){
                       e.preventDefault();
                       if(_schoolHideTimer){clearTimeout(_schoolHideTimer);_schoolHideTimer=null;}
+                      // Clicking the row keeps the ORIGINAL single-school behaviour: it fills
+                      // this row in place, including deliberately picking a school that is
+                      // already in the table (duplicates are allowed and get flagged). The
+                      // CHECKBOX is the multi-select control; the row click is not a toggle.
                       r.school=s.name; r.schoolCds=s.cds; r.schoolAbbr=s.abbr;
                       $dd.hide();
                       $(document).off('click._schoolDd');
@@ -17258,17 +18303,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Track which side was last edited to prevent circular updates
         var _lastEdit={};  // role.key → 'coaches' | 'students'
         var _stuInputs={};
-        _coachRoles.forEach(function(role){
-          var $stuCell=numCell(role.key);
-          var $stuInp=$stuCell.find('input');
-          $stuInp.val(r[role.key]||'');
-          _stuInputs[role.key]=$stuInp;
-          $tr.append($stuCell);
-        });
+        if(_stuCollapsed){
+          if(ri===0){
+            var $stuVert=$('<td class="sb-stu-vert">').attr('rowspan', siteRows.length+1).css({
+              border:'1px solid #dee2e6',background:'#f8f9fb',padding:'4px 2px',width:'1px',
+              textAlign:'center',verticalAlign:'middle',cursor:'pointer'
+            });
+            $stuVert.append($('<span style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px;font-weight:700;color:#6c757d;letter-spacing:.04em;">').text('Students'));
+            $stuVert.attr('title','Expand Students');
+            $stuVert.on('click',function(){ _sbStuCollapse[_stuKey]=false; _stuRerender(); });
+            $tr.append($stuVert);
+          }
+        } else {
+          _coachRoles.forEach(function(role){
+            var $stuCell=numCell(role.key);
+            var $stuInp=$stuCell.find('input');
+            $stuInp.val(r[role.key]||'');
+            _stuInputs[role.key]=$stuInp;
+            $tr.append($stuCell);
+          });
+        }
 
         // Total students (read-only)
         var $totalStudents=$('<input type="text" class="total-students" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'36px',fontWeight:'600'}).val(calcTotalStudents(r));
-        $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStudents));
+        if(!_stuCollapsed) $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStudents));
 
         // ── Coach counts — editable, one per coach role ──
         var _coachInputs={};
@@ -17302,8 +18360,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           saveSiteRows(); updateTotalRow($tbody);
         }
 
-        // Wire student inputs
+        // Wire student inputs (absent while the Students section is collapsed)
         _coachRoles.forEach(function(role){
+          if(!_stuInputs[role.key]) return;
           (function(capturedRole){
             var _stuTimer=null;
             _stuInputs[capturedRole.key].on('input',function(){
@@ -17372,10 +18431,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             .on('mouseleave',function(){$(this).css({background:'#fff1f0',borderColor:'#ffccc7',color:'#cf1322'});});
         (function(ri2){$del.on('click',function(){
             var _delSid=r.schoolId;
+            var _delNm=String((r&&r.school)||'').trim();
+            try{ if(_delNm) _pgUndo.begin(g.id); }catch(e){}   // removing a named school takes data with it
             siteRows.splice(ri2,1);
             if(_delSid!=null) podPurgeSchool(g, calId, _delSid, siteRows);   // deleted row → drop its pod assignment (unless a duplicate row still carries the id)
             if(siteRows.length===0) siteRows.push({school:''});
             saveSiteRows(); savePods(); refreshTable();
+            try{ if(_delNm) _pgUndo.offer(g.id,{lead:_delNm,tail:' removed.'}); }catch(e){}
           });})(ri);
         $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 6px',textAlign:'center',verticalAlign:'middle',background:'#fafafa',whiteSpace:'nowrap'}).append($del));
         $tbody.append($tr);
@@ -17391,9 +18453,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _ts=0,_tc=0,_tst=0;
       _coachRoles.forEach(function(role){
         var v=siteRows.reduce(function(s,r){ return s+(parseInt(r[role.key])||0); },0);
-        _ts+=v; $trow.append(tc(v).addClass('tot-stu-'+role.key));
+        _ts+=v;
+        if(!_stuCollapsed) $trow.append(tc(v).addClass('tot-stu-'+role.key));   // tallies still computed
       });
-      $trow.append(tc(_ts).addClass('tot-students'));
+      if(!_stuCollapsed) $trow.append(tc(_ts).addClass('tot-students'));
       _coachRoles.forEach(function(role){
         var v=siteRows.reduce(function(s,r){ return s+(parseInt(r['coaches_'+role.key])||0); },0);
         _tc+=v; $trow.append(tc(v).addClass('tot-c-'+role.key));
@@ -17420,6 +18483,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $tableWrap.append($tableContent);
     $tableWrap.append($addRowBtn);
     $section.append($tableWrap);
+    // Collapse for this Site Breakdown. Counts only real school rows: placeholders,
+    // totals, POD label/bracket rows and deleted rows are excluded.
+    (function(){
+      var $copy=$secHd.find('.sb-copyto-btn');
+      var apply=attachSectionCollapse({
+        key:g.id+'|site|'+calId, $hd:$secHd, $body:$tableWrap, label:'Site Breakdown',
+        summary:function($t){
+          var n=(siteRows||[]).filter(function(r){
+            if(!r||r.deleted) return false;
+            if(r.isTotal||r.isPodLabel||r.isBracket||r.kind==='pod'||r.kind==='total') return false;
+            var nm=(r.school&&(r.school.name||r.school))||r.name||'';
+            return String(nm).trim()!=='';
+          }).length;
+          $t.append($('<span>').text(' ('+n+' school'+(n===1?'':'s')+')'));
+        }
+      });
+      var _apply=apply;
+      apply=function(){ _apply(); if($copy.length) $copy.toggle(!_pgSecCollapse[g.id+'|site|'+calId]); };
+      $secHd.find('.pg-sec-toggle').off('click').on('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        _pgSecCollapse[g.id+'|site|'+calId]=!_pgSecCollapse[g.id+'|site|'+calId];
+        apply();
+      });
+      apply();
+    })();
     setTimeout(_podRefreshBrackets,0);   // brackets measure row geometry, so build after attach/layout
 
     var _refreshTableTimer=null;
@@ -17607,6 +18695,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $section.append($secHd);
 
       var $body=$('<div class="px-0 py-0">');
+      attachSectionCollapse({
+        key:'unalloc|'+g.id+'|'+calId, $hd:$secHd, $body:$body, label:'Unallocated Hours'
+      });
 
       // Allocated Hours table — uses the EXACT inline styles from the Site Breakdown table (header, cells, inputs, focus, read-only).
       // Column widths only: every column except Notes is compact (width:1% + nowrap → shrinks to content); Notes keeps the remaining flexible width.
