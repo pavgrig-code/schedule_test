@@ -10189,6 +10189,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $cvWrap.append($cvChk);
       $hd.append($cvWrap);
     }
+    // ─ Master Collapse/Expand — multi-calendar only, display-only. In separate view the pair
+    // drives every individual block; in Combined View it drives the one combined area. Icon
+    // state mirrors the blocks: all expanded → Collapse only, all collapsed → Expand only,
+    // mixed → both. Registry below is filled by each block's own apply().
+    var _blkReg=[]; var _mstRefresh=function(){};
+    var _cvKey=String(g.id)+'|__cv';
+    var $mstUp=null,$mstDn=null,$cvSum=null;
+    if(_validCalRows.length>1){
+      if(det.combinedView){
+        // collapsed-state list: divider after the Combined View control, then ● Name per
+        // calendar in order — the compact circle/name recipe from the collapsed Program
+        // Calendars summary. Informational only; ellipsis-bounded so it never reaches the
+        // master controls on the far right.
+        $cvSum=$('<span aria-hidden="true">').css({marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',flex:'1 1 0',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',alignSelf:'center',pointerEvents:'none',userSelect:'none',color:'#212529'}).attr('draggable','false');
+        _validCalRows.forEach(function(r,i){
+          if(i) $cvSum.append($('<span draggable="false">').text('\u2003'));   // spacing, not commas
+          var col=r.color||'#ffffff';
+          $cvSum.append($('<span draggable="false" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;background:'+col+';border:1px solid rgba(0,0,0,.25);">'));
+          $cvSum.append($('<span draggable="false">').text((r.name&&r.name.trim())?r.name.trim():('Calendar '+(_calRows.indexOf(r)+1))));
+        });
+        $cvSum.hide();
+        $hd.append($cvSum);
+      }
+      var _mstCss='margin-left:0;flex:0 0 auto;background:none;border:none;padding:0 2px;line-height:1;cursor:pointer;color:#6c757d;font-size:10px;';
+      var $mstWrap=$('<span>').css({marginLeft:'auto',flex:'0 0 auto',display:'inline-flex',alignItems:'center',gap:'6px',alignSelf:'center'});
+      $mstUp=$('<button type="button" class="pg-sec-toggle pg-calmst-collapse pg-view-ok" style="'+_mstCss+'">').html('&#8963;&#8963;')
+        .attr('title','Collapse all').attr('aria-label','Collapse all Program Calendars');
+      $mstDn=$('<button type="button" class="pg-sec-toggle pg-calmst-expand pg-view-ok" style="'+_mstCss+'">').html('&#8964;&#8964;')
+        .attr('title','Expand all').attr('aria-label','Expand all Program Calendars');
+      $mstWrap.append($mstUp).append($mstDn);
+      $hd.append($mstWrap);
+    }
     $section.append($hd);
     // Combined View calendar list — color circle + name + date range per Program Calendar (same style as the calendar headers).
     if(det.combinedView && _validCalRows.length>1){
@@ -11185,13 +11217,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
 
       // Sub-header for multi-calendar mode (single-calendar handled in main $hd above)
+      var $subHdr=null;
       if(_validCalRows.length>1){
-        var $subHdr=$('<div>').css({padding:'6px 14px',background:'#f0f4f8',fontSize:'11px',borderBottom:'1px solid #dee2e6',display:'flex',alignItems:'baseline',gap:'0',flexWrap:'wrap'});
+        $subHdr=$('<div>').css({padding:'6px 14px',background:'#f0f4f8',fontSize:'11px',borderBottom:'1px solid #dee2e6',display:'flex',alignItems:'baseline',gap:'0',flexWrap:'wrap'});
         $subHdr.attr('data-cal-hdr-idx', String(origIdx));
         $subHdr.append(buildCalHeaderEl(calRow.name,calRow.firstDay,calRow.lastDay,origIdx,calRow.color));
         $subHdr.append(_calVFBtn([{cr:calRow}]));
         $section.append($subHdr);
       }
+      // Collapse/Expand — display-only, per calendar, the shared section-chevron idiom.
+      // Lives on this calendar's own header: the sub-header when several calendars render
+      // separately, the main card header when there is exactly one.
+      var _blkKey=String(g.id)+'|'+String(calRow.calId!=null?calRow.calId:origIdx);
+      var _blkHdr=$subHdr||$hd;
+      var $blkTg=$('<button type="button" class="pg-sec-toggle pg-calblk-toggle pg-view-ok" style="margin-left:auto;flex:0 0 auto;background:none;border:none;padding:0 2px;line-height:1;cursor:pointer;color:#6c757d;font-size:10px;">');
+      _blkHdr.append($blkTg);
 
       var weekStart=toMonday(fd), weekEnd=toSunday(ld);
       var weeks=[], cur=new Date(weekStart);
@@ -11358,8 +11398,54 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $tbl.append($tbody);
       $scroll.append($tbl);
       $section.append($scroll);
+
+      // ─ Collapse/Expand for this Program Calendar — display-only, no History, no Undo ─
+      // Collapsed: the grid hides (DOM kept alive, so scroll position and filter state
+      // survive) and the Filter button is removed from the header. Expanding restores
+      // both exactly as the current mode (Edit or locked View) left them.
+      (function($tg,$hdrEl,$content,key,nm){
+        function apply(){
+          var col=!!_pgCalGridCollapse[key];
+          $content.toggle(!col);
+          $hdrEl.find('.cal-vf-btn').toggle(!col);
+          $tg.html(col?'&#8964;&#8964;':'&#8963;&#8963;')
+            .attr('title',(col?'Expand ':'Collapse ')+nm)
+            .attr('aria-label',(col?'Expand ':'Collapse ')+nm)
+            .attr('aria-expanded',col?'false':'true');
+        }
+        $tg.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgCalGridCollapse[key]=!_pgCalGridCollapse[key]; apply(); _mstRefresh(); });
+        _blkReg.push({key:key,apply:apply});
+        apply();
+      })($blkTg,_blkHdr,$scroll,_blkKey,calName);
     }); // end _calRowsWithIdx.forEach
     } // end else — standard individual per-calendar matrices
+
+    // ─ Master Collapse/Expand wiring — runs after the content exists in either mode ─
+    if(_validCalRows.length>1 && $mstUp){
+      var _cvContent=det.combinedView ? $section.children().not($hd) : null;
+      var _cvApply=function(){
+        if(!det.combinedView) return;
+        var col=!!_pgCalGridCollapse[_cvKey];
+        _cvContent.toggle(!col);
+        if($cvSum) $cvSum.toggle(col);   // the calendar list shows only while collapsed
+        _mstRefresh();
+      };
+      _mstRefresh=function(){
+        var keys=det.combinedView ? [_cvKey] : _blkReg.map(function(b){ return b.key; });
+        var n=keys.length, c=0;
+        keys.forEach(function(k){ if(_pgCalGridCollapse[k]) c++; });
+        $mstUp.toggle(c<n);   // something is expanded → Collapse all is meaningful
+        $mstDn.toggle(c>0);   // something is collapsed → Expand all is meaningful
+      };
+      var _mstSet=function(col){
+        if(det.combinedView){ _pgCalGridCollapse[_cvKey]=col; _cvApply(); }
+        else { _blkReg.forEach(function(b){ _pgCalGridCollapse[b.key]=col; b.apply(); }); _mstRefresh(); }
+      };
+      $mstUp.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _mstSet(true); });
+      $mstDn.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _mstSet(false); });
+      _cvApply();      // no-op in separate view; reapplies persisted combined state otherwise
+      _mstRefresh();   // initial icon state from the persisted maps
+    }
 
     // Debounce calendar hours refresh so multiple simultaneous triggers coalesce
     var _calHoursRaf=null;
@@ -14848,6 +14934,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $calSeg.append($('<span>').css({fontWeight:'600',fontSize:'12px',color:'#212529'}).text(calName));
       $hd.append($calSeg);
       $hd.append($('<span>').css({fontWeight:'700',fontSize:'13px',color:'#212529',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'}).text('Summary'));
+      // Collapse/Expand — display-only, per calendar, the shared section-chevron idiom
+      var _sumKey=String(g.id)+'|'+String(calId);
+      var $sumTg=$('<button type="button" class="pg-sec-toggle pg-sum-toggle pg-view-ok" style="margin-left:auto;flex:0 0 auto;background:none;border:none;padding:0 2px;line-height:1;cursor:pointer;color:#6c757d;font-size:10px;">');
+      $hd.append($sumTg);
       $card.append($hd);
 
       // Table: School Name | Staffing Hours
@@ -14888,12 +14978,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('School Name'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
       $hr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Amount'));
-      $tbl.append($('<thead>').append($hr));
+      var $sumThead=$('<thead>').append($hr);
+      $tbl.append($sumThead);
       var $tb=$('<tbody>');
 
       // School rows first (latest Site Breakdown name; hide schools with no hours for this calendar).
       _visTotals.forEach(function(st,vi){
-        var $sTr=$('<tr>');
+        var $sTr=$('<tr class="sum-school-row">');
         if(_sumPodOn){
           if(_sumStart[vi]) $sTr.append(_sumPodBracketTd(_sumStart[vi]));
           else if(!_sumCovered[vi]) $sTr.append(_sumPodEmptyTd('#ffffff'));
@@ -14940,6 +15031,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
 
       $tbl.append($tb); $scroll.append($tbl); $card.append($scroll);
+
+      // ─ Collapse/Expand for this Program Summary — display-only, no History, no Undo ─
+      // Collapsed: school rows AND their column-header row hide (no leftover space); the
+      // Total / Site Schedule / Unallocated Hours / Total rows stay, immediately below the
+      // header, and keep updating because refreshSummary rebuilds re-apply this state.
+      (function($tg,$thead,$body,key,nm){
+        function apply(){
+          var col=!!_pgSumCollapse[key];
+          $thead.toggle(!col);
+          $body.find('tr.sum-school-row').toggle(!col);
+          $tg.html(col?'&#8964;&#8964;':'&#8963;&#8963;')
+            .attr('title',(col?'Expand ':'Collapse ')+nm+' Summary')
+            .attr('aria-label',(col?'Expand ':'Collapse ')+nm+' Summary')
+            .attr('aria-expanded',col?'false':'true');
+        }
+        $tg.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgSumCollapse[key]=!_pgSumCollapse[key]; apply(); });
+        apply();
+      })($sumTg,$sumThead,$tb,_sumKey,calName);
       $container.append($card);
 
       // Roll this calendar's overall total (staffing hours + any Unallocated Hours) into the guide summary.
@@ -15607,6 +15716,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Program Calendars collapse state: display-only, per guide id, held in memory for
   // the session so it never touches guideDetails and never writes a History entry.
   var _pgCalCollapse={};
+  var _pgSumCollapse={};      // per-calendar Program Summary collapse — display-only, keyed gid|calId
+  var _pgCalGridCollapse={};  // per-calendar Calendar-area collapse — display-only, keyed gid|calKey
   // Students-section collapse per Site Breakdown table (guideId|calId). Display-only:
   // never written to guideDetails, so no data change, no History, no JSON/Excel export.
   var _sbStuCollapse={};
@@ -17064,6 +17175,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         (function(gRi){ $nbGear.on('click',function(e){ e.stopPropagation(); e.preventDefault(); openNBSettings(calendarRows[gRi], this); }); })(ri);
         $bilCell.append($nbGear);
         $bilTd.append($bilCell);
+        // Reserve a dedicated right gutter for the "..." (same 22px recipe the Staffing Hours
+        // time cells use) so the Billable/Non-Billable status never shifts and is never
+        // covered when the control appears. Edit mode only — locked view never shows dots.
+        if(_pgvCur.mode!=='view') $bilTd.css('paddingRight','22px');
         // the whole Meal Break configuration travels, not just the checkbox
         addCalCopy($bilTd, ri, 'Meal Breaks',
           function(row){ return row?{billable:!!row.billable, nb:row.nbBreaks?JSON.parse(JSON.stringify(row.nbBreaks)):null}:null; },
@@ -17165,12 +17280,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(_pgvCur.mode==='view') return;            // locked View stays entirely read-only
       $td.css({position:'relative'});
       var $dots=$('<div class="pg-cal-copy-dots">').css({
-        position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#adb5bd',
+        position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#495057',
         cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',
-        userSelect:'none',lineHeight:'1',zIndex:'5'
+        userSelect:'none',lineHeight:'1',zIndex:'5',fontWeight:'700'
       }).text('\u2026');
+      // darker resting colour for discoverability; hover keeps the Staffing Hours pill treatment
       $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});})
-           .on('mouseleave',function(){$(this).css({background:'none',color:'#adb5bd'});});
+           .on('mouseleave',function(){$(this).css({background:'none',color:'#495057'});});
       $td.on('mouseenter',function(){ $dots.show(); }).on('mouseleave',function(){ $dots.hide(); });
       $dots.on('click',function(e){
         e.preventDefault(); e.stopPropagation();
@@ -17255,7 +17371,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _rows.forEach(function(cr,i){
         var $hdr=$calSec.find('[data-cal-hdr-idx="'+i+'"]');
         if(!$hdr.length) return;
-        $hdr.empty().append(_mkHdrContent(cr.name,cr.firstDay,cr.lastDay,i,cr.color));
+        // Replace only the TITLE element (circle + name + date range): the Filter button and
+        // the collapse chevron share this header and must survive a header refresh.
+        var $t=$hdr.children().first();
+        if($t.length) $t.replaceWith(_mkHdrContent(cr.name,cr.firstDay,cr.lastDay,i,cr.color));
+        else $hdr.append(_mkHdrContent(cr.name,cr.firstDay,cr.lastDay,i,cr.color));
       });
       refreshSummary(g);
     }
@@ -18106,10 +18226,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $dots=$('<button type="button" class="sb-cell-dots">').css({
               flex:'0 0 auto', width:'12px', opacity:'0',
               background:'none', border:'none', padding:'0', lineHeight:'1',
-              cursor:'pointer', color:'#6c757d', fontSize:'11px', transition:'opacity .12s'
+              cursor:'pointer', color:'#495057', fontSize:'11px', transition:'opacity .12s',
+              borderRadius:'3px', fontWeight:'700'
             }).html('&#8943;');
             $td.on('mouseenter',function(){ $dots.css('opacity','1'); })
                .on('mouseleave',function(){ $dots.css('opacity','0'); });
+            // darker resting colour; hovering the trigger itself gets the Staffing Hours pill
+            $dots.on('mouseenter',function(){ $(this).css('background','#e9ecef'); })
+                 .on('mouseleave',function(){ $(this).css('background','none'); });
             (function(capKey, capRow, capIdx){
               $dots.data('sbCopyApi', { build:function(item, $m){
                 var _roles=getRoles(g.id);
