@@ -351,6 +351,14 @@ label.staff-status-label.active-label{color:#198754 !important;}
 label.staff-status-label.inactive-label{color:#E24B4A !important;}
 .staff-active-chk:not(:checked){background:#E24B4A;border-color:#E24B4A;}
 .staff-id-inactive-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-left:5px;vertical-align:1px;flex-shrink:0;pointer-events:none;}
+/* Clickable section headers: a subtle tint on hover so the whole header reads as
+   interactive without looking like a button. Background only — no size, border or
+   layout change, so the header never shifts. The chevron darkens slightly with it. */
+.pg-hdr-clickable{transition:background-color .12s ease;}
+.pg-hdr-clickable:hover{background-color:#eef2f7!important;}
+.pg-hdr-clickable:hover .pg-sec-toggle,
+.pg-hdr-clickable:hover .pg-cal-toggle{color:#3c4043;}
+
 /* ── Google/Material-style chevron icon buttons ──────────────────────────────────────
    Compact square click targets with circular hover, no visible border at rest.
    Three families share the same base; the master pair is slightly larger. */
@@ -11663,47 +11671,59 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // The subtle blue card is kept: it is what separates allocations from school rows and from
     // the Extra Shifts card (warm dashed). Combined view keeps the circle + calendar name, which
     // is attribution rather than a label — without it a row could belong to any calendar.
+    // Allocated Hours in a breakdown: compact rows in the Extra Shift idiom — a labelled area
+    // whose HOURS sit in the breakdown's last column, so they line up vertically with the Hrs /
+    // Total figures below and can be compared at a glance. No date (the cell and the breakdown
+    // header already establish it) and no repeated header when several records share a date:
+    // the label appears once, on the first row.
+    // o.colspan: how many leading columns the label+notes cell should span (default 5, i.e.
+    // everything before Total). o.applyColWidths: the host breakdown's own width applier, so
+    // this table resolves to the SAME column geometry rather than guessing at it.
     function _allocBreakdownTable(items,o){
       o=o||{};
       var blocks=[];
       (items||[]).forEach(function(it){ if(it&&it.rows&&it.rows.length) blocks.push(it); });
       if(!blocks.length) return null;
       var multi=!!o.showCalendar;
-      var $wrap=$('<div class="cal-tip-alloc">').css({margin:'6px 0 8px',border:'1px solid #c3d2e4',background:'#f4f8fd',borderRadius:'6px',padding:'4px 7px'});
+      var cs=(o.colspan!=null)?o.colspan:5;
+      var $wrap=$('<div class="cal-tip-alloc">').css({margin:'6px 0 8px',border:'1px solid #e6cf8a',background:'#fef3c7',borderRadius:'6px',padding:'3px 6px 4px'});
+      var $t=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'10px'});
+      if(typeof o.applyColWidths==='function'){ try{ o.applyColWidths($t); }catch(e){} }
+      var $tb=$('<tbody>');
+      var first=true;
       blocks.forEach(function(bl){
         var calNm=(bl.calRow&&bl.calRow.name&&bl.calRow.name.trim())||((bl.calOrigIdx!=null)?('Calendar '+(bl.calOrigIdx+1)):'Calendar');
         var calCol=(bl.calRow&&bl.calRow.color)||'#ffffff';
         bl.rows.forEach(function(r){
-          // One flex line per allocation: hours never wrap or shrink; a long note takes the
-          // remaining width and wraps to at most two lines, so the area cannot grow tall.
-          var $row=$('<div class="alloc-tip-row">').css({display:'flex',alignItems:'baseline',gap:'5px',fontSize:'10px',lineHeight:'1.35',padding:'1px 0'});
+          var $row=$('<tr class="alloc-tip-row">');
+          var $lb=$('<td>').attr('colspan',cs).css({padding:'2px 5px',verticalAlign:'middle'});
+          var $line=$('<div>').css({display:'flex',alignItems:'baseline',gap:'6px',minWidth:'0',lineHeight:'1.3'});
           if(multi){
-            var $c=$('<span class="alloc-tip-cal">').css({flex:'0 0 auto',whiteSpace:'nowrap',color:'#3c4043'});
-            $c.append($('<span>').css({display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:calCol,border:'1px solid rgba(0,0,0,.25)',marginRight:'4px',verticalAlign:'middle'}));
-            $c.append($('<span>').text(calNm));
-            $row.append($c);
+            // Combined view: attribution, so an allocation is never ambiguous between calendars.
+            var $c=$('<span class="alloc-tip-cal">').css({flex:'0 0 auto',whiteSpace:'nowrap',color:'#3c4043',fontSize:'9.5px'});
+            $c.append($('<span>').css({display:'inline-block',width:'7px',height:'7px',borderRadius:'50%',background:calCol,border:'1px solid rgba(0,0,0,.25)',marginRight:'4px',verticalAlign:'middle'}));
+            $c.append($('<span>').css({fontWeight:'600'}).text(calNm));
+            $line.append($c);
           }
-          $row.append($('<span class="alloc-tip-hrs">').css({flex:'0 0 auto',whiteSpace:'nowrap',fontWeight:'700',color:'#3b5b86'}).text(r.total+' hrs'));
+          // The label leads, once per area; later rows keep the column but leave it blank.
+          $line.append($('<span class="alloc-tip-label">').css({flex:'0 0 auto',whiteSpace:'nowrap',fontWeight:'700',color:'#8a6d1a',fontSize:'9.5px'}).text(first?'Allocated Hours':''));
           var nt=(r.notes==null?'':String(r.notes)).trim();
           if(nt){
-            $row.append($('<span class="alloc-tip-sep">').css({flex:'0 0 auto',color:'#9bb0c9'}).text('\u00b7'));
-            $row.append($('<span class="alloc-tip-notes">').css({flex:'1 1 auto',minWidth:'0',color:'#6c757d',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:'2',WebkitBoxOrient:'vertical',wordBreak:'break-word'}).text(nt));
+            // Notes stay secondary to the label and never push the row taller than two lines.
+            $line.append($('<span class="alloc-tip-notes">').css({flex:'1 1 auto',minWidth:'0',color:'#6c757d',fontSize:'9.5px',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:'2',WebkitBoxOrient:'vertical',wordBreak:'break-word'}).text(nt));
           }
-          $wrap.append($row);
+          $lb.append($line);
+          $row.append($lb);
+          // Hours in the LAST column, right-aligned with the Total figures below it.
+          $row.append($('<td class="alloc-tip-hrs">').css({padding:'2px 5px',textAlign:'right',whiteSpace:'nowrap',fontWeight:'700',color:'#8a6d1a',verticalAlign:'middle'}).text(r.total+' hrs'));
+          $tb.append($row);
+          first=false;
         });
       });
+      $t.append($tb);
+      $wrap.append($t);
       return $wrap;
     }
-    // "Sep 8, 2026" for a stored ISO date; blank stays blank (undated rows never reach the breakdown).
-    function _pgAllocDateDisp(iso){
-      if(!iso) return '\u2014';
-      var p=String(iso).split('-');
-      if(p.length!==3) return String(iso);
-      var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      var mi=parseInt(p[1],10)-1;
-      return (M[mi]||p[1])+' '+parseInt(p[2],10)+', '+p[0];
-    }
-
     function _xsBreakdownTable(items,o){
       // `items` is an array of {sh, calRow, calId, calOrigIdx} so the Calendar column and Edit/Delete resolve
       // per shift — the individual view passes one calendar for every shift; the Combined view passes each
@@ -13401,7 +13421,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Allocated Hours area, directly under the header — each row tagged with its own Program
       // Calendar circle + name so an allocation is never ambiguous in the combined popup.
       if(_allocItems.length){
-        var $_cA=_allocBreakdownTable(_allocItems,{showCalendar:true});
+        var $_cA=_allocBreakdownTable(_allocItems,{showCalendar:true,colspan:5});
         if($_cA) $pad.append($_cA);
       }
       if(_xsItems.length) $pad.append(_xsBreakdownTable(_xsItems,{pinned:_tipPinned,gObj:gObj,dateKey:_xsIso}));
@@ -13908,18 +13928,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $calTip.append($hdrPad);
 
       // ── Scrollable detail rows ──
+      var _totalColspan=5; // columns before the Total column — used by the subtotal rows AND by
+                           // the Allocated Hours area, which must land its hours in that column.
       var $scroll=$('<div>').css({overflowY:'auto',overscrollBehavior:'contain',maxHeight:CAL_TIP_SCROLL_MAX,padding:'0 12px'});
       // Saved Extra Shifts render FIRST, above the regular Hours Breakdown content, in their own compact
       // sub-card with a subtly different (dashed, warm-tinted) border. Edit/Delete only in the pinned popup.
       // Allocated Hours for this calendar+date — read-only, directly under the header/notes.
       var _tipAlloc=(_tipCalId!=null)?allocForDate(gObj.id,_tipCalId,dateKeyForTip):[];
       if(_tipAlloc.length){
-        var $_aTbl=_allocBreakdownTable([{rows:_tipAlloc,calRow:_tipCalRow,calId:_tipCalId,calOrigIdx:calOrigIdx}],{showCalendar:false});
+        var $_aTbl=_allocBreakdownTable([{rows:_tipAlloc,calRow:_tipCalRow,calId:_tipCalId,calOrigIdx:calOrigIdx}],{showCalendar:false,colspan:_totalColspan,applyColWidths:applyColWidths});
         if($_aTbl) $scroll.append($_aTbl);
       }
       if(_xsShifts.length) $scroll.append(_xsBreakdownTable(_xsShifts.map(function(sh){ return {sh:sh,calRow:_tipCalRow,calId:_tipCalId,calOrigIdx:calOrigIdx}; }),{pinned:_tipPinned,gObj:gObj,dateKey:dateKeyForTip}));
       var $tb=$('<tbody>');
-      var _totalColspan=5; // columns before the Total column (for subtotal layout)
 
       // Emits a subtotal row for a section (only when it has hours > 0). The label is intentionally just
       // "Subtotal" — the school name is already shown in the section header directly above, so repeating it
@@ -16154,7 +16175,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     return apply;
   }
   var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Add Discount|Copy To|Options|Clear|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
-  function _pgvStripEditAffordances(root){ try{ $(root).find('.sb-cell-dots, .sb-cell-menu').remove(); }catch(e){} }
+  function _pgvStripEditAffordances(root){ try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots').remove(); }catch(e){} }
   function _pgvDocTransform(root){
     var $R=$(root);
     _pgvStripEditAffordances($R);   // hover copy "..." never appears in locked View
@@ -17884,13 +17905,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $h2.append($('<th>').css(Object.assign({},thBase,{textAlign:(k===0?'left':'right'),background:'#f4f7fb',minWidth:(k===0?'150px':'')})).text(sub));
         });
       });
-      var $addTh=$('<th rowspan="2">').css(Object.assign({},thBase,{textAlign:'center',minWidth:'118px'}));
-      if(_pgvCur.mode!=='view'){
-        var $addBtn=$('<button type="button" class="btn btn-sm btn-outline-primary pg-disc-add" style="font-size:11px;padding:2px 10px;white-space:nowrap;">').text('+ Add Discount');
-        $addBtn.on('click',function(){ discAddStage(); });
-        $addTh.append($addBtn);
-      }
-      $h1.append($addTh);
+      // + Add Discount lives BELOW the table now (see $discAddWrap), so the table no longer
+      // carries a trailing column for it — adding or deleting a stage can't shift it sideways.
       $tbl.append($('<thead>').append($h1).append($h2));
 
       // ── one body row per Program Calendar, in the Program Calendars table's order ──
@@ -17940,6 +17956,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             })(si,calId,$srch);
             $dTd.append($srch);
           } else { $dTd.append($('<span>').css({color:'#adb5bd'}).text('\u2014')); }
+          addDiscCopy($dTd,'name',si,calId);
           $tr.append($dTd);
 
           // % — editable, numeric only, recalculates on every keystroke.
@@ -17962,6 +17979,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $pTd.append($pi);
           } else if(has){ $pTd.text(String(sl.pct!=null?sl.pct:'')); }
           else { $pTd.text('\u2014'); }
+          addDiscCopy($pTd,'pct',si,calId);
           $tr.append($pTd);
 
           var showCalc=(cum>0)||has;
@@ -17969,7 +17987,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $tr.append($('<td class="pg-disc-savings">').css(Object.assign({},tdBase,{textAlign:'right',color:'#1a7f37'})).text(showCalc?pgFmtAmt(calc.savings):'\u2014'));
           $tr.append($('<td class="pg-disc-amount">').css(Object.assign({},tdBase,{textAlign:'right',fontWeight:'600'})).text(showCalc?pgFmtAmt(calc.amount):'\u2014'));
         });
-        $tr.append($('<td>').css(tdBase));
         $tb.append($tr);
       });
       $tbl.append($tb);
@@ -17986,13 +18003,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $ft.append($('<td class="pg-disc-tot-savings">').attr('data-disc-stage',String(si)).css(Object.assign({},ftBase,{textAlign:'right',color:'#1a7f37'})).text(pgFmtAmt(Math.round(stageTot[si].sav*100)/100)));
         $ft.append($('<td class="pg-disc-tot-stage-amt">').attr('data-disc-stage',String(si)).css(Object.assign({},ftBase,{textAlign:'right'})).text(pgFmtAmt(Math.round(stageTot[si].amt*100)/100)));
       });
-      $ft.append($('<td>').css(ftBase));
       $tbl.append($('<tfoot>').append($ft));
       return $tbl;
     }
 
     var $discContent=buildDiscTable();
     $discWrap.append($discContent);
+    // Same treatment as + Add Role / + Add Calendar: left-aligned under its table, inside the
+    // collapsible body so collapsing the section hides it, and absent entirely in locked View.
+    var $discAddWrap=$('<div>');
+    if(_pgvCur.mode!=='view'){
+      var $discAddBtn=$('<button type="button" class="btn btn-sm btn-outline-primary pg-disc-add" style="font-size:11px;padding:2px 10px;margin:8px 12px;white-space:nowrap;">').text('+ Add Discount');
+      $discAddBtn.on('click',function(){ discAddStage(); });
+      $discAddWrap.append($discAddBtn);
+    }
+    $discBody.append($discAddWrap);
     function refreshDiscTable(){
       var $n=buildDiscTable();
       $discContent.replaceWith($n);
@@ -18006,6 +18031,80 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     attachSectionCollapse({
       key:g.id+'|discounts', $hd:$discHd, $body:$discBody, label:'Discounts', defaultCollapsed:true
     });
+
+    // "..." bulk copy for a Discount or % cell — same visual treatment as the Program
+    // Calendars copy control (hover-revealed, upper-right, reserved gutter so nothing shifts).
+    // ONE portalled menu node for the whole app; a per-render node would leak on every rebuild.
+    var $discCopyMenu=$('body > .pg-disc-copy-menu').first();
+    if(!$discCopyMenu.length){
+      $discCopyMenu=$('<div class="sf-action-menu pg-disc-copy-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dadce0',borderRadius:'6px',boxShadow:'0 2px 10px rgba(0,0,0,.18)',padding:'4px 0',display:'none',fontSize:'11px',whiteSpace:'nowrap'});
+      $('body').append($discCopyMenu);
+    }
+    function discCloseCopyMenu(){ $discCopyMenu.hide().empty(); $(document).off('mousedown.pgdisccopy'); }
+    function addDiscCopy($td,kind,stIdx,calId){
+      if(_pgvCur.mode==='view') return;            // locked View exposes no copy controls
+      $td.css({position:'relative',paddingRight:'20px'});   // reserved gutter: values never move
+      var $dots=$('<div class="pg-disc-copy-dots">').css({
+        position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#495057',
+        cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',
+        userSelect:'none',lineHeight:'1',zIndex:'5',fontWeight:'700'
+      }).text('\u2026');
+      $dots.on('mouseenter',function(){$(this).css({background:'#e9ecef',color:'#495057'});})
+           .on('mouseleave',function(){$(this).css({background:'none',color:'#495057'});});
+      $td.on('mouseenter',function(){ $dots.show(); }).on('mouseleave',function(){ $dots.hide(); });
+      $dots.on('click',function(e){
+        e.preventDefault(); e.stopPropagation();
+        discCloseCopyMenu(); $discCopyMenu.empty();
+        var n=(calendarRows||[]).length;
+        var label=(kind==='name')?('Copy Discount to all calendars ('+n+')'):('Copy % to all calendars ('+n+')');
+        var $it=$('<div>').css({padding:'5px 12px',cursor:'pointer'}).text(label);
+        $it.on('mouseenter',function(){ $(this).css('background','#f1f3f4'); }).on('mouseleave',function(){ $(this).css('background','none'); });
+        $it.on('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); discCloseCopyMenu(); discCopyAcross(kind,stIdx,calId); });
+        $discCopyMenu.append($it);
+        var r=$dots[0].getBoundingClientRect();
+        $discCopyMenu.css({left:Math.round(r.left)+'px',top:Math.round(r.bottom+3)+'px'}).show();
+        $(document).off('mousedown.pgdisccopy').on('mousedown.pgdisccopy',function(ev2){
+          if($(ev2.target).closest('.pg-disc-copy-menu').length) return;
+          discCloseCopyMenu();
+        });
+      });
+      $td.append($dots);
+    }
+    // ONE bulk transaction: every calendar in THIS stage takes the source value. Stages before
+    // and after are untouched — only the cumulative figures derived from them are repainted.
+    // A blank source clears the value everywhere, which is the same rule the other copies use.
+    function discCopyAcross(kind,stIdx,srcCalId){
+      var store=discStore(), st=store.stages[stIdx]; if(!st) return;
+      if(!st.byCal) st.byCal={};
+      var src=st.byCal[String(srcCalId)]||null;
+      var rows=(calendarRows||[]);
+      var before=JSON.stringify(st.byCal);
+      try{ _pgUndo.begin(g.id); }catch(e){}
+      rows.forEach(function(cr){
+        var cid=String((cr&&cr.calId!=null)?cr.calId:'');
+        if(!cid) return;
+        if(kind==='name'){
+          if(!src||String(src.name||'').trim()===''){ delete st.byCal[cid]; return; }
+          var keepPct=(st.byCal[cid]&&st.byCal[cid].pct!=null)?st.byCal[cid].pct:null;
+          // a row that had no discount gets the default percentage; an existing row keeps its own
+          st.byCal[cid]={ name:String(src.name), pct:(keepPct!=null?keepPct:DISC_DEFAULT_PCT) };
+        } else {
+          var tgt=st.byCal[cid];
+          if(!tgt) return;                          // no discount here: nothing to carry a % on
+          tgt.pct=(src?src.pct:'');                 // the row keeps its OWN discount name
+        }
+      });
+      if(JSON.stringify(st.byCal)===before){ try{ _pgUndo.cancel(); }catch(e){} return; }   // nothing changed: no Undo, no History
+      saveDisc();
+      var n=rows.length;
+      try{
+        _pgHist.begin(g.id);
+        if(kind==='name') _pgHist.evt(g.id,{kind:'edit',action:'Discount copied',desc:'Copied \u201c'+String((src&&src.name)||'')+'\u201d to Discount '+(stIdx+1)+' across '+n+' Program Calendars.'});
+        else _pgHist.evt(g.id,{kind:'edit',action:'Discount percentage copied',desc:'Copied Discount '+(stIdx+1)+' percentage '+String((src&&src.pct)!=null?src.pct:'')+'% across '+n+' Program Calendars.'});
+      }catch(e){}
+      refreshDiscTable();
+      try{ _pgUndo.offer(g.id,{lead:(kind==='name'?'Discount':'Discount %'),tail:' copied to '+n+' calendar'+(n===1?'':'s')+'.'}); }catch(e){}
+    }
 
     // ── search dropdown ──
     function discOpenDD($inp,stIdx,calId){
@@ -18078,8 +18177,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       refreshDiscTable();
     }
     // Stage delete: confirm first, then ONE atomic transaction + one History record + Undo.
+    // A stage is EMPTY when no calendar has a discount name or a percentage in it. Nothing can
+    // be lost by removing it, so the confirmation would be pure friction — delete straight away.
+    function discStageEmpty(stIdx){
+      var st=discStore().stages[stIdx];
+      if(!st||!st.byCal) return true;
+      for(var k in st.byCal){
+        var sl=st.byCal[k]; if(!sl) continue;
+        if(String(sl.name||'').trim()!=='') return false;
+        if(sl.pct!=null && String(sl.pct).trim()!=='') return false;
+      }
+      return true;
+    }
     function discConfirmDelete(stIdx){
       var n=stIdx+1;
+      if(discStageEmpty(stIdx)){ discDeleteStage(stIdx); return; }
       _xsDialog('Delete Discount '+n+' for all programs?',[
         {label:'Cancel'},
         {label:'Delete',primary:true,danger:true,fn:function(){ discDeleteStage(stIdx); }}
