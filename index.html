@@ -351,6 +351,33 @@ label.staff-status-label.active-label{color:#198754 !important;}
 label.staff-status-label.inactive-label{color:#E24B4A !important;}
 .staff-active-chk:not(:checked){background:#E24B4A;border-color:#E24B4A;}
 .staff-id-inactive-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-left:5px;vertical-align:1px;flex-shrink:0;pointer-events:none;}
+/* ── Staffing Allocation cross-highlight ─────────────────────────────────────────────
+   Hovering a checkbox cell should answer "which school? which day?" at a glance without a
+   tooltip. Three restrained layers rather than a spreadsheet crosshair:
+     hovered cell   strongest
+     School Name + the day header   clearly emphasised (the two labels the eye needs)
+     rest of the row / column       light context
+   Driven by classes a single delegated handler sets, so there are no per-cell listeners and
+   the weekend tint and pod brackets underneath stay readable. */
+.sf-alloc-table tr.sf-alloc-row-hot > td{background:rgba(66,133,244,.06);}
+.sf-alloc-table td.sf-alloc-col-hot{background:rgba(66,133,244,.06);}
+.sf-alloc-table tr.sf-alloc-row-hot > td.sf-alloc-school{background:rgba(66,133,244,.16);font-weight:600;}
+.sf-alloc-table th.sf-alloc-col-hot{background:rgba(66,133,244,.20)!important;color:#1a3a6b;}
+.sf-alloc-table td.sf-alloc-cell-hot{background:rgba(66,133,244,.26)!important;}
+/* Active WEEKEND header: stays in the weekend blue family rather than switching to the generic
+   highlight, so Sat/Sun still read as weekend while clearly being the active column. */
+.sf-alloc-table th.sf-alloc-wknd.sf-alloc-col-hot{background:#a9c6e6!important;color:#12345c;font-weight:800;}
+.sf-alloc-table td.sf-alloc-wknd.sf-alloc-col-hot{background:#dce8f6!important;}
+.sf-alloc-table td.sf-alloc-wknd.sf-alloc-cell-hot{background:#bcd5ee!important;}
+/* The internal table title is a plain title row — never picked up by the cross-highlight. */
+.sf-alloc-table th.sf-alloc-title{background:#e9eef4;color:#3c4043;font-weight:700;}
+/* Compact Pod column: sized by its bracket + name, with long names truncating rather than
+   widening the whole table. */
+.sf-alloc-table td.sf-alloc-pod-bracket .sf-alloc-pod-name,
+.sf-alloc-table .sf-alloc-pod-sizer span:first-child{max-width:86px;overflow:hidden;text-overflow:ellipsis;}
+/* Pod brackets are never tinted over — they carry the pod's own colour, as in Site Breakdown. */
+.sf-alloc-table tr.sf-alloc-row-hot > td.sf-alloc-pod{background:transparent;}
+
 /* Clickable section headers: a subtle tint on hover so the whole header reads as
    interactive without looking like a button. Background only — no size, border or
    layout change, so the header never shifts. The chevron darkens slightly with it. */
@@ -3108,6 +3135,121 @@ $(function(){
     $item.on('mouseenter', openSub).on('mouseleave', scheduleClose);
     return $item;
   }
+  // Snapshots: a hover-or-click submenu in the same idiom as Add to Workspace — the parent menu
+  // stays open, and a short grace delay lets the pointer travel into the submenu.
+  // Both entries are deliberately INERT for now: the structure is what this release delivers, so
+  // they close the menus and do nothing rather than pretending to work.
+  function _pgBuildSnapshotsItem(makeItem, gObj, closeParent){
+    var $item, timer=null;
+    function cancelClose(){ if(timer){ clearTimeout(timer); timer=null; } }
+    function scheduleClose(){ cancelClose(); timer=setTimeout(function(){ $('.pg-snap-submenu').remove(); $(document).off('mousedown.pgsnapmenu'); }, 320); }
+    function openSub(){
+      cancelClose();
+      if(document.querySelector('.pg-snap-submenu')) return true;   // already open
+      var rect=($item&&$item[0]&&$item[0].getBoundingClientRect)?$item[0].getBoundingClientRect():null;
+      _pgSnapshotsSubmenu(gObj, rect, function(){ if(closeParent) closeParent(); });
+      $('.pg-snap-submenu').on('mouseenter',cancelClose).on('mouseleave',scheduleClose);
+      return true;
+    }
+    $item=makeItem(function(){ openSub(); });
+    $item.on('mouseenter',openSub).on('mouseleave',scheduleClose);
+    return $item;
+  }
+  // Save Snapshot dialog: name prefilled "{Guide} \u2013 {Date}", compact WYSIWYG notes using the
+  // application's existing toolbar/body recipe, Cancel | Save Snapshot.
+  function _pgSnapSaveDialog(gObj){
+    $('.pg-snap-modal').remove();
+    var $ov=$('<div class="pg-snap-modal">').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'1000003',display:'flex',alignItems:'center',justifyContent:'center'});
+    var $box=$('<div class="pg-snap-box">').css({background:'#fff',borderRadius:'10px',padding:'18px 20px',boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:'420px',maxWidth:'520px'});
+    $box.append($('<div>').css({fontWeight:'700',fontSize:'14px',color:'#212529',marginBottom:'12px'}).text('Save Snapshot'));
+
+    $box.append($('<div>').css({fontSize:'11px',fontWeight:'600',color:'#495057',marginBottom:'4px'}).text('Snapshot Name'));
+    var $name=$('<input type="text" class="pg-snap-name" autocomplete="off">')
+      .css({width:'100%',border:'1px solid #dde3ea',borderRadius:'6px',padding:'6px 8px',fontSize:'12px',color:'#212529',boxSizing:'border-box',outline:'none'})
+      .val(pgSnapDefaultName(gObj));
+    $box.append($name);
+
+    $box.append($('<div>').css({fontSize:'11px',fontWeight:'600',color:'#495057',margin:'12px 0 4px'}).text('Notes'));
+    var $wrap=$('<div class="wysiwyg-wrap pg-snap-notes-wrap">');
+    $wrap.append($('<div class="wysiwyg-toolbar">')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="bold" title="Bold"><b>B</b></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="italic" title="Italic"><i>I</i></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="underline" title="Underline"><u>U</u></button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="insertUnorderedList" title="Bullet list">&#8226; List</button>')
+      .append('<button type="button" class="wysiwyg-btn" data-cmd="removeFormat" title="Clear formatting">&#10005; Clear</button>'));
+    var $notes=$('<div class="wysiwyg-body pg-snap-notes" contenteditable="true" data-placeholder="Add notes for this snapshot\u2026">')
+      .css({minHeight:'70px',maxHeight:'160px',overflowY:'auto',fontSize:'12px',lineHeight:'1.45',padding:'6px 8px'});
+    $wrap.append($notes);
+    $box.append($wrap);
+
+    var $btns=$('<div>').css({display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'16px'});
+    var $cancel=$('<button type="button" class="pg-snap-cancel">').css({background:'none',border:'1px solid #dee2e6',borderRadius:'6px',padding:'6px 16px',cursor:'pointer',fontSize:'12px',fontWeight:'600',color:'#495057'}).text('Cancel');
+    var $save=$('<button type="button" class="pg-snap-save">').css({background:'#0d6efd',border:'none',borderRadius:'6px',padding:'6px 16px',cursor:'pointer',fontSize:'12px',fontWeight:'600',color:'#fff'}).text('Save Snapshot');
+    // Cancel creates NOTHING — no snapshot, no History record.
+    $cancel.on('click',function(){ $ov.remove(); });
+    $save.on('click',function(){
+      var snap=pgSnapCreate(gObj,$name.val(),$notes.html());
+      try{
+        _pgHist.flushNow();
+        _pgHist.evt(gObj.id,{kind:'snapshot',action:'Snapshot taken',desc:snap.name,snapId:snap.id,snapNotes:snap.notesText});
+      }catch(e){}
+      $ov.remove();
+    });
+    $btns.append($cancel,$save);
+    $box.append($btns);
+    $ov.append($box).on('mousedown',function(e){ if($(e.target).is($ov)) $ov.remove(); });
+    $('body').append($ov);
+    try{ $name[0].focus(); $name[0].select(); }catch(e){}
+    return $ov;
+  }
+  function _pgSnapshotsSubmenu(gObj, anchorRect, onChosen){
+    $('.pg-snap-submenu').remove();
+    var $m=$('<div class="sf-action-menu pg-snap-submenu">').css({
+      position:'fixed',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',
+      boxShadow:'0 4px 16px rgba(0,0,0,.14)',padding:'4px',zIndex:'1000002',
+      fontSize:'12px',minWidth:'150px'
+    });
+    function row(icon,label,fn){
+      var $r=$('<div class="pg-snap-item">').css({display:'flex',alignItems:'center',gap:'8px',padding:'6px 10px',borderRadius:'6px',cursor:'pointer',color:'#212529',whiteSpace:'nowrap'});
+      $r.append($('<span>').css({display:'inline-flex',width:'16px',height:'16px',flexShrink:'0'}).html(icon));
+      $r.append($('<span>').text(label));
+      $r.on('mouseenter',function(){ $(this).css('background','#f1f3f4'); }).on('mouseleave',function(){ $(this).css('background','none'); });
+      $r.on('click',function(e){ e.stopPropagation(); $('.pg-snap-submenu').remove(); $(document).off('mousedown.pgsnapmenu'); if(onChosen) onChosen(); if(fn) fn(); });
+      return $r;
+    }
+    $m.append(row(_pgIcon('snapshotTake'),'Take Snapshot',function(){ _pgSnapSaveDialog(gObj); }));
+    $m.append(row(_pgIcon('snapshotView'),'View Snapshots'));
+    // Up to the 10 most recent, newest first, behind a divider. Clicking a NAME downloads that
+    // stored snapshot — it never imports or restores, and never re-serializes the live guide.
+    var recent=pgSnapRecent(gObj.id,10);
+    if(recent.length){
+      $m.append($('<div class="pg-snap-divider">').css({height:'1px',background:'#eceff2',margin:'4px 6px'}));
+      recent.forEach(function(sn){
+        var $r=$('<div class="pg-snap-recent">').attr('data-snap-id',sn.id)
+          .css({padding:'5px 10px',borderRadius:'6px',cursor:'pointer',maxWidth:'260px'});
+        $r.append($('<div class="pg-snap-recent-name">').css({fontSize:'12px',color:'#212529',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).text(sn.name));
+        // Notes snippet: PLAIN text only, one line, ellipsised — and omitted entirely when there
+        // are no notes, so an empty line never appears.
+        if(sn.notesText){
+          $r.append($('<div class="pg-snap-recent-note">').css({fontSize:'10px',color:'#8a9199',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'240px'}).text(sn.notesText));
+        }
+        $r.on('mouseenter',function(){ $(this).css('background','#f1f3f4'); }).on('mouseleave',function(){ $(this).css('background','none'); });
+        $r.on('click',function(e){ e.stopPropagation(); pgSnapDownload(gObj.id,sn.id); $('.pg-snap-submenu').remove(); $(document).off('mousedown.pgsnapmenu'); if(onChosen) onChosen(); });
+        $m.append($r);
+      });
+    }
+    $('body').append($m);
+    // Measured off-screen first so the menu is content-width, then placed beside its parent item
+    // and flipped/clamped to stay inside the viewport — the same placement rule as Add to Workspace.
+    $m.css({left:'-9999px',top:'0px',visibility:'hidden'});
+    var r=(anchorRect&&anchorRect.right)?anchorRect:{left:120,right:260,top:120,bottom:140};
+    var mw=$m[0].offsetWidth||160, mh=$m[0].offsetHeight||80;
+    var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+    var left=r.right+4; if(left+mw>vw-4) left=Math.max(4,r.left-mw-4); if(left<4) left=4;
+    var top=r.top; if(top+mh>vh-4) top=Math.max(4,vh-mh-4); if(top<4) top=4;
+    $m.css({left:left+'px',top:top+'px',visibility:'visible'});
+    setTimeout(function(){ $(document).on('mousedown.pgsnapmenu',function(ev){ if(!$m[0].contains(ev.target)){ $m.remove(); $(document).off('mousedown.pgsnapmenu'); } }); },0);
+  }
   function _wsShortcutDestMenu(gObj, anchorRect, nonNote, onChosen){
     _wsInjectStyles();   // this submenu can open on the Planning Guide screen before the Workspace has rendered
     _wsCloseMenus();
@@ -3928,7 +4070,7 @@ $(function(){
     var $srch=$('<input type="text" placeholder="Search history">').css({margin:'10px 16px',padding:'6px 10px',border:'1px solid #dee2e6',borderRadius:'6px',fontSize:'12px',outline:'none'});
     var $body=$('<div>').css({overflowY:'auto',padding:'0 16px 14px',flex:'1'});
     var COLORS={add:'#1e7145',edit:'#0d6efd','delete':'#c5221f',reset:'#b06000','import':'#5f6368',error:'#c5221f',lock:'#495057',unlock:'#495057',info:'#5f6368'};
-    var ICON={add:'duplicate',edit:'history','delete':'trash',reset:'history','import':'import',error:'import',lock:'lock',unlock:'unlock',info:'history'};
+    var ICON={add:'duplicate',edit:'history','delete':'trash',reset:'history','import':'import',error:'import',lock:'lock',unlock:'unlock',info:'history',snapshot:'snapshot'};
     function dayLabel(ts){
       var d=new Date(ts), t=new Date(); t.setHours(0,0,0,0);
       var d0=new Date(d); d0.setHours(0,0,0,0);
@@ -3958,7 +4100,20 @@ $(function(){
         var $tm=$('<span>').css({fontSize:'10.5px',color:'#98a2ad',flexShrink:'0'}).text(tmLabel(r.ts));
         $top.append($ic,$at,$tm);
         $row.append($top);
-        if(r.desc) $row.append($('<div>').css({fontSize:'11.5px',color:'#495057',margin:'3px 0 0 20px'}).text(r.desc));
+        if(r.desc){
+          var $ds=$('<div>').css({fontSize:'11.5px',color:'#495057',margin:'3px 0 0 20px'});
+          if(r.snapId){
+            // Snapshot records: the NAME is a link that downloads the stored snapshot JSON.
+            // It downloads the FROZEN bytes and never restores or re-serializes the live guide,
+            // so clicking here can't change anything.
+            var $lk2=$('<span class="pg-hist-snap-link">').attr({'data-snap-id':r.snapId,title:'Download this snapshot'})
+              .css({color:'#0d6efd',cursor:'pointer',textDecoration:'underline'}).text(r.desc);
+            $lk2.on('click',function(e){ e.stopPropagation(); try{ pgSnapDownload(g.id,r.snapId); }catch(_e){} });
+            $ds.append($lk2);
+            if(r.snapNotes) $ds.append($('<span class="pg-hist-snap-note">').css({color:'#8a929b',marginLeft:'6px'}).text('\u00b7 '+r.snapNotes));
+          } else { $ds.text(r.desc); }
+          $row.append($ds);
+        }
         $row.append($('<div>').css({fontSize:'10.5px',color:'#8a929b',margin:'3px 0 0 20px'}).text('Updated by '+((r.user&&r.user.name)||'Unknown')));
         if(r.details&&r.details.length>1){
           var $tog=$('<div>').css({fontSize:'10.5px',color:'#0d6efd',cursor:'pointer',margin:'4px 0 0 20px',userSelect:'none'}).text('Show '+r.details.length+' changes \u25be');
@@ -4017,6 +4172,11 @@ $(function(){
     trash:'<svg data-icon="trash" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4.4h10M6.4 4.4V3.1a.7.7 0 0 1 .7-.7h1.8a.7.7 0 0 1 .7.7v1.3M4.5 4.4l.55 8.3a.85.85 0 0 0 .85.8h4.2a.85.85 0 0 0 .85-.8l.55-8.3" stroke="#dc3545" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.7 6.8v4.2M9.3 6.8v4.2" stroke="#dc3545" stroke-width="1.1" stroke-linecap="round"/></svg>'
   };
   function _pgIcon(name){ return _PG_ICONS[name] || ''; }
+  // Snapshots family: a camera-ish frame for the parent/take action and a stacked-layers glyph
+  // for the list. Same 16x16 box and the History blue, so the group reads as one neighbourhood.
+  _PG_ICONS.snapshot='<svg data-icon="snapshot" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.8" y="4.2" width="12.4" height="9" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 4.2l.9-1.6h3l.9 1.6" stroke="#1a73e8" stroke-width="1" stroke-linejoin="round"/><circle cx="8" cy="8.7" r="2.3" fill="#fff" stroke="#1a73e8" stroke-width="1"/></svg>';
+  _PG_ICONS.snapshotTake='<svg data-icon="snapshotTake" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.8" y="4.2" width="12.4" height="9" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 4.2l.9-1.6h3l.9 1.6" stroke="#1a73e8" stroke-width="1" stroke-linejoin="round"/><path d="M8 6.6v4.2M5.9 8.7h4.2" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round"/></svg>';
+  _PG_ICONS.snapshotView='<svg data-icon="snapshotView" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.6" y="2.4" width="9.4" height="7" rx="1.3" fill="#fff" stroke="#1a73e8" stroke-width="1"/><rect x="4.6" y="4.6" width="9.4" height="7" rx="1.3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M6.6 7.1h5.4M6.6 9.1h3.6" stroke="#1a73e8" stroke-width="1" stroke-linecap="round"/></svg>';
   // Fill a menu-icon span with an SVG string (data-icon...) or a plain glyph, whichever was passed.
   function _pgSetMenuIcon($span, icon){ if(typeof icon==='string' && icon.charAt(0)==='<') $span.html(icon); else $span.text(icon); return $span; }
   function _buildGuideMenuItem(icon,label,opt){
@@ -4028,6 +4188,9 @@ $(function(){
     });
     $it.append(_pgSetMenuIcon($('<span>').css({width:'16px',height:'16px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'12px',opacity:(opt.danger?'1':'0.85'),flexShrink:'0'}), icon));
     $it.append($('<span>').text(label));
+    // opt.submenu: a right-pointing caret pushed to the far edge, marking the item as opening a
+    // submenu rather than performing an action ("Snapshots \u203a").
+    if(opt.submenu) $it.append($('<span class="pg-menu-caret">').css({marginLeft:'auto',paddingLeft:'10px',fontSize:'10px',color:'#adb5bd',flexShrink:'0'}).text('\u203a'));
     var _hov=opt.danger?'#fdecec':'#f5f5f5';
     $it.on('mouseenter',function(){ $(this).css('background',_hov); }).on('mouseleave',function(){ $(this).css('background','none'); });
     $it.on('click',function(e){ e.stopPropagation(); var _r=(this.getBoundingClientRect?this.getBoundingClientRect():null); if(opt.fn) opt.fn(_r); });
@@ -4166,7 +4329,15 @@ $(function(){
         try{ parsed=JSON.parse(text); }catch(e){ return false; }                         // malformed / failed parse
         if(!parsed || typeof parsed!=='object' || Array.isArray(parsed)) return false;    // not an object
         if(parsed.type!=='planning-guide') return false;                                  // wrong format
-        // History can never be injected or overwritten through an import
+        // A SNAPSHOT carries its own History and is allowed to restore it; that is the whole
+        // point of a checkpoint. Ordinary Planning Guide JSON keeps the original rule: History
+        // can never be injected or overwritten through an import.
+        var _isSnap=!!(parsed.snapshot && typeof parsed.snapshot==='object' && parsed.snapshot.id) || parsed.exportKind==='snapshot';
+        var _snapHist=null, _snapMeta=null;
+        if(_isSnap){
+          _snapMeta=parsed.snapshot||{};
+          try{ _snapHist=Array.isArray(parsed.history)?JSON.parse(JSON.stringify(parsed.history)):[]; }catch(e){ _snapHist=[]; }
+        }
         try{ delete parsed.history; if(parsed.data&&typeof parsed.data==='object'){ delete parsed.data.history; delete parsed.data.pgHistory; } }catch(e){}
         var data=parsed.data;
         if(!data || typeof data!=='object' || Array.isArray(data)) return false;          // missing required saved state
@@ -4201,6 +4372,16 @@ $(function(){
           if(gi>-1) PLANNING_GUIDES[gi].name=newName;
           gObj.name=newName;
           ensureGuideEntityIds(gObj);                       // backfill any missing internal ids
+          if(_isSnap){
+            // Restore the snapshot's audit trail, THEN append one clearly identifiable
+            // post-restore event — so there is a visible boundary between the historical record
+            // and anything the user does next.
+            try{
+              _pgHist.restore(gObj.id,_snapHist||[]);
+              _pgHist.evt(gObj.id,{kind:'import',action:'Snapshot restored',
+                desc:'Restored snapshot \u201c'+String((_snapMeta&&_snapMeta.name)||'Snapshot')+'\u201d.'});
+            }catch(e){}
+          }
           selectGuide(gObj);                                // full re-render -> recomputes all derived values
           return true;
         }catch(e){
@@ -4522,6 +4703,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       .append($('<span class="tip-pod-name">').css({fontSize:'8px',fontWeight:'700',color:ink,whiteSpace:'nowrap',lineHeight:'1',alignSelf:'center'}).text(pod.name))
       .append($('<span class="tip-pod-line">').css({width:'2px',borderRadius:'1px',background:ink,alignSelf:'stretch',minHeight:'9px'}));
   }
+  // Drop schools the Staffing Allocation excludes for this day. Passing a SPARSE array (holes
+  // instead of a spliced list) keeps every surviving school's original index intact, which the
+  // click-through context and pod grouping both depend on.
+  function _tipAllocSites(sites, gid, ci, wk, dayKey){
+    if(!sites) return sites;
+    var out=sites.slice();
+    for(var i=0;i<out.length;i++){
+      if(!out[i]) continue;
+      if(!staffAllocAllows(gid,ci,wk,i,dayKey)) out[i]=null;
+    }
+    return out;
+  }
   function _tipPodListify($host, sites, pods, mkLine){
     var runs=[], cur=null;
     (sites||[]).forEach(function(sr,si){
@@ -4535,11 +4728,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           .append($('<span class="tip-pod-name">').css({fontSize:'8px',fontWeight:'700',color:ink,whiteSpace:'nowrap',lineHeight:'1'}).text(run.pod.name))
           .append($('<span class="tip-pod-line">').css({width:'2px',borderRadius:'1px',background:ink,alignSelf:'stretch',minHeight:'9px'}));
         var $names=$('<span>').css({display:'block',flex:'1',minWidth:'0'});
-        run.items.forEach(function(si){ $names.append(mkLine(sites[si],si)); });
+        run.items.forEach(function(si){ if(!sites[si]) return; $names.append(mkLine(sites[si],si)); });
         $host.append($('<div class="tip-pod-run">').attr({'data-pod-name':run.pod.name,'data-pod-size':String(run.items.length)})
           .css({display:'flex',alignItems:'stretch',gap:'5px'}).append($rail).append($names));
       } else {
-        run.items.forEach(function(si){ $host.append(mkLine(sites[si],si)); });
+        run.items.forEach(function(si){ if(!sites[si]) return; $host.append(mkLine(sites[si],si)); });
       }
     });
   }
@@ -7797,6 +7990,53 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     return sds.find(function(s){return s.id===sdId;})||null;
   }
 
+  // ── Staffing Allocation ── per-table UI state plus a School x Day checkbox matrix, stored on
+  // the guide so it rides the JSON export/import like any other guide detail. Keyed by the
+  // staffing table's own slot suffix (the same key its hours use), so a table's allocation
+  // follows it through school/pod/week splits. Deliberately NOT wired into any calculation yet:
+  // this is the persistence foundation only.
+  function staffAllocStore(gid){
+    var det=guideDetails[String(gid)]||{};
+    if(!det.staffAlloc||typeof det.staffAlloc!=='object') det.staffAlloc={};
+    return det.staffAlloc;
+  }
+  function staffAllocRec(gid,sfx){
+    var st=staffAllocStore(gid);
+    if(!st[sfx]||typeof st[sfx]!=='object') st[sfx]={on:false,cells:{}};
+    if(typeof st[sfx].on!=='boolean') st[sfx].on=!!st[sfx].on;
+    if(!st[sfx].cells||typeof st[sfx].cells!=='object') st[sfx].cells={};
+    return st[sfx];
+  }
+  function staffAllocKey(si,dayKey){ return String(si)+'|'+String(dayKey); }
+  // THE calculation gate. Allocation sits between the Site Breakdown count and the Staffing
+  // Hours override: an unchecked school contributes 0 for that day, and an override cannot
+  // resurrect it — the spec is explicit that the allocation layer decides participation at the
+  // recurring-day level. Both count paths (the Staffing Hours table and the Calendar) call this,
+  // so the two can never disagree.
+  // Suffix matching rather than re-deriving the separation rules: a table's slot suffix always
+  // ENDS with 'c<ci>' + week, and only MULTI-school tables can have an `on` record, so a
+  // per-school 's<si>c0' record can never be on and can never match by accident.
+  function staffAllocAllows(gid,ci,wk,si,dayKey){
+    var det=guideDetails[String(gid)]; if(!det||!det.staffAlloc) return true;
+    var st=det.staffAlloc;
+    var tail=((ci!==null&&ci!==undefined)?('c'+ci):'')+(wk||'');
+    if(!tail) return true;
+    var key=staffAllocKey(si,dayKey);
+    for(var sfx in st){
+      var rec=st[sfx];
+      if(!rec||!rec.on||!rec.cells) continue;
+      if(sfx.length<tail.length||sfx.slice(-tail.length)!==tail) continue;
+      if(rec.cells[key]===false) return false;
+    }
+    return true;
+  }
+  // Absent means CHECKED: every box starts checked, and the map is written in full whenever the
+  // matrix renders, so an export always carries an explicit value for every intersection.
+  function staffAllocGet(rec,si,dayKey){
+    var v=rec.cells[staffAllocKey(si,dayKey)];
+    return (v===false)?false:true;
+  }
+
   // Build the DAYS array for a guide: special days (noHours=false) then Mon-Sun
   function buildDaysArray(gid){
     var sds=getSpecialDays(gid);
@@ -8804,7 +9044,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }:null;
           var _cCi=(editCombo&&editCombo.ci!=null)?editCombo.ci:null;
           var _cWk=(editCombo&&editCombo.wk)||'';
-          function _effSch(u,role,dayK){ var _o=shSchoolCntOv(_slots,u.si,_cCi,_cWk,role.key,dayK); return _o!=null?_o:(parseInt(u.sRow&&u.sRow[role.countKey])||0); }
+          function _effSch(u,role,dayK){
+            // Allocation first: excluded means 0 for this day, ahead of any count override, so a
+            // stale override can never resurrect an excluded school's Site Breakdown count.
+            if(!staffAllocAllows(g.id,_cCi,_cWk,u.si,dayK)) return 0;
+            var _o=shSchoolCntOv(_slots,u.si,_cCi,_cWk,role.key,dayK); return _o!=null?_o:(parseInt(u.sRow&&u.sRow[role.countKey])||0);
+          }
+          function _defComposite(role,dayK){
+            var _t=0;
+            (_compSchools?_compSchools():[]).forEach(function(u){
+              if(!staffAllocAllows(g.id,_cCi,_cWk,u.si,dayK)) return;
+              _t+=(parseInt(u.sRow&&u.sRow[role.countKey])||0);
+            });
+            return _t;
+          }
           function _effComposite(role,dayK){ var _t=0; (_compSchools?_compSchools():[]).forEach(function(u){ _t+=_effSch(u,role,dayK); }); return _t; }  // 'isBillable' receives the Program Calendar row (or boolean); it flows to calcAdjustedHours/buildBreakControl, which apply that calendar's meal-break settings
           ROLES.forEach(function(r){ if(!shData[r.key]) shData[r.key]={}; DAYS.forEach(function(d){ if(!shData[r.key][d.k]) shData[r.key][d.k]={start:'',end:''}; }); });
           var _p={};
@@ -8900,7 +9153,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   _brkCtlsU[role.key][day.k]=brkCtlU;
                 } else if(row.type==='count'){
                   $td.css({background:'#f0f4f8'});
-                  var _defC=getCountsFn()[role.countKey]||0;
+                  var _defC=_compSchools?_defComposite(role,day.k):(getCountsFn()[role.countKey]||0);
                   var _ovC=null;
                   if(editableCnt){ _ovC=shCntOv(shData,role.key,day.k); }
                   else if(_compSchools){ var _ecc=_effComposite(role,day.k); if(_ecc!==_defC) _ovC=_ecc; }
@@ -8991,7 +9244,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // get an empty pod cell; the Pod column only appears when at least one school is assigned.
             var _popPods=podsFor(g,(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[];
             function _popPodOf(row){ var sid=row&&row.schoolId; if(sid==null) return null; for(var _pi=0;_pi<_popPods.length;_pi++){ if((_popPods[_pi].schoolIds||[]).indexOf(sid)>=0) return _popPods[_pi]; } return null; }
-            var _compList=(_compSchools?_compSchools():[]);
+            // Excluded schools are not part of this day's staffing at all, so they are not listed
+            // here either — the popup must not offer a count for a school that cannot contribute.
+            var _compList=(_compSchools?_compSchools():[]).filter(function(u){
+              return staffAllocAllows(g.id,_cCi,_cWk,u.si,dayO&&dayO.k);
+            });
             var _anyPod=_compList.some(function(u){ return !!_popPodOf(u.sRow); });
             var $headRow=$('<tr>');
             if(_anyPod) $headRow.append($('<th class="sh-cnt-pod-cell">').css({textAlign:'left',padding:'4px 4px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700',whiteSpace:'nowrap',width:'1px'}).text('Pod'));
@@ -9017,7 +9274,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               return $td;
             }
             function _popPodEmptyCell(){ return $('<td class="sh-cnt-pod-cell">').css({width:'1px',borderBottom:'1px solid #f1f3f5'}); }
-            var rowsState=(_compSchools?_compSchools():[]).map(function(u){
+            // Build from the ALREADY-FILTERED list, not a fresh _compSchools() call — an excluded
+            // school must not be offered a count for a day it does not staff.
+            var rowsState=_compList.map(function(u){
               var sb=parseInt(u.sRow&&u.sRow[role.countKey])||0;
               var saved=shSchoolCntOv(_slots,u.si,_cCi,_cWk,role.key,dayO.k);
               var v=(saved!=null)?saved:sb;
@@ -9167,8 +9426,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(!$schoolStrip) return;
             $schoolStrip.empty();
             var list=_stripSchools();
-            if(list.length<2){ $schoolStrip.hide(); return; }
-            $schoolStrip.show();
+            if(list.length<2) return;   // visibility is _applyAllocMode's call, never this one's
             var pods=podsFor(g,(editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[];
             function podOf(row){ var sid=row&&row.schoolId; if(sid==null) return null; for(var i2=0;i2<pods.length;i2++){ if((pods[i2].schoolIds||[]).indexOf(sid)>=0) return pods[i2]; } return null; }
             var i=0;
@@ -9192,12 +9450,278 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               i=j;
             }
           }
+          // ── Staffing Allocation matrix ── the alternative presentation of that same school
+          // list: one row per school, one checkbox per School x (Special Day | weekday). Built
+          // into the SAME holder the strip lives in, so toggling swaps presentations without
+          // touching the hours table beside it.
+          var $allocWrap=null;
+          function _allocSchools(){ return _stripSchools(); }
+          // The matrix is shown in locked View too (read-only) — users need to inspect which
+          // schools are allocated to which days. Only the enabling CONTROL is edit-only.
+          function _allocEligible(){ return _allocSchools().length>1; }
+          // Select All / Clear as ONE transaction over THIS table only.
+          // The no-op guard matters: if nothing actually changes, the spec wants no Undo and no
+          // History, so the comparison is made BEFORE anything is written. _pgUndo's snapshot is
+          // the whole guide, which is what lets Undo restore an arbitrary MIXTURE of checked and
+          // unchecked values rather than merely inverting them.
+          function _allocBulk(on){
+            var list=_allocSchools();
+            if(list.length<2) return;
+            var rec=staffAllocRec(g.id,sfxClass);
+            if(!rec.on) return;
+            var days=buildDaysArray(g.id);
+            var changed=false;
+            list.forEach(function(u){
+              days.forEach(function(dy){
+                if(staffAllocGet(rec,u.si,dy.k)!==on) changed=true;
+              });
+            });
+            if(!changed) return;   // already all on / all off: no data change, no Undo, no History
+            try{ _pgUndo.begin(g.id); }catch(e){}
+            list.forEach(function(u){
+              days.forEach(function(dy){ rec.cells[staffAllocKey(u.si,dy.k)]=on; });
+            });
+            setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+            var _cn=(editCombo&&editCombo.calRow&&editCombo.calRow.name)||'';
+            try{
+              _pgHist.begin(g.id);   // rebaseline so the debounced differ does not double-log
+              _pgHist.evt(g.id,{kind:'edit',action:'Staffing Allocation changed',
+                desc:(on?'Selected all Staffing Allocations':'Cleared Staffing Allocation')+(_cn?(' for '+_cn):'')+'.'});
+            }catch(e){}
+            _rebuildAllocTable();
+            try{ updU($tbU); }catch(e){}
+            try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(e){}
+            try{ _pgUndo.offer(g.id,{lead:(on?'All Staffing Allocations':'Staffing Allocation'),tail:(on?' selected.':' cleared.')}); }catch(e){}
+          }
+          function _rebuildAllocTable(){
+            if(!$allocWrap) return;
+            $allocWrap.empty();
+            var list=_allocSchools();
+            if(list.length<2){ $allocWrap.hide(); return; }
+            var rec=staffAllocRec(g.id,sfxClass);
+            if(!rec.on){ $allocWrap.hide(); return; }
+            $allocWrap.show();
+            var days=buildDaysArray(g.id);
+            var ABBR={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
+            var pods=podsFor(g,(editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[];
+            function podOf(row){ var sid=row&&row.schoolId; if(sid==null) return null; for(var i2=0;i2<pods.length;i2++){ if((pods[i2].schoolIds||[]).indexOf(sid)>=0) return pods[i2]; } return null; }
+            var anyPod=list.some(function(u){ return !!podOf(u.sRow); });
+
+            var th={border:'1px solid #e3e8ee',background:'#f0f4f8',fontWeight:'700',fontSize:'9px',color:'#495057',padding:'3px 6px',whiteSpace:'nowrap',textAlign:'center'};
+            var td={border:'1px solid #e3e8ee',fontSize:'10px',color:'#212529',padding:'2px 6px',whiteSpace:'nowrap',textAlign:'center'};
+            var $t=$('<table class="sf-alloc-table">').css({borderCollapse:'collapse',width:'max-content',background:'#fff'});
+            var $hr=$('<tr>');
+            // Same weekend tint and same 2px separator the Staffing Hours table uses, so the two
+            // tables read as one family rather than two conventions.
+            var SEP_BORDER='2px solid #9aafc5';
+            var WKND_TH='#dde8f5', WKND_TD='#edf3fa';
+            var _lastSdIdx=days.reduce(function(acc,d2,i2){ return d2.isSd?i2:acc; },-1);
+            var _isWknd=function(k){ return k==='sat'||k==='sun'; };
+            var _isSep=function(i2){ return _lastSdIdx>=0 && i2===_lastSdIdx; };
+            // Schools outside a pod still occupy the Pod column, so every School Name and
+            // checkbox below stays in the same place whether or not a pod is present.
+            // Pod column sizes to its bracket + name (the hidden sizer supplies the intrinsic
+            // width), so no fixed minimum; a long name truncates rather than widening the table.
+            if(anyPod) $hr.append($('<th class="sf-alloc-pod-h">').css(Object.assign({},th,{padding:'3px 4px',width:'1px',maxWidth:'92px',overflow:'hidden',textOverflow:'ellipsis'})).text('Pod'));
+            $hr.append($('<th class="sf-alloc-school-h">').css(Object.assign({},th,{textAlign:'left',minWidth:'150px'})).text('School Name'));
+            days.forEach(function(dy,dyi){
+              var $th=$('<th>').addClass(dy.isSd?'sf-alloc-sd-h':'sf-alloc-day-h').attr('data-day',dy.k)
+                .css(Object.assign({},th,{minWidth:'34px'},
+                  _isWknd(dy.k)?{background:WKND_TH,color:'#3d5a80'}:{},
+                  _isSep(dyi)?{borderRight:SEP_BORDER}:{}));
+              if(_isWknd(dy.k)) $th.addClass('sf-alloc-wknd');   // lets hover strengthen it in the weekend family
+              if(dy.isSd){
+                var sd=getSdById(g.id,dy.sdId);
+                var $in=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap'});
+                $in.append($('<span class="sf-alloc-sd-circle">').css({display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:(sd&&sd.color)||'#ffffff',border:'1px solid rgba(0,0,0,.25)',flexShrink:'0'}));
+                $in.append($('<span>').text(dy.l));
+                $th.append($in);
+              } else { $th.text(ABBR[dy.k]||dy.l); }
+              $hr.append($th);
+            });
+            // An INTERNAL table title, not another section header: one cell spanning every
+            // column so it stays stable as Pod and Special Day columns come and go.
+            var _span=(anyPod?1:0)+1+days.length;
+            var $titleTh=$('<th class="sf-alloc-title" colspan="'+_span+'">').css(Object.assign({},th,{textAlign:'left',padding:'3px 6px',fontSize:'9.5px',letterSpacing:'.02em'}));
+            var $titleIn=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'8px'});
+            $titleIn.append($('<span>').text('Staffing Allocation'));
+            if(_pgvCur.mode!=='view'){
+              // Secondary to the title: same compact idiom as the other small action controls,
+              // sized so the header does not grow taller than its one text line.
+              var _mkBulk=function(lbl,cls,fn){
+                var $b=$('<button type="button" class="'+cls+'">').css({
+                  background:'none',border:'1px solid #dee2e6',borderRadius:'4px',
+                  padding:'0 6px',fontSize:'9px',lineHeight:'15px',color:'#6c757d',
+                  cursor:'pointer',fontWeight:'500',whiteSpace:'nowrap',flexShrink:'0'
+                }).text(lbl);
+                $b.on('mouseenter',function(){ $(this).css({borderColor:'#adb5bd',color:'#495057'}); })
+                  .on('mouseleave',function(){ $(this).css({borderColor:'#dee2e6',color:'#6c757d'}); });
+                $b.on('click',function(e){ e.preventDefault(); e.stopPropagation(); fn(); });
+                return $b;
+              };
+              $titleIn.append(_mkBulk('Select All','sf-alloc-all',function(){ _allocBulk(true); }));
+              $titleIn.append(_mkBulk('Clear','sf-alloc-clear',function(){ _allocBulk(false); }));
+            }
+            $titleTh.append($titleIn);
+            var $titleRow=$('<tr class="sf-alloc-title-row">').append($titleTh);
+            $t.append($('<thead>').append($titleRow).append($hr));
+
+            var $tb=$('<tbody>');
+            var i=0;
+            while(i<list.length){
+              var p0=podOf(list[i].sRow), j=i+1;
+              while(j<list.length&&podOf(list[j].sRow)===p0) j++;
+              for(var k2=i;k2<j;k2++){
+                (function(u,rowIdx,isFirstOfPod,podSpan,pod){
+                  var $tr=$('<tr class="sf-alloc-row">').attr('data-alloc-si',String(u.si));
+                  // No inline row hover: an inline background beats the .sf-alloc-*-hot classes,
+                  // so the cross-highlight below owns row emphasis entirely.
+                  if(anyPod){
+                    if(pod){
+                      if(isFirstOfPod){
+                        // The Site Breakdown recipe, verbatim: a position:relative rowspan cell
+                        // holding an ABSOLUTELY positioned wrap (top:0/bottom:0). That is what
+                        // makes the line run from the top edge of the first school in the run to
+                        // the bottom edge of the last — a stretched inline element only spans its
+                        // own row's content box, which is what the first version got wrong.
+                        var _ink=(typeof _podBracketColor==='function')?_podBracketColor(pod.color):(pod.color||'#6c757d');
+                        var $pTd=$('<td class="sf-alloc-pod sf-alloc-pod-bracket">')
+                          .attr({rowspan:String(podSpan),'data-pod-name':pod.name||'','data-pod-rows':podSpan})
+                          .css(Object.assign({},td,{padding:'0',width:'1px',whiteSpace:'nowrap',position:'relative',verticalAlign:'middle'}));
+                        $pTd.append($('<div class="sf-alloc-pod-wrap">').css({display:'flex',alignItems:'stretch',justifyContent:'flex-end',gap:'3px',position:'absolute',top:'0',bottom:'0',left:'0',right:'0',padding:'0 3px',overflow:'hidden'})
+                          .append($('<span class="sf-alloc-pod-name">').attr('title',pod.name||'').css({alignSelf:'center',whiteSpace:'nowrap',textAlign:'right',fontSize:'9px',fontWeight:'700',color:_ink,lineHeight:'1.1'}).text(pod.name||''))
+                          .append($('<div class="sf-alloc-pod-line">').css({alignSelf:'stretch',width:'3px',borderRadius:'2px',background:_ink,flexShrink:'0'})));
+                        // Hidden sizer: gives the 1px-wide cell a real intrinsic width, exactly as
+                        // the Site Breakdown does, since the visible wrap is out of flow.
+                        $pTd.append($('<div class="sf-alloc-pod-sizer">').css({visibility:'hidden',display:'flex',alignItems:'center',gap:'3px',padding:'0 3px',height:'0',overflow:'hidden'})
+                          .append($('<span>').css({whiteSpace:'nowrap',fontSize:'9px',fontWeight:'700'}).text(pod.name||''))
+                          .append($('<span>').css({width:'3px',flexShrink:'0'})));
+                        $tr.append($pTd);
+                      }
+                    } else {
+                      $tr.append($('<td class="sf-alloc-pod sf-alloc-pod-empty">').css(td));   // keeps the columns aligned
+                    }
+                  }
+                  var nm=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||('School '+(u.si+1));
+                  $tr.append($('<td class="sf-alloc-school">').css(Object.assign({},td,{textAlign:'left',fontWeight:'500'})).text(nm));
+                  days.forEach(function(dy,dyi){
+                    var $c=$('<td class="sf-alloc-cell">').attr({'data-alloc-si':String(u.si),'data-alloc-day':dy.k})
+                      .css(Object.assign({},td,{padding:'2px'},
+                        _isWknd(dy.k)?{background:WKND_TD}:{},
+                        _isSep(dyi)?{borderRight:SEP_BORDER}:{}));
+                    if(_isWknd(dy.k)) $c.addClass('sf-alloc-wknd');
+                    var _ro=(_pgvCur.mode==='view');
+                    var _chk=staffAllocGet(rec,u.si,dy.k);
+                    if(_ro){
+                      // Checkmark for allocated, empty for not — readable, inert, and immune to
+                      // the locked transform because it is not a form control at all.
+                      var $ind=$('<span class="sf-alloc-ind">').attr('data-checked',_chk?'1':'0')
+                        .css({display:'inline-block',fontSize:'11px',lineHeight:'1',color:_chk?'#308930':'#c8ccd1'})
+                        .text(_chk?'\u2713':'');
+                      rec.cells[staffAllocKey(u.si,dy.k)]=_chk;
+                      $c.append($ind);
+                      $tr.append($c);
+                      return;
+                    }
+                    // The whole cell is the target, not just the 12px control. Clicking the
+                    // checkbox itself already fires change, so the cell handler must ignore that
+                    // click or the two would cancel each other out.
+                    $c.css('cursor','pointer').on('click',function(e){
+                      if(e.target && e.target.tagName==='INPUT') return;
+                      var $b=$(this).find('input.sf-alloc-cb');
+                      if(!$b.length) return;
+                      $b.prop('checked',!$b.prop('checked')).trigger('change');
+                    });
+                    var $cb=$('<input type="checkbox" class="sf-alloc-cb">').css({cursor:'pointer',margin:'0',width:'12px',height:'12px'})
+                      .prop('checked',_chk);
+                    // Write the value on EVERY render so the export always carries an explicit
+                    // entry for every intersection, not just the ones a user has touched.
+                    rec.cells[staffAllocKey(u.si,dy.k)]=$cb.prop('checked');
+                    if(!_ro) $cb.on('change',function(){
+                      // Allocation now DRIVES calculations, so a change is a real transaction:
+                      // snapshot first, one History sentence, then repaint the dependency chain,
+                      // then offer Undo. The order matters — Undo must capture the pre-change state.
+                      var on=this.checked;
+                      try{ _pgUndo.begin(g.id); }catch(e){}
+                      staffAllocRec(g.id,sfxClass).cells[staffAllocKey(u.si,dy.k)]=on;
+                      setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+                      var _sn=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||('School '+(u.si+1));
+                      var _dn=dy.l||dy.k;
+                      var _cn=(editCombo&&editCombo.calRow&&editCombo.calRow.name)||'';
+                      try{
+                        _pgHist.begin(g.id);   // rebaseline so the debounced differ does not double-log
+                        _pgHist.evt(g.id,{kind:'edit',action:'Staffing Allocation changed',
+                          desc:(on?'Added ':'Removed ')+_sn+(on?' to ':' from ')+_dn+' Staffing Allocation'+(_cn?(' for '+_cn):'')+'.'});
+                      }catch(e){}
+                      // Only this table's counts, then the calendar/summary chain — not a full
+                      // application rerender. _updateHours fans out to the calendar cells,
+                      // refreshSummary, the Program Calendars cells and the Discounts figures.
+                      try{ updU($tbU); }catch(e){}
+                      try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(e){}
+                      try{ _pgUndo.offer(g.id,{lead:_sn,tail:(on?(' added to '+_dn+'.'):(' removed from '+_dn+'.'))}); }catch(e){}
+                    });
+                    $c.append($cb);
+                    $tr.append($c);
+                  });
+                  $tb.append($tr);
+                })(list[k2],k2,k2===i,j-i,p0);
+              }
+              i=j;
+            }
+            $t.append($tb);
+            // ONE delegated pair of handlers for the whole table rather than a listener per cell:
+            // with many schools x many days that is the difference between dozens of bindings and
+            // two. Classes do the painting (see the .sf-alloc-*-hot rules in the page CSS).
+            $t.on('mouseenter','td.sf-alloc-cell',function(){
+              var $c=$(this), dk=$c.attr('data-alloc-day');
+              $t.find('.sf-alloc-row-hot').removeClass('sf-alloc-row-hot');
+              $t.find('.sf-alloc-col-hot').removeClass('sf-alloc-col-hot');
+              $t.find('.sf-alloc-cell-hot').removeClass('sf-alloc-cell-hot');
+              $c.closest('tr').addClass('sf-alloc-row-hot');
+              $t.find('td.sf-alloc-cell[data-alloc-day="'+dk+'"]').addClass('sf-alloc-col-hot');
+              $t.find('thead th[data-day="'+dk+'"]').addClass('sf-alloc-col-hot');
+              $c.addClass('sf-alloc-cell-hot');
+            });
+            $t.on('mouseleave',function(){
+              $t.find('.sf-alloc-row-hot').removeClass('sf-alloc-row-hot');
+              $t.find('.sf-alloc-col-hot').removeClass('sf-alloc-col-hot');
+              $t.find('.sf-alloc-cell-hot').removeClass('sf-alloc-cell-hot');
+            });
+            var $scr=$('<div>').css({overflowX:'auto',maxWidth:'100%'});
+            $scr.append($t);
+            $allocWrap.append($scr);
+            setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+            try{ _pgHist.begin(g.id); }catch(e){}
+          }
+          // EXACTLY ONE representation, derived from the allocation state — not from whatever
+          // event caused the rerender. Enabled: the matrix, rebuilt so pod brackets and columns
+          // reflect the current Site Breakdown. Disabled: the school list. Never both.
+          function _applyAllocMode(){
+            var on=_allocEligible() && staffAllocRec(g.id,sfxClass).on;
+            if(on){
+              if($schoolStrip) $schoolStrip.hide();
+              if(!$allocWrap) return;
+              if(!$allocWrap.parent().length && $schoolStrip && $schoolStrip.parent().length) $allocWrap.insertAfter($schoolStrip);
+              _rebuildAllocTable();   // re-derives Pod column + brackets; checkbox values persist in the store
+            } else {
+              if($allocWrap) $allocWrap.detach();   // out of the DOM entirely, not merely hidden
+              if($schoolStrip){
+                _rebuildSchoolStrip();
+                $schoolStrip.toggle(_stripSchools().length>1);
+              }
+            }
+          }
           if(editCombo&&editCombo.si===null){
             $schoolStrip=$('<div class="sf-school-strip">').css({display:'flex',flexDirection:'column',gap:'2px',padding:'2px 2px 4px',marginTop:'2px'});
             _rebuildSchoolStrip();
+            $allocWrap=$('<div class="sf-alloc-wrap">').css({padding:'2px 2px 6px',marginTop:'2px',display:'none'});
+            _applyAllocMode();
           }
           function updU($tb){
-            _rebuildSchoolStrip();
+            // Route through _applyAllocMode, never straight to the strip: the mode decides which
+            // ONE representation is on screen, so a pod/Site-Breakdown change repaints the
+            // allocation table's brackets instead of resurrecting the school list beside it.
+            _applyAllocMode();
             var c=getCountsFn();
             ROLES.forEach(function(role){
               var _anyOvC=(editableCnt||_compSchools)&&DAYS.some(function(_d){return (editableCnt?(shCntOv(shData,role.key,_d.k)||0):_effComposite(role,_d.k))>0;});
@@ -9205,9 +9729,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $tb.find('.count-cell-u[data-role="'+role.key+'"]').each(function(){
                 var _dk=$(this).attr('data-day');
                 var _dOv=null;
+                var _dDef=_compSchools?_defComposite(role,_dk):(c[role.countKey]||0);
                 if(editableCnt){ _dOv=shCntOv(shData,role.key,_dk); }
-                else if(_compSchools){ var _ec2=_effComposite(role,_dk); if(_ec2!==(c[role.countKey]||0)) _dOv=_ec2; }
-                _shCntPaint($(this), _dOv, c[role.countKey]||0);
+                else if(_compSchools){ var _ec2=_effComposite(role,_dk); if(_ec2!==_dDef) _dOv=_ec2; }
+                _shCntPaint($(this), _dOv, _dDef);
               });
             });
             // Build hours map in one pass to avoid O(n²) nested finds
@@ -9249,7 +9774,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $frU.append($('<td colspan="2">').css(Object.assign({},FOOT_CU,{textAlign:'left',textTransform:'uppercase',letterSpacing:'.03em',color:'#3d5a80',background:'#e8eef5'})).text('Total Hrs/Day'));
           DAYS.forEach(function(day,di){ var W=day.k==='sat'||day.k==='sun'; var _isSepUF=(_lastSdIdxU>=0&&di===_lastSdIdxU); $frU.append($('<td class="day-total-u">').attr({'data-day':day.k,'data-sfx':sfxClass}).css(Object.assign({},FOOT_CU,{fontSize:'11px',color:'#1a3a5c'},W?{background:'#c8dbee'}:{},_isSepUF?{borderRight:'2px solid #9aafc5'}:{})).text('')); });
           $tfU.append($frU); $tblU.append($tbU,$tfU); $scr.append($tblU);
-          return {$scroll:$scr,$tbody:$tbU,pickers:_p,$strip:$schoolStrip,recalc:function(){updU($tbU);}};
+          return {$scroll:$scr,$tbody:$tbU,pickers:_p,$strip:$schoolStrip,$alloc:$allocWrap,
+                  allocEligible:_allocEligible,applyAlloc:_applyAllocMode,
+                  allocOn:function(){ return _allocEligible() && staffAllocRec(g.id,sfxClass).on; },
+                  recalc:function(){updU($tbU);}};
         }
 
         // ── Render all slots ────────────────────────────────────────────────
@@ -9479,6 +10007,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if($copyToBtn) _calSec.$hdr.append($copyToBtn);
             if($clearBtn) _calSec.$hdr.append($clearBtn);
           }
+          var _$allocHost=_hasSub?$hdr:_calSec.$hdr;
+          var _$allocAfter=$clearBtn||null;
           var cFn=combo.pod
             ? (function(list,csr){ return function(){
                 var t={}; ROLES.forEach(function(r){ t[r.countKey]=0; });
@@ -9490,8 +10020,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               }; })(combo.podSchools,combo.calSiteRows)
             : (function(sr,csr){ return function(){ return getSchoolCounts(sr,csr); }; })(combo.sRow,combo.calSiteRows);
           var res=buildOneTable(shData,cFn,sfx,combo.calRow,combo);
+          // ── Staffing Allocation checkbox ── multi-school tables only, and never while locked.
+          // Inserted BEFORE Clear so the order reads "Copy to  Staffing Allocation  |  Clear",
+          // with the divider carried on Clear itself so a stray click cannot land on it.
+          if(res.allocEligible && res.allocEligible() && _$allocHost && _$allocHost.length){
+            (function(sfxKey2,resRef){
+              var $wrap=$('<label class="sf-alloc-toggle">').css({
+                display:'inline-flex',alignItems:'center',gap:'4px',marginLeft:'8px',
+                fontSize:'10px',color:'#6c757d',fontWeight:'500',cursor:'pointer',
+                whiteSpace:'nowrap',flexShrink:'0',userSelect:'none'
+              });
+              var $cb=$('<input type="checkbox" class="sf-alloc-toggle-cb">').css({cursor:'pointer',margin:'0',width:'12px',height:'12px'})
+                .prop('checked',!!staffAllocRec(g.id,sfxKey2).on);
+              $wrap.append($cb).append($('<span>').text('Staffing Allocation'));
+              $wrap.on('mouseenter',function(){ $(this).css('color','#495057'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+              $cb.on('change',function(){
+                staffAllocRec(g.id,sfxKey2).on=this.checked;
+                setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+                try{ _pgHist.begin(g.id); }catch(e){}   // display-only: rebaseline so nothing is logged
+                resRef.applyAlloc();
+              });
+              if(_$allocAfter && _$allocAfter.length && $.contains(_$allocHost[0],_$allocAfter[0])){
+                $wrap.insertBefore(_$allocAfter);
+                // Divider between the checkbox and Clear, so Clear is never a mis-click away.
+                _$allocAfter.css({marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'});
+              } else {
+                _$allocHost.append($wrap);
+              }
+            })(sfx,res);
+          }
           res.$scroll.attr({'data-sf-cal':combo.ci!=null?String(combo.ci):'','data-sf-school':combo.si!=null?String(combo.si):'','data-sf-wk':combo.wk||'','data-sf-pod':combo.pod?String(combo.pod.id):''});
           if(res.$strip) _calSec.$section.append(res.$strip);   // composite school strip: below the title, above the column headers
+          // Only mounted when allocation is ON; otherwise the section keeps its original shape.
+          if(res.$alloc && res.allocOn && res.allocOn()) _calSec.$section.append(res.$alloc);
           _calSec.$section.append(res.$scroll);
           _allRecalcs.push(res);
           _comboResults.push({combo:combo,shData:shData,res:res,$hdr:$hdr||$(),$calSection:_calSec.$section});
@@ -10963,6 +11524,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var ck=role.isCoach?'coaches_'+role.key:role.key;
           var cnt;
           if(sRow){
+            // Same gate the Staffing Hours table applies, so the Calendar can never show a figure
+            // the table does not: excluded school contributes nothing on this day.
+            if(!staffAllocAllows(g.id,_ciPart,_wkPart,si,srcKey)) continue;
             cnt=parseInt(sRow[ck])||0;
             var _shcCal=shSchoolCntOv(_slots,si,_ciPart,_wkPart,role.key,srcKey);   // Staffing Hours count override (canonical per-school) sits between the SB default and the CHB cell override
             if(_shcCal!=null) cnt=_shcCal;
@@ -10970,6 +11534,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             cnt=0;
             for(var j=0;j<_siteRows.length;j++){
               if(!_siteRows[j]) continue;
+              if(!staffAllocAllows(g.id,_ciPart,_wkPart,j,srcKey)) continue;   // per-school gate inside the aggregate sum
               var _shcC2=shSchoolCntOv(_slots,j,_ciPart,_wkPart,role.key,srcKey);
               cnt+=(_shcC2!=null)?_shcC2:(parseInt(_siteRows[j][ck])||0);
             }
@@ -12572,6 +13137,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Per-school: each school uses its OWN counts and its OWN resolved column.
         _siteRows.forEach(function(sRow,si){
           if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
+          // Staffing Allocation: an unchecked school is ABSENT from this day, not shown at zero.
+          // Skipping here is what makes its row vanish and every derived subtotal follow.
+          if(!staffAllocAllows(gObj.id,ciForTip,wkForTip,si,resolveSchoolKey(si).srcKey)) return;
           var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
           var resolved=resolveSchoolKey(si);
           if(resolved.noHours){
@@ -12620,6 +13188,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var cnt=0, baseCnt=0, anyC=false, anyT=false, anyS=false, anyE=false, _ov0=null, _baseMap={}, _siL=[];
             _siteRows.forEach(function(r,si){
               if(!r) return;
+              // Same gate on the aggregate path: excluded schools contribute no count, so the
+              // combined row's figure matches the day cell rather than exceeding it.
+              if(!staffAllocAllows(gObj.id,ciForTip,wkForTip,si,aggResolved.srcKey)) return;
               var c0=parseInt(r[role.countKey])||0;
               var _shc0=shCntOv(_sfSlots[_slotKey2(si, ciForTip, wkForTip)],role.key,aggResolved.srcKey);   // canonical per-school SH count override
               if(_shc0!=null) c0=_shc0;
@@ -13476,7 +14047,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var _slCtx={gObj:gObj,calRow:cr,calOrigIdx:oi,dayKey:dayKey,cellDate:cellDate,abWeek:gp.abWeek};
             // Pod rails: consecutive pod-mates share one thin colored rail + small pod name (SB order kept).
             var _slPods=(cr.calId!=null)?podsFor(gObj,cr.calId):null;
-            _tipPodListify($slw, _grpSites, _slPods, function(sr,si){
+            _tipPodListify($slw, _tipAllocSites(_grpSites,gObj.id,oi,gp.abWeek||'',dayKey), _slPods, function(sr,si){
               var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
               // Subtle bullet: muted dot + clickable name, each school on its own line (min-width:0 keeps ellipsis in flex).
               return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'5px',fontSize:'9px',color:'#6c757d',lineHeight:'1.4'})
@@ -13743,6 +14314,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Per-school: each school uses its OWN counts and its OWN resolved column.
         _siteRows.forEach(function(sRow,si){
           if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
+          // Staffing Allocation: an unchecked school is ABSENT from this day, not shown at zero.
+          // Skipping here is what makes its row vanish and every derived subtotal follow.
+          if(!staffAllocAllows(gObj.id,ciForTip,wkForTip,si,resolveSchoolKey(si).srcKey)) return;
           var schoolName=(si+1)+'. '+(sRow.school||sRow.schoolAbbr||('School '+(si+1)));
           var resolved=resolveSchoolKey(si);
           if(resolved.noHours){
@@ -13791,6 +14365,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var cnt=0, baseCnt=0, anyC=false, anyT=false, anyS=false, anyE=false, _ov0=null, _baseMap={}, _siL=[];
             _siteRows.forEach(function(r,si){
               if(!r) return;
+              // Same gate on the aggregate path: excluded schools contribute no count, so the
+              // combined row's figure matches the day cell rather than exceeding it.
+              if(!staffAllocAllows(gObj.id,ciForTip,wkForTip,si,aggResolved.srcKey)) return;
               var c0=parseInt(r[role.countKey])||0;
               var _shc0=shCntOv(_sfSlots[_slotKey2(si, ciForTip, wkForTip)],role.key,aggResolved.srcKey);   // canonical per-school SH count override
               if(_shc0!=null) c0=_shc0;
@@ -13889,7 +14466,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var _ivSlCtx={gObj:gObj,calRow:_tipCalRow,calOrigIdx:calOrigIdx,dayKey:dayKey,cellDate:cellDate,abWeek:abWeek};
         // Pod rails: consecutive pod-mates share one thin colored rail + small pod name (SB order kept).
         var _ivPods=(_tipCalRow&&_tipCalRow.calId!=null)?podsFor(gObj,_tipCalRow.calId):null;
-        _tipPodListify($schoolList, _siteRows, _ivPods, function(sr,si){
+        _tipPodListify($schoolList, _tipAllocSites(_siteRows,gObj.id,calOrigIdx,abWeek||'',dayKey), _ivPods, function(sr,si){
           var _nm=(sr.school&&sr.school.trim())||sr.schoolAbbr||('School '+(si+1));
           // Subtle bullet: muted dot + clickable name, each school on its own line (min-width:0 keeps ellipsis in flex).
           return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontSize:'10px',color:'#5f6368',lineHeight:'1.45'})
@@ -14035,7 +14612,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $trow=$('<tr>').css({background:'#f0f4f8'});
       var $grandTd=$('<td>').css({padding:'5px 5px',textAlign:'center',fontWeight:'700',color:'#0d6efd'}).text(grand);
       _live.total=$grandTd;
-      [$('<td>').attr('colspan',colspan).css({padding:'5px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text(_tipTotalLabel((_siteRows||[]).length,_allocGrand)),
+      [$('<td>').attr('colspan',colspan).css({padding:'5px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text(_tipTotalLabel((function(){
+        // Schools participating on THIS date: excluded ones were filtered out of the rows above,
+        // so counting them here would contradict what the reader can actually see.
+        var _r=(_siteRows||[]), _n=0;
+        for(var _i=0;_i<_r.length;_i++){
+          if(!_r[_i]) continue;
+          var _sk=null; try{ _sk=(resolveSchoolKey(_i)||{}).srcKey; }catch(_e){}
+          if(staffAllocAllows(gObj.id,ciForTip,wkForTip,_i,_sk||dayKeyForTip)) _n++;
+        }
+        return _n;
+      })(),_allocGrand)),
        $grandTd
       ].forEach(function($c){ $trow.append($c); });
       $tFoot.append($('<tbody>').append($trow));
@@ -14981,6 +15568,55 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // file: the guide's full saved state (authoritative for a future Import / restore) plus a calculated
   // snapshot (per-calendar + guide totals) for IT / integration / debugging use. Versioned + structured so
   // another system can parse it predictably.
+  // THE authoritative Planning Guide serialization. Export JSON and Snapshots both call this, so
+  // a snapshot's core data is the same bytes a normal export would produce — no second code path
+  // that could drift. Snapshot metadata is added by the caller, never in here.
+  function buildGuidePayload(g){
+    var det=getGuideDetail(g.id);
+    var calc={ calendars:[], totals:{ hours:0, amount:0 } };
+    try{ var $sum=buildSummarySection(g); if($sum&&$sum[0]&&$sum[0].__pgCalc) calc=$sum[0].__pgCalc; }catch(_e){}
+    var now=new Date();
+    var payload={
+      schemaVersion:'1.0',
+      type:'planning-guide',
+      exportKind:'full',
+      exportedAt:now.toISOString(),
+      application:{ name:'Planning Guide' },
+      guide:{ id:g.id, name:g.name, status:(det&&det.status)||null },
+      data:JSON.parse(JSON.stringify(det||{})),
+      calculated:calc
+    };
+    try{
+      var _pfx=g.id+'|', _sa={}, _sn={};
+      Object.keys(scheduleAssignments).forEach(function(k){
+        if(k.indexOf(_pfx)!==0) return;
+        var _sid=scheduleAssignments[k]; if(_sid==null) return;
+        var _st=STAFF.find(function(x){ return String(x.id)===String(_sid); });
+        _sa[k.slice(_pfx.length)]={ staffId:_sid, staffName:(_st&&_st.n)||null };
+      });
+      Object.keys(scheduleShiftNotes).forEach(function(k){
+        if(k.indexOf(_pfx)!==0) return;
+        var _nv=scheduleShiftNotes[k]; if(_nv==null||_nv==='') return;
+        _sn[k.slice(_pfx.length)]=_nv;
+      });
+      payload.data.staffAssignments=_sa;
+      payload.data.shiftNotes=_sn;
+    }catch(_ex){}
+    return payload;
+  }
+  // Shared download path, so a snapshot file behaves exactly like an export file.
+  function downloadJsonFile(json, fname){
+    var blob=new Blob([json],{type:'application/json'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ try{URL.revokeObjectURL(url);}catch(e){} a.remove(); },0);
+  }
+  function pgSafeFileName(base){
+    return String(base||'snapshot').replace(/[\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim()+'.json';
+  }
   function exportGuideToJson(g){
     function jsonError(){
       var $ov=$('<div>').css({position:'fixed',inset:'0',background:'rgba(0,0,0,.3)',zIndex:'100000',display:'flex',alignItems:'center',justifyContent:'center'});
@@ -14994,54 +15630,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $('body').append($ov);
     }
     try{
-      var det=getGuideDetail(g.id);
-      // Calculated snapshot - reuse buildSummarySection's exact figures (no divergence from the on-screen
-      // Summary / Excel). Building the fragment has no side effects; we only read the stashed numbers.
-      var calc={ calendars:[], totals:{ hours:0, amount:0 } };
-      try{ var $sum=buildSummarySection(g); if($sum&&$sum[0]&&$sum[0].__pgCalc) calc=$sum[0].__pgCalc; }catch(_e){}
+      // A plain export carries NO snapshot metadata and NO History — that separation is asserted.
+      var payload=buildGuidePayload(g);
       var now=new Date();
-      var payload={
-        schemaVersion:'1.0',
-        type:'planning-guide',
-        exportKind:'full',
-        exportedAt:now.toISOString(),
-        application:{ name:'Planning Guide' },
-        guide:{ id:g.id, name:g.name, status:(det&&det.status)||null },
-        // Full saved state (deep-cloned) - the authoritative source for a future Import / restore.
-        data:JSON.parse(JSON.stringify(det||{})),
-        // Derived, read-only snapshot - convenience for integrations / debugging; recomputed on import.
-        calculated:calc
-      };
-      // Assigned staff + per-shift notes live in module maps keyed by guide-scoped
-      // shiftKeys; export them gid-agnostically (suffix si|origIdx|date|roleKey|num)
-      // with the staff display name beside the id so imports survive roster id drift.
-      try{
-        var _pfx=g.id+'|', _sa={}, _sn={};
-        Object.keys(scheduleAssignments).forEach(function(k){
-          if(k.indexOf(_pfx)!==0) return;
-          var _sid=scheduleAssignments[k]; if(_sid==null) return;
-          var _st=STAFF.find(function(x){ return String(x.id)===String(_sid); });
-          _sa[k.slice(_pfx.length)]={ staffId:_sid, staffName:(_st&&_st.n)||null };
-        });
-        Object.keys(scheduleShiftNotes).forEach(function(k){
-          if(k.indexOf(_pfx)!==0) return;
-          var _nv=scheduleShiftNotes[k]; if(_nv==null||_nv==='') return;
-          _sn[k.slice(_pfx.length)]=_nv;
-        });
-        payload.data.staffAssignments=_sa;
-        payload.data.shiftNotes=_sn;
-      }catch(_ex){}
       var json=JSON.stringify(payload,null,2);
       var mm=String(now.getMonth()+1).padStart(2,'0'), dd2=String(now.getDate()).padStart(2,'0');
-      var fname=(g.name+' ('+g.id+') - '+mm+'-'+dd2+'-'+now.getFullYear()+'.json')
-        .replace(/[\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
-      var blob=new Blob([json],{type:'application/json'});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement('a');
-      a.href=url; a.download=fname;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function(){ try{URL.revokeObjectURL(url);}catch(e){} a.remove(); },0);
+      downloadJsonFile(json,(g.name+' ('+g.id+') - '+mm+'-'+dd2+'-'+now.getFullYear())
+        .replace(/[\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim()+'.json');
     }catch(e){ jsonError(); }
   }
   function buildSummarySection(g){
@@ -15126,7 +15721,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // Fast path (no Special Days, no Week A/B): each weekday recurs identically, so compute
           // per-weekday hours once and multiply by how many of each weekday fall in [fd, ld] — O(7).
           var _dowH=[0,0,0,0,0,0,0];
-          for(var _di=0;_di<7;_di++){ var _dk=DOWKEY[_di], _hh=0; for(var _ri=0;_ri<_active.length;_ri++){ var _ar=_active[_ri], _rd=_sBase[_ar.k]; if(_rd){ var _v=_adjH(_rd[_dk]); if(_v>0) _hh+=_v*_ar.c; } } _dowH[_di]=_hh; }
+          for(var _di=0;_di<7;_di++){ var _dk=DOWKEY[_di], _hh=0;
+            // Staffing Allocation gate: an excluded school contributes 0 on that weekday. The
+            // shortcut survives because allocation is per-weekday and constant across the range.
+            var _dAllow=staffAllocAllows(g.id,_ci2,'',si,_dk);
+            if(_dAllow){ for(var _ri=0;_ri<_active.length;_ri++){ var _ar=_active[_ri], _rd=_sBase[_ar.k]; if(_rd){ var _v=_adjH(_rd[_dk]); if(_v>0) _hh+=_v*_ar.c; } } }
+            _dowH[_di]=_hh; }
           var _N=Math.round((ld.getTime()-fd.getTime())/86400000)+1, _base=Math.floor(_N/7), _rem=_N%7, _fdDow=fd.getDay();
           for(var _j=0;_j<7;_j++){ tot+=_dowH[(_fdDow+_j)%7]*(_base+(_j<_rem?1:0)); }
         } else {
@@ -15141,6 +15741,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var sdId=markerSdId(_calId2, isoD(d), si);
               if(sdId){ var sd=getSdById(g.id, sdId); if(sd){ if(sd.noHours){ d=addDays(d,1); continue; } srcKey=sd.id; } }
             }
+            if(!staffAllocAllows(g.id,_ci2,_isAB?(_wkG||''):'',si,srcKey)){ d=addDays(d,1); continue; }   // excluded for this day/Special Day
             for(var _ri2=0;_ri2<_active.length;_ri2++){
               var _ar2=_active[_ri2], _rd2=slot[_ar2.k];
               var _tm=_rd2?_rd2[srcKey]:null, _c=_ar2.c;
@@ -15636,10 +16237,78 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       evt:function(g,e){ push(g,e); },
       _sentence:sentence,   // test/debug: render one structural change as its sentence
       list:function(g){ return load(g).slice().reverse(); },
+      raw:function(g){ return load(g).slice(); },                       // oldest-first, as stored
+      restore:function(g,arr){ persist(g, (arr||[]).slice()); _gid=g; _snap=snapOf(g); },   // snapshot import
       user:user
     };
   })();
   try{ window._pgHist=_pgHist; }catch(e){}   // test/debug handle
+
+  // ── Snapshots ───────────────────────────────────────────────────────────────
+  // IN-MEMORY ONLY, deliberately: no localStorage/sessionStorage/IndexedDB, so snapshots die
+  // with the page. The repository is a plain module map behind a small API, so swapping it for a
+  // database-backed one later means replacing these few functions and nothing else.
+  // IMMUTABILITY comes from storing the SERIALIZED json string, not object references: once
+  // taken, no later edit to the live guide can reach inside a snapshot.
+  var _pgSnapStore={};                       // gid -> [snapshot, ...] oldest first
+  var _pgSnapSeq=0;
+  function _pgSnapArr(gid){ var k=String(gid); if(!_pgSnapStore[k]) _pgSnapStore[k]=[]; return _pgSnapStore[k]; }
+  function pgSnapList(gid){ return _pgSnapArr(gid).slice(); }
+  // Newest first, capped — the submenu shows 10; the rest stay in memory for View Snapshots.
+  function pgSnapRecent(gid,n){ return _pgSnapArr(gid).slice().reverse().slice(0,n||10); }
+  function pgSnapById(gid,id){
+    var a=_pgSnapArr(gid);
+    for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; }
+    return null;
+  }
+  // Plain text for menus, History and search: never render stored HTML as markup outside the
+  // sanitized notes body itself.
+  function pgSnapPlain(html){
+    try{
+      var d=document.createElement('div');
+      d.innerHTML=_wsSanitizeHtml(String(html||''));
+      return (d.textContent||'').replace(/\s+/g,' ').trim();
+    }catch(e){ return ''; }
+  }
+  function pgSnapDefaultName(g){
+    var d=new Date();
+    var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return ((g&&g.name)||'Planning Guide')+' \u2013 '+MON[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();
+  }
+  // Capture: core payload from the SAME builder Export JSON uses, plus snapshot metadata and the
+  // guide's History. Serialized immediately — that string IS the snapshot.
+  function pgSnapCreate(g,name,notesHtml){
+    var uid=(_pgHist&&_pgHist.user)?_pgHist.user():{id:'local-user',name:'Local User'};
+    var id='snap-'+Date.now()+'-'+(++_pgSnapSeq);
+    var createdAt=new Date().toISOString();
+    var safeNotes=_wsSanitizeHtml(String(notesHtml||''));
+    var payload=buildGuidePayload(g);
+    payload.exportKind='snapshot';
+    payload.snapshot={
+      id:id, name:String(name||'').trim()||pgSnapDefaultName(g),
+      notesHtml:safeNotes, notesText:pgSnapPlain(safeNotes),
+      createdAt:createdAt, createdBy:{ id:uid.id||null, name:uid.name||'Local User' },
+      snapshotSchemaVersion:'1.0'
+    };
+    // History rides INSIDE the snapshot; a plain export never carries it.
+    try{ payload.history=JSON.parse(JSON.stringify(_pgHist.raw(g.id)||[])); }catch(e){ payload.history=[]; }
+    var snap={
+      id:id, gid:String(g.id), name:payload.snapshot.name,
+      notesHtml:safeNotes, notesText:payload.snapshot.notesText,
+      createdAt:createdAt, createdBy:payload.snapshot.createdBy,
+      json:JSON.stringify(payload,null,2)   // frozen bytes: the immutability guarantee
+    };
+    _pgSnapArr(g.id).push(snap);
+    return snap;
+  }
+  // Download the STORED bytes — never re-serialize the live guide, which may have moved on.
+  function pgSnapDownload(gid,id){
+    var s2=pgSnapById(gid,id);
+    if(!s2) return false;
+    downloadJsonFile(s2.json, pgSafeFileName(s2.name));
+    return true;
+  }
+  try{ window._pgSnaps={ list:pgSnapList, recent:pgSnapRecent, byId:pgSnapById, create:pgSnapCreate, download:pgSnapDownload, plain:pgSnapPlain }; }catch(e){}
 
   // ── Undo notifications ──────────────────────────────────────────────────────
   // A compact Gmail-style snackbar offered after a COMPLETED Planning Guide change that
@@ -16175,7 +16844,36 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     return apply;
   }
   var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Add Discount|Copy To|Options|Clear|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
-  function _pgvStripEditAffordances(root){ try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots').remove(); }catch(e){} }
+  function _pgvStripEditAffordances(root){
+    try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots').remove(); }catch(e){}
+    // Staffing Allocation is edit-only for now. The build-time guard covers a fresh locked
+    // render; locking an ALREADY-RENDERED guide is an in-place transform, so the control and its
+    // matrix are removed here too — and the school strip it replaced is restored, otherwise a
+    // guide locked while allocation was on would show neither presentation.
+    try{
+      // The enabling CONTROL is edit-only, but the matrix stays for inspection: users need to see
+      // which schools are allocated to which days while locked. Its checkboxes are made inert
+      // rather than removed, so the checked/empty state still reads.
+      $(root).find('.sf-alloc-toggle').remove();
+      // Bulk controls and cell clickability are edit-only. The build-time guard covers a FRESH
+      // locked render; locking an ALREADY-RENDERED guide is an in-place transform, so they must
+      // be removed here too — otherwise a guide locked mid-session stays interactive.
+      $(root).find('.sf-alloc-all, .sf-alloc-clear').remove();
+      $(root).find('td.sf-alloc-cell').css('cursor','').off('click');
+      // Convert live checkboxes to the SAME read-only indicator the locked build renders, before
+      // _pgvReplaceFields runs — a disabled input would simply be stripped, blanking the cell and
+      // losing the allocation state the user is meant to be able to inspect.
+      $(root).find('input.sf-alloc-cb').each(function(){
+        var on=!!this.checked;
+        $(this).replaceWith($('<span class="sf-alloc-ind">').attr('data-checked',on?'1':'0')
+          .css({display:'inline-block',fontSize:'11px',lineHeight:'1',color:on?'#308930':'#c8ccd1'})
+          .text(on?'\u2713':''));
+      });
+      $(root).find('.sf-alloc-wrap').each(function(){
+        if(!$(this).find('.sf-alloc-table').length) $(this).remove();
+      });
+    }catch(e){}
+  }
   function _pgvDocTransform(root){
     var $R=$(root);
     _pgvStripEditAffordances($R);   // hover copy "..." never appears in locked View
@@ -16443,6 +17141,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           };
           return $lk;
         })(),
+        _pgBuildSnapshotsItem(function(fn){ return _buildGuideMenuItem(_pgIcon('snapshot'),'Snapshots',{fn:fn,submenu:true}).addClass('pg-view-ok'); }, g, function(){ $menu.hide(); }),
         mkItem(_pgIcon('history'),'History',{fn:function(){ if(_guideOps.history) _guideOps.history(g); }}).addClass('pg-view-ok'),
         mkDivider(),
         _wsBuildAddToWorkspaceItem(function(fn){ return _buildGuideMenuItem(_pgIcon('workspace'),'Add to Workspace',{fn:fn}).addClass('pg-view-ok'); }, g, function(){ $menu.hide(); }),
@@ -17166,12 +17865,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var csTdStyle={border:'1px solid #dee2e6',padding:'2px 3px',verticalAlign:'middle'};
     var csNameStyle='width:100%;border:none;background:transparent;font-size:11px;outline:none;padding:2px 6px;color:#212529;min-width:120px;';
 
+    // Declared HERE, above buildCalSetupTable, because that function now calls discAnyApplied()
+    // -> discStore() during the very first render. As `var`s further down the file the NAMES
+    // hoisted but the VALUES did not, so discStore() saw undefined and threw. Same class of bug
+    // as the _totalColspan ordering issue: a hoisted `var` is a declaration, not a value.
+    var DISC_DEFAULT_NAMES=['Timeline to Close/Begin','Multi-Year Agreement','Installment Billing','3+ Days/Week'];
+    var DISC_DEFAULT_PCT=5;
+    var DISTRICT_FLOOR_DEFAULT='74.00';   // hoisted: the discounted columns read districtFloor()
     function buildCalSetupTable(){
       var $scroll=$('<div style="overflow-x:auto;">');
       var $tbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
       var $thead=$('<thead>');
       var $htr=$('<tr>');
-      [['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Meal Breaks',{}],['Price/Hr',{minWidth:'74px'}],['Scheduled Hours',{minWidth:'92px',textAlign:'right'}],['Unallocated (Remaining) Hours',{minWidth:'104px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['Amount',{minWidth:'92px',textAlign:'right'}],['Del',{width:'36px'}]].forEach(function(pair){
+      var _discOn=discAnyApplied();
+      // A bolder left border plus a cooler tint separates the discounted block from the base
+      // pricing columns, so the two pricing stories are not read as one run of numbers.
+      var DISC_EDGE={borderLeft:'2px solid #b9c6d6'}, DISC_TINT={background:'#eef3f9'};
+      var _cols=[['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Meal Breaks',{}],['Price/Hr',{minWidth:'74px'}],['Scheduled Hours',{minWidth:'92px',textAlign:'right'}],['Unallocated (Remaining) Hours',{minWidth:'104px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['Amount',{minWidth:'92px',textAlign:'right'}]];
+      if(_discOn){
+        _cols.push(['Net Price/Hr',Object.assign({minWidth:'80px',textAlign:'right'},DISC_EDGE,DISC_TINT)]);
+        _cols.push(['Savings',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
+        _cols.push(['Net Amount',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
+      }
+      _cols.push(['Del',{width:'36px'}]);
+      _cols.forEach(function(pair){
         $htr.append($('<th>').css(Object.assign({},csThStyle,pair[1])).text(pair[0]));
       });
       $thead.append($htr);
@@ -17529,7 +18246,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             return $td;
           }
           $tr.append(calcTd('site'), calcTd('unalloc'), calcTd('total'), calcTd('amount'));
-          setTimeout(function(){ pgCalcCellsRefresh(g); },0);   // fill once the table is attached
+          if(_discOn){
+            // Read-only plain values (no disabled-input styling), right-aligned like the other
+            // financial columns. Filled by paintDiscCalcCells once the table is attached.
+            ['price','savings','amount'].forEach(function(k,ki){
+              var css=Object.assign({},csTdStyle,{textAlign:'right',whiteSpace:'nowrap',padding:'4px 10px',color:(k==='savings'?'#1a7f37':'#212529'),background:'#f6f9fc'});
+              if(ki===0) css.borderLeft='2px solid #b9c6d6';
+              $tr.append($('<td class="pg-cal-disc-'+k+'">').attr('data-disc-cal',String(capturedCalId==null?'':capturedCalId)).css(css).text('\u2014'));
+            });
+          }
+          setTimeout(function(){ pgCalcCellsRefresh(g); paintDiscCalcCells(); },0);   // fill once attached
         })((calendarRows[ri]&&calendarRows[ri].calId)!=null?calendarRows[ri].calId:row.calId);
         // Del button cell — matches Site Breakdown style
         var $delTd=$('<td>').css(Object.assign({},csTdStyle,{textAlign:'center',width:'46px',background:'#fafafa',padding:'4px 6px',verticalAlign:'middle',whiteSpace:'nowrap'}));
@@ -17573,7 +18299,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           .text('Planning Guide ('+nCal+' program'+(nCal===1?'':'s')+')'));
         $tr.append($('<td class="pg-cal-total-hours">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
         $tr.append($('<td class="pg-cal-total-amount">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
-        for(var k=iAmt+1;k<hs.length;k++) $tr.append($('<td>').css(base));
+        if(_discOn){
+          // A single Price/Hr does not sum across calendars, so that cell is deliberately BLANK.
+          $tr.append($('<td class="pg-cal-total-disc-price">').css(Object.assign({},base,{textAlign:'right',borderLeft:'2px solid #b9c6d6'})).text(''));
+          $tr.append($('<td class="pg-cal-total-disc-savings">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap',color:'#1a7f37'})).text('\u2014'));
+          $tr.append($('<td class="pg-cal-total-disc-amount">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
+        }
+        for(var k=iAmt+(_discOn?4:1);k<hs.length;k++) $tr.append($('<td>').css(base));
         $tbl.append($('<tfoot>').append($tr));   // footer, not a body row
       })();
 
@@ -17785,6 +18517,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     attachHeaderClickToggle($calSetupHd,_calToggleFn);
     applyCalCollapse();
 
+    // Repaint the discounted cells IN PLACE. Price/Hr edits happen inside this very table, so a
+    // rebuild on every keystroke would steal focus — the table is only rebuilt when the columns'
+    // VISIBILITY flips (first discount applied, or the last one removed).
+    var _discColsShown=null;
+    function paintDiscCalcCells(){
+      try{
+        var shown=discAnyApplied();
+        if(_discColsShown!==null && _discColsShown!==shown){ _discColsShown=shown; refreshCalSetupTable(); return; }
+        _discColsShown=shown;
+        if(!shown) return;
+        var totSav=0, totAmt=0;
+        (calendarRows||[]).forEach(function(cr){
+          var cid=(cr&&cr.calId!=null)?String(cr.calId):'';
+          if(!cid) return;
+          var f=discFinalFor(cid);
+          if(!f) return;
+          totSav+=f.savings; totAmt+=f.amount;
+          $('td.pg-cal-disc-price[data-disc-cal="'+cid+'"]').text(pgFmtAmt(f.price));
+          $('td.pg-cal-disc-savings[data-disc-cal="'+cid+'"]').text(pgFmtAmt(f.savings));
+          $('td.pg-cal-disc-amount[data-disc-cal="'+cid+'"]').text(pgFmtAmt(f.amount));
+        });
+        $('td.pg-cal-total-disc-savings').text(pgFmtAmt(Math.round(totSav*100)/100));
+        $('td.pg-cal-total-disc-amount').text(pgFmtAmt(Math.round(totAmt*100)/100));
+      }catch(e){}
+    }
     function refreshCalSetupTable(){
       $csTableContent.remove();
       $csTableContent=buildCalSetupTable();
@@ -17810,8 +18567,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Cumulative, NOT compounded: every stage recomputes from the ORIGINAL Price/Hr using the
     // sum of the percentages up to and including that stage, so removing a middle stage can
     // never leave a stale compounded factor behind.
-    var DISC_DEFAULT_NAMES=['Timeline to Close/Begin','Multi-Year Agreement','Installment Billing','3+ Days/Week'];
-    var DISC_DEFAULT_PCT=5;
+    // Has ANY calendar actually had a discount selected? An empty Discount stage is not enough:
+    // the discounted columns appear only when there is a real discount to show.
+    function discAnyApplied(){
+      var st=discStore().stages;
+      for(var i=0;i<st.length;i++){
+        var by=st[i]&&st[i].byCal; if(!by) continue;
+        for(var k in by){ if(by[k]&&String(by[k].name||'').trim()!=='') return true; }
+      }
+      return false;
+    }
+    // The FINAL accumulated state for one calendar: the cumulative figures through the LAST
+    // stage. Computed from the same helpers the Discounts table renders from, so the Program
+    // Calendars columns and the Discounts area are the same numbers by construction.
+    // A calendar with no discount of its own returns its ORIGINAL price with zero savings —
+    // never a blank, which would read as missing data rather than "no discount applied".
+    function discFinalFor(calId){
+      var snap=pgCalcSnapshot(g), rows=(calendarRows||[]);
+      var cr=null;
+      for(var i=0;i<rows.length;i++){ if(rows[i]&&String(rows[i].calId)===String(calId)) cr=rows[i]; }
+      if(!cr) return null;
+      var base=discBaseFor(snap,cr);
+      var ser=discSeriesFor(base,calId);
+      var last=ser.length?ser[ser.length-1]:{price:base.price,savings:0,amount:base.amount,cum:0};
+      return { price:last.price, savings:last.savings, amount:last.amount, base:base.amount, cum:last.cum };
+    }
     function discStore(){
       var det=guideDetails[String(g.id)]||{};
       if(!det.discounts||typeof det.discounts!=='object') det.discounts={};
@@ -17837,24 +18617,119 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!isFinite(hours)) hours=0;
       return { price:price, hours:hours, amount:Math.round(price*hours*100)/100 };
     }
-    // Cumulative state for one calendar through stage index k (inclusive).
-    // Only stages that actually carry a discount for THIS calendar contribute, so removing an
-    // earlier selection immediately re-bases every later stage on the remaining percentages.
-    function discCumAt(stages,calId,k){
+    function discFloorNum(){ var v=parseFloat(districtFloor()); return isFinite(v)?v:0; }
+    // Display an effective percentage without trailing zeros: 5%, 2.5%, 3.25%, 0%.
+    function discPctDisp(v){ return String(Math.round((v||0)*100)/100)+'%'; }
+
+    // ── THE DISTRICT FLOOR CAP ──────────────────────────────────────────────────────────────
+    // Discounts stay cumulative and ADDITIVE from the original Price/Hr, but the floor is a hard
+    // lower bound on the discounted rate. The cap is applied SEQUENTIALLY and PER CALENDAR:
+    // each stage may only spend whatever cumulative percentage is still available before the
+    // rate would cross the floor, so the same discount can be worth 5% on one calendar and 0% on
+    // another. A single global percentage would be wrong — each calendar has its own base price.
+    //
+    // The stored pct stays the INTENDED percentage (5). Only the EFFECTIVE value is derived, so
+    // lowering the floor later automatically restores each discount toward its intended figure;
+    // nothing has been overwritten.
+    //
+    // maxCum is the cumulative percentage that lands EXACTLY on the floor: base*(1-maxCum/100)
+    // == floor. Capping to it makes the arithmetic land on the floor rather than near it.
+    //
+    // A calendar already priced BELOW the floor takes no discount at all — the floor is a
+    // discount floor, never an automatic base-rate increase, so it must not manufacture savings.
+    function discSeriesFor(base,calId){
+      var stages=discStore().stages, out=[];
+      var P=base.price, floor=discFloorNum();
+      var below=(P>0 && floor>0 && P<floor);
+      var maxCum=(P>0 && floor>0) ? Math.max(0,(1-(floor/P))*100) : 100;
       var cum=0;
-      for(var i=0;i<=k&&i<stages.length;i++) cum+=discPct(stages[i],calId);
-      return Math.round(cum*1e6)/1e6;
-    }
-    function discStageCalc(base,cum){
-      var f=1-(cum/100);
-      var price=Math.round(base.price*f*100)/100;
-      var amount=Math.round(base.hours*base.price*f*100)/100;   // from the ORIGINAL price, not the rounded one
-      return { cum:cum, price:price, amount:amount, savings:Math.round((base.amount-amount)*100)/100 };
+      stages.forEach(function(st){
+        var sl=discSlot(st,calId);
+        var iv=sl?parseFloat(sl.pct):NaN;
+        var intended=(isFinite(iv)&&iv>0)?iv:0;
+        var eff=0;
+        if(!below && intended>0) eff=Math.min(intended, Math.max(0, maxCum-cum));
+        eff=Math.round(eff*1e6)/1e6;
+        cum=Math.round((cum+eff)*1e6)/1e6;
+        var amount=Math.round(base.hours*P*(1-cum/100)*100)/100;   // from the ORIGINAL price
+        out.push({
+          has:!!sl, intended:intended, eff:eff, cum:cum,
+          price:Math.round(P*(1-cum/100)*100)/100,
+          amount:amount,
+          savings:Math.round((base.amount-amount)*100)/100,
+          capped:(intended>0 && eff<intended-1e-9)
+        });
+      });
+      return out;
     }
 
     var $discSection=$('<div class="card border-0 shadow-sm rounded-2 mt-2" id="discounts-section-'+g.id+'" style="overflow:visible;width:fit-content;max-width:100%;">');
     var $discHd=$('<div class="px-3 py-2 d-flex align-items-center" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;gap:6px;">');
     $discHd.append($('<span class="fw-bold text-dark" style="font-size:12px;white-space:nowrap;flex:0 0 auto;">').text('Discounts'));
+    // ── District Floor ── lives in the HEADER, so it stays visible (and editable) while the
+    // section is collapsed; the body is what collapses, never this. Default 74.00 until set.
+    function districtFloor(){
+      var det=guideDetails[String(g.id)]||{};
+      var v=det.districtFloor;
+      return (v==null||String(v).trim()==='')?DISTRICT_FLOOR_DEFAULT:String(v);
+    }
+    function dfFmt(v){ var n=parseFloat(v); return isFinite(n)?n.toFixed(2):DISTRICT_FLOOR_DEFAULT; }
+    var $dfWrap=$('<span class="pg-df-wrap">').css({display:'inline-flex',alignItems:'center',gap:'6px',flex:'0 0 auto',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'});
+    $dfWrap.append($('<span class="pg-df-label">').css({fontSize:'11px',color:'#495057',whiteSpace:'nowrap'}).text('District Floor'));
+    if(_pgvCur.mode==='view'){
+      // Locked: plain read-only text, NOT a disabled input.
+      // No currency prefix here: locking an ALREADY-RENDERED guide flattens the input in place to
+      // a plain "74.00", so prefixing only this build-time branch would make a fresh locked render
+      // disagree with an in-place lock. Both now read the same. (History keeps the $ prefix.)
+      $dfWrap.append($('<span class="pg-df-value">').css({fontSize:'11px',fontWeight:'600',color:'#212529',whiteSpace:'nowrap'}).text(dfFmt(districtFloor())));
+    } else {
+      var $dfInp=$('<input type="text" class="pg-df-input" inputmode="decimal" autocomplete="off">')
+        .css({width:'62px',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'right',outline:'none',padding:'2px 5px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'})
+        .val(dfFmt(districtFloor()));
+      // The value at the moment editing began — History compares against THIS, not against the
+      // store, because the store is now updated on every keystroke.
+      var _dfPrev=dfFmt(districtFloor());
+      $dfInp.on('focus',function(){ _dfPrev=dfFmt(districtFloor()); });
+      // LIVE recalculation: every keystroke re-derives the caps rather than waiting for blur or
+      // Enter. The field lives in the section HEADER, which refreshDiscTable() does not rebuild,
+      // so typing is uninterrupted and focus/caret survive.
+      // NOT normalized here: forcing "7" to "7.00" mid-word would fight the typist. Normalizing
+      // stays on commit. An unparseable intermediate ("", ".") deliberately leaves the stored
+      // floor untouched — blanking the field must not make the cap jump to the 74.00 default
+      // for a keystroke and visibly re-cap every calendar.
+      $dfInp.on('input',function(){
+        var raw=String(this.value||'').replace(/[^0-9.]/g,'');
+        var parts=raw.split('.'); if(parts.length>2) raw=parts[0]+'.'+parts.slice(1).join('');
+        if(raw!==this.value) this.value=raw;
+        var n=parseFloat(raw);
+        if(!isFinite(n)) return;                           // keep the last valid floor in force
+        setGuideDetail(g.id,'districtFloor',raw);
+        // Rebaseline the History snapshot on EVERY keystroke. Writing to guideDetails otherwise
+        // trips the debounced whole-guide differ, which would log an automatic record per typing
+        // burst on top of the explicit one at commit — the spec wants ONE record for the action.
+        try{ _pgHist.begin(g.id); }catch(e){}
+        // The floor caps every stage of every calendar, so re-derive the whole table AND the
+        // Program Calendars Net columns. No History here: the record belongs to the commit.
+        refreshDiscTable();
+      });
+      var _dfCommit=function(){
+        var next=dfFmt(this.value);
+        this.value=next;                                   // normalize to two decimals
+        setGuideDetail(g.id,'districtFloor',next);         // store the normalized form
+        refreshDiscTable();
+        if(next===_dfPrev) return;                         // no net change: nothing to record
+        // ONE History record for the whole edit, however many keystrokes it took; the effective
+        // percentage adjustments that follow are derived, not separate events.
+        try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'District Floor changed',desc:'Changed District Floor: $'+_dfPrev+' \u2192 $'+next+'.'}); }catch(e){}
+        _dfPrev=next;
+      };
+      $dfInp.on('blur',_dfCommit);
+      $dfInp.on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } });
+      // The header toggles the section on click; this field must not.
+      $dfInp.on('click',function(e){ e.stopPropagation(); });
+      $dfWrap.append($dfInp);
+    }
+    $discHd.append($dfWrap);
     $discSection.append($discHd);
     var $discBody=$('<div class="px-0 py-0">');
     $discSection.append($discBody);
@@ -17926,13 +18801,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($('<td class="pg-disc-base-hours">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtHours(base.hours)));
         $tr.append($('<td class="pg-disc-base-amt">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtAmt(base.amount)));
 
+        var _ser=discSeriesFor(base,calId);   // capped independently for THIS calendar
         stages.forEach(function(st,si){
           var sl=discSlot(st,calId);
-          var cum=discCumAt(stages,calId,si);
-          var calc=discStageCalc(base,cum);
+          var calc=_ser[si]||{price:base.price,amount:base.amount,savings:0,cum:0,eff:0,capped:false};
           var has=!!sl;
-          if(has){ stageTot[si].sav+=calc.savings; stageTot[si].amt+=calc.amount; }
-          else { stageTot[si].sav+=discStageCalc(base,cum).savings; stageTot[si].amt+=discStageCalc(base,cum).amount; }
+          // Every calendar contributes to the stage total at its own capped figure — the totals
+          // are a sum of independently capped calendars, never one global percentage.
+          stageTot[si].sav+=calc.savings; stageTot[si].amt+=calc.amount;
 
           // Discount cell: search field until chosen, then the name + a subtle per-cell "x".
           var $dTd=$('<td class="pg-disc-name-cell">').attr({'data-disc-stage':String(si),'data-disc-cal':String(calId)}).css(Object.assign({},tdBase,{textAlign:'left',minWidth:'150px'}));
@@ -17959,30 +18835,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           addDiscCopy($dTd,'name',si,calId);
           $tr.append($dTd);
 
-          // % — editable, numeric only, recalculates on every keystroke.
+          // % — READ-ONLY. Selecting a discount populates the default 5% and that is the value;
+          // there is no manual override for now, so it renders as plain text in the same style as
+          // the other calculated cells rather than as an input. Cumulative maths is unaffected:
+          // it has always read sl.pct, which the selection sets.
           var $pTd=$('<td class="pg-disc-pct-cell">').css(Object.assign({},tdBase,{textAlign:'right'}));
-          if(has && _pgvCur.mode!=='view'){
-            var $pi=$('<input type="text" class="pg-disc-pct" inputmode="decimal" autocomplete="off">')
-              .css({width:'52px',border:'1px solid #dde3ea',borderRadius:'4px',background:'#f7f9fc',fontSize:'11px',textAlign:'right',outline:'none',padding:'2px 5px',boxSizing:'border-box',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',color:'#212529'})
-              .val(sl.pct!=null?String(sl.pct):'');
-            (function(stIdx,cid,$in){
-              $in.on('input',function(){
-                // Numeric only, bounded 0-100: an invalid percentage must never reach the math.
-                var raw=String(this.value||'').replace(/[^0-9.]/g,'');
-                var parts=raw.split('.'); if(parts.length>2) raw=parts[0]+'.'+parts.slice(1).join('');
-                var n=parseFloat(raw);
-                if(isFinite(n)&&n>100){ n=100; raw='100'; }
-                if(raw!==this.value) this.value=raw;
-                discSetPct(stIdx,cid,(raw===''?'':(isFinite(n)?n:'')));
-              });
-            })(si,calId,$pi);
-            $pTd.append($pi);
-          } else if(has){ $pTd.text(String(sl.pct!=null?sl.pct:'')); }
+          if(has){
+            // The EFFECTIVE percentage, not the intended one: showing 5% while only 2.5% was
+            // applied would leave the Price/Hr, Savings and Amount beside it looking wrong.
+            var $pv=$('<span class="pg-disc-pct">').text(discPctDisp(calc.eff));
+            if(calc.capped){
+              // Subtle marker that the District Floor reduced this one; the title carries the why.
+              $pv.addClass('pg-disc-pct-capped').css({color:'#8a6d1a',borderBottom:'1px dotted #c8a63a',cursor:'help'})
+                 .attr('title','Reduced from '+discPctDisp(calc.intended)+' by the District Floor');
+            }
+            $pTd.append($pv);
+          }
           else { $pTd.text('\u2014'); }
-          addDiscCopy($pTd,'pct',si,calId);
           $tr.append($pTd);
 
-          var showCalc=(cum>0)||has;
+          var showCalc=(calc.cum>0)||has;
           $tr.append($('<td class="pg-disc-price">').css(Object.assign({},tdBase,{textAlign:'right'})).text(showCalc?pgFmtAmt(calc.price):'\u2014'));
           $tr.append($('<td class="pg-disc-savings">').css(Object.assign({},tdBase,{textAlign:'right',color:'#1a7f37'})).text(showCalc?pgFmtAmt(calc.savings):'\u2014'));
           $tr.append($('<td class="pg-disc-amount">').css(Object.assign({},tdBase,{textAlign:'right',fontWeight:'600'})).text(showCalc?pgFmtAmt(calc.amount):'\u2014'));
@@ -18022,11 +18894,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $n=buildDiscTable();
       $discContent.replaceWith($n);
       $discContent=$n;
+      paintDiscCalcCells();   // the Program Calendars discounted columns read the same figures
     }
     // Any change to base pricing or hours must reach this table. pgDiscRefresh is called from
     // refreshSummary alongside pgCalcCellsRefresh, so Price/Hr edits, staffing/allocated hour
     // changes, imports and calendar add/delete all flow through one path.
-    _pgDiscHooks[String(g.id)]=refreshDiscTable;
+    _pgDiscHooks[String(g.id)]=function(){ refreshDiscTable(); };
 
     attachSectionCollapse({
       key:g.id+'|discounts', $hd:$discHd, $body:$discBody, label:'Discounts', defaultCollapsed:true
@@ -18086,7 +18959,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(kind==='name'){
           if(!src||String(src.name||'').trim()===''){ delete st.byCal[cid]; return; }
           var keepPct=(st.byCal[cid]&&st.byCal[cid].pct!=null)?st.byCal[cid].pct:null;
-          // a row that had no discount gets the default percentage; an existing row keeps its own
+          // The INTENDED percentage travels, not an effective one. Each calendar then caps it
+          // against its OWN base price and the floor, so one copied discount can legitimately
+          // show 5% here, 3.25% there and 0% on a calendar already at the floor.
           st.byCal[cid]={ name:String(src.name), pct:(keepPct!=null?keepPct:DISC_DEFAULT_PCT) };
         } else {
           var tgt=st.byCal[cid];
@@ -18156,17 +19031,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'add',action:'Discount added',desc:'Added \u201c'+name+'\u201d discount to '+discCalName(calId)+': '+DISC_DEFAULT_PCT+'%.'}); }catch(e){}
       refreshDiscTable();
     }
-    function discSetPct(stIdx,calId,val){
-      var store=discStore(), st=store.stages[stIdx]; if(!st||!st.byCal) return;
-      var sl=st.byCal[String(calId)]; if(!sl) return;
-      var prev=sl.pct;
-      sl.pct=(val===''?'':val);
-      saveDisc();
-      if(String(prev)!==String(sl.pct)){
-        try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Discount percentage changed',desc:'Changed \u201c'+String(sl.name||'')+'\u201d discount: '+String(prev)+'% \u2192 '+String(sl.pct)+'%.'}); }catch(e){}
-      }
-      discRepaintCalcs();   // keep focus/caret in the % field: repaint values, don't rebuild
-    }
     function discClearCell(stIdx,calId){
       var store=discStore(), st=store.stages[stIdx]; if(!st||!st.byCal) return;
       var sl=st.byCal[String(calId)]; if(!sl) return;
@@ -18206,33 +19070,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'delete',action:'Discount stage deleted',desc:'Deleted Discount '+n+'.'}); }catch(e){}
       refreshDiscTable();
       try{ _pgUndo.offer(g.id,{lead:'Discount '+n,tail:' deleted.'}); }catch(e){}
-    }
-    // Repaint the calculated cells in place (no rebuild) so an in-progress % edit keeps focus.
-    function discRepaintCalcs(){
-      var snap=pgCalcSnapshot(g), store=discStore(), stages=store.stages;
-      var stageTot=stages.map(function(){ return {sav:0,amt:0}; });
-      $discContent.find('tr.pg-disc-row').each(function(){
-        var $tr=$(this), calId=$tr.attr('data-disc-cal');
-        var cr=null, rows=(calendarRows||[]);
-        for(var i=0;i<rows.length;i++){ if(rows[i]&&String(rows[i].calId)===String(calId)) cr=rows[i]; }
-        if(!cr) return;
-        var base=discBaseFor(snap,cr);
-        var $p=$tr.find('td.pg-disc-price'), $s=$tr.find('td.pg-disc-savings'), $a=$tr.find('td.pg-disc-amount');
-        stages.forEach(function(st,si){
-          var cum=discCumAt(stages,calId,si);
-          var calc=discStageCalc(base,cum);
-          var has=!!discSlot(st,calId);
-          var show=(cum>0)||has;
-          if($p[si]) $($p[si]).text(show?pgFmtAmt(calc.price):'\u2014');
-          if($s[si]) $($s[si]).text(show?pgFmtAmt(calc.savings):'\u2014');
-          if($a[si]) $($a[si]).text(show?pgFmtAmt(calc.amount):'\u2014');
-          stageTot[si].sav+=calc.savings; stageTot[si].amt+=calc.amount;
-        });
-      });
-      stages.forEach(function(st,si){
-        $discContent.find('td.pg-disc-tot-savings[data-disc-stage="'+si+'"]').text(pgFmtAmt(Math.round(stageTot[si].sav*100)/100));
-        $discContent.find('td.pg-disc-tot-stage-amt[data-disc-stage="'+si+'"]').text(pgFmtAmt(Math.round(stageTot[si].amt*100)/100));
-      });
     }
 
     $discSection.insertAfter($calSetupSection);
