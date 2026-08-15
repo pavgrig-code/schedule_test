@@ -1062,6 +1062,28 @@ $(function(){
   }
   // Build the badge elements for a school. Returns an array (possibly empty) so callers can
   // append without branching. A blank GSOffered yields NO badge rather than an empty one.
+  var PG_EIL_FALLBACK='Other';
+  var _pgEilRank=null;
+  function pgEilLabel(sc){
+    var v=(sc&&sc.eil!=null)?String(sc.eil).trim():'';
+    return v||PG_EIL_FALLBACK;   // never null/undefined/empty as a heading
+  }
+  // Rank by first appearance in the authoritative list — a data-derived order, so it is stable
+  // across searches and openings without hard-coding the category names.
+  function pgEilOrder(label){
+    if(!_pgEilRank){
+      _pgEilRank=Object.create(null);
+      var n=0;
+      for(var i=0;i<SCHOOLS_LIST.length;i++){
+        var v=pgEilLabel(SCHOOLS_LIST[i]);
+        if(v===PG_EIL_FALLBACK) continue;
+        if(!(v in _pgEilRank)) _pgEilRank[v]=n++;
+      }
+    }
+    if(label===PG_EIL_FALLBACK) return 1e9;   // the fallback always sorts last
+    return (label in _pgEilRank)?_pgEilRank[label]:(1e9-1);
+  }
+  try{ window._pgEil={ label:pgEilLabel, order:pgEilOrder }; }catch(e){}
   function pgSchoolBadges(sc){
     var out=[];
     if(!sc) return out;
@@ -1074,7 +1096,20 @@ $(function(){
     };
     var cat=pgGsCategory(sc.gs);
     if(cat) out.push(mk(String(sc.gs).trim(), PG_GS_COLORS[cat], 'pg-gs-badge').attr('data-gs-cat',cat));
-    if(String(sc.charter||'').toUpperCase()==='Y') out.push(mk('CH', PG_CHARTER_COLOR, 'pg-ch-badge'));
+    if(String(sc.charter||'').toUpperCase()==='Y'){
+      // Charter is a round "C", not a pill: it reads as a status marker rather than another
+      // grade-range label. Width and height are the SAME value (14px, matching the GS badge's
+      // line box) with borderRadius 50%, so it is a true circle at any zoom — a padding-based
+      // pill can never be. Flex centring keeps the C optically centred; the 14px line-height on
+      // the parent would push it off-centre on its own.
+      out.push($('<span class="pg-ch-badge">').css({
+        flex:'0 0 auto', display:'inline-flex', alignItems:'center', justifyContent:'center',
+        width:'14px', height:'14px', minWidth:'14px', borderRadius:'50%',
+        fontSize:'9px', fontWeight:'700', lineHeight:'1',
+        background:PG_CHARTER_COLOR.bg, color:PG_CHARTER_COLOR.fg,
+        pointerEvents:'none'   // never individually clickable
+      }).text('C'));
+    }
     return out;
   }
   function pgDistrictByCds(cds){ return cds?(DISTRICT_BY_CDS[String(cds)]||null):null; }
@@ -1326,7 +1361,7 @@ $(function(){
       var dc=String(sc.districtCds||''), d=DISTRICT_BY_CDS[dc];
       var dn=(d&&d.name)||'', da=(d&&d.abbr)||'', dcy=(d&&d.county)||'';
       _schoolSearchIndex.push({ s:sc, d:d||null,
-        hay:(sc.name+' '+da+' '+dn+' '+dcy+' '+(sc.city||'')+' '+(sc.gs||'')+' '+sc.cds+' '+dc).toLowerCase() });
+        hay:(sc.name+' '+da+' '+dn+' '+dcy+' '+(sc.city||'')+' '+(sc.gs||'')+' '+(sc.eil||'')+' '+sc.cds+' '+dc).toLowerCase() });
     }
     return _schoolSearchIndex;
   }
@@ -20362,8 +20397,32 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var abbr=(_gd&&_gd.abbr)||'';
                 var distName=(_gd&&_gd.name)||abbr||dcds;
                 $dd.append($('<div>').css({fontSize:'9px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.07em',padding:'6px 10px 3px',color:'#6c757d',background:'#f8f9fa',borderBottom:'1px solid #e9ecef',position:'sticky',top:'0'}).text(distName+' ('+abbr+')'));
+                // DISTRICT → EIL → SCHOOL. The EIL stage is part of the GROUPING, not a heading
+                // dropped in after sorting: schools are bucketed by EIL first, so two schools
+                // sharing an EIL can never be separated by a third from another category.
+                // Buckets render in a data-derived order (pgEilOrder) so subsections do not jump
+                // around between searches; within a bucket the existing school order is kept.
+                var _eilBuckets={};
                 groups[dcds].forEach(function(s){
-                  var $item=$('<div>').css({padding:'5px 14px',fontSize:'12px',cursor:'pointer',color:'#212529',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap'})
+                  var lb=pgEilLabel(s);
+                  if(!_eilBuckets[lb]) _eilBuckets[lb]=[];
+                  _eilBuckets[lb].push(s);
+                });
+                Object.keys(_eilBuckets).sort(function(a,b){
+                  var d=pgEilOrder(a)-pgEilOrder(b);
+                  return d!==0?d:(a<b?-1:a>b?1:0);
+                }).forEach(function(_eil){
+                // Subsection heading: lighter than the district header above it and clearly not
+                // a result row — no checkbox, not clickable, and it truncates rather than wrapping.
+                $dd.append($('<div class="pg-eil-head">').css({
+                  fontSize:'9.5px', fontWeight:'600', color:'#8a9199', background:'#fff',
+                  padding:'4px 10px 2px 22px', whiteSpace:'nowrap', overflow:'hidden',
+                  textOverflow:'ellipsis', pointerEvents:'none', letterSpacing:'.01em'
+                }).text(_eil));
+                _eilBuckets[_eil].forEach(function(s){
+                  // Indented (22px vs the heading's own indent) so the school clearly sits
+                  // BENEATH its EIL subsection rather than beside it.
+                  var $item=$('<div>').css({padding:'5px 14px 5px 22px',fontSize:'12px',cursor:'pointer',color:'#212529',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap'})
                     .on('mouseenter',function(){$(this).css('background','#f0f6ff');})
                     .on('mouseleave',function(){$(this).css('background','');});
                   // Checkbox state is DERIVED from the current Site Breakdown every render —
@@ -20410,8 +20469,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       saveSiteRows(); buildSchoolCell(); updateTotalRow($tbody); refreshSbDupes(); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }
                     });
                   $dd.append($item);
-                });
-              });
+                });   // schools in this EIL bucket
+                });   // EIL buckets in this district
+              });     // districts
               if(!filtered.length) $dd.append($('<div>').css({padding:'8px 14px',fontSize:'11px',color:'#adb5bd'}).text(_selAbbr ? 'No schools found for this district.' : 'No schools found'));
               $dd.toggle(true);
             }
