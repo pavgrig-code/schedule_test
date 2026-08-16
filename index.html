@@ -20287,7 +20287,84 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   var c=$(this).attr('data-cds');
                   if(c!=null) $(this).prop('checked', sbHasSchool(c));
                 });
+                sbSyncEilParents();
               }catch(e){}
+            }
+            // EIL parent state is DERIVED from the Site Breakdown, exactly like the child boxes —
+            // never tracked separately, so it stays right however a school arrived or left
+            // (search, row delete, import, another workflow). The member list is the FULL
+            // subsection, not the filtered view, so the heading always means what it says.
+            function sbSyncEilParents(){
+              try{
+                $dd.find('input.pg-eil-cb').each(function(){
+                  var $p=$(this);
+                  var codes=String($p.attr('data-eil-cds')||'').split(',').filter(Boolean);
+                  if(!codes.length) return;
+                  var on=0;
+                  for(var i=0;i<codes.length;i++){ if(sbHasSchool(codes[i])) on++; }
+                  this.checked = on===codes.length;
+                  this.indeterminate = on>0 && on<codes.length;   // standard mixed state
+                });
+              }catch(e){}
+            }
+            // Bulk add/remove for an EIL subsection. Mirrors sbToggleSchool's add/remove
+            // semantics exactly (fill the first empty row, keep a trailing blank, splice on
+            // remove) but performs the whole set as ONE transaction: one undo snapshot, one
+            // History record, one Undo offer — never one per school.
+            function sbBulkSchools(list, add, label){
+              var rows=siteRowsFor(g, calId)||siteRows;
+              if(!rows || !list || !list.length) return 0;
+              // Only act on schools that actually need it, so re-checking a partially selected
+              // subsection cannot duplicate the ones already present.
+              var todo=list.filter(function(sc){ return add ? !sbHasSchool(sc.cds) : sbHasSchool(sc.cds); });
+              if(!todo.length) return 0;
+              var _ddWasOpen=false;
+              try{ _ddWasOpen=!!($dd[0] && $dd[0].style.display!=='none'); }catch(e){}
+              if(_ddWasOpen) pinDd();
+              try{ _pgUndo.begin(g.id); }catch(e){}
+              todo.forEach(function(sc){
+                if(add){
+                  var target=null;
+                  for(var i=0;i<rows.length;i++){ if(rows[i] && !rows[i].deleted && !rows[i].school){ target=rows[i]; break; } }
+                  if(!target){ target={school:''}; rows.push(target); }
+                  target.school=sc.name; target.schoolCds=sc.cds;
+                  target.districtCds=sc.districtCds||''; target.schoolAbbr=sc.abbr||'';
+                  if(!rows.some(function(x){ return x && !x.deleted && !x.school; })) rows.push({school:''});
+                } else {
+                  for(var j=rows.length-1;j>=0;j--){
+                    if(rows[j] && String(rows[j].schoolCds||'')===String(sc.cds)){ rows.splice(j,1); break; }
+                  }
+                }
+              });
+              if(!rows.length) rows.push({school:''});
+              saveSiteRows();
+              var _n=todo.length, _where=calLabel||'Site Breakdown';
+              try{ _pgHist.begin(g.id); }catch(e){}      // rebaseline so the save-diff cannot double-log
+              try{ _pgHist.evt(g.id,{ kind:'edit',
+                action:(add?'Added ':'Removed ')+_n+' '+(label||'')+' school'+(_n===1?'':'s')+(add?' to ':' from ')+_where,
+                desc:'' }); }catch(e){}
+              try{ _pgUndo.offer(g.id, add?{head:String(_n)+' ',lead:(label||'')+' school'+(_n===1?'':'s'),tail:' added.'}
+                                          :{head:String(_n)+' ',lead:(label||'')+' school'+(_n===1?'':'s'),tail:' removed.'}); }catch(e){}
+              try{ refreshTable(); }catch(e){ try{ _stuRerender(); }catch(e2){} }
+              try{ refreshSummary(g); }catch(e){}
+              // Rebaseline AGAIN once the cascade has settled. Adding many schools at once makes
+              // refreshTable/refreshSummary write further state (staffing slots and friends), and
+              // the debounced whole-guide differ logs that as a SECOND, automatic record on top
+              // of the explicit one — the same double-log seen before, but here it only appears
+              // at bulk sizes because a single add does not move enough downstream state.
+              // A synchronous rebaseline is not enough on its own: some of that downstream work
+              // lands after the current task, so a deferred one runs inside the differ's debounce
+              // window and rebaselines whatever settled late.
+              try{ _pgHist.begin(g.id); }catch(e){}
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
+              if(_ddWasOpen){
+                pinDd();
+                if(_schoolHideTimer){ clearTimeout(_schoolHideTimer); _schoolHideTimer=null; }
+                try{ $dd.css(_ddPin||{}).show(); }catch(e){}
+                try{ sbSyncDdChecks(); }catch(e){}
+              }
+              return _n;
             }
             function sbToggleSchool(sc, add){
               var rows=siteRowsFor(g, calId)||siteRows;
@@ -20414,11 +20491,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 }).forEach(function(_eil){
                 // Subsection heading: lighter than the district header above it and clearly not
                 // a result row — no checkbox, not clickable, and it truncates rather than wrapping.
-                $dd.append($('<div class="pg-eil-head">').css({
-                  fontSize:'9.5px', fontWeight:'600', color:'#8a9199', background:'#fff',
-                  padding:'4px 10px 2px 22px', whiteSpace:'nowrap', overflow:'hidden',
-                  textOverflow:'ellipsis', pointerEvents:'none', letterSpacing:'.01em'
-                }).text(_eil));
+                // The subsection heading is now a selectable PARENT row. Its scope is the whole
+                // EIL group in this district — every member, not just the ones a search happens
+                // to be showing — so the label always represents the complete group. The tooltip
+                // says so, because that scope is otherwise invisible while filtering.
+                var _eilAll=pgSchoolsForDistrict(dcds).filter(function(x){ return pgEilLabel(x)===_eil; });
+                var _eilCodes=_eilAll.map(function(x){ return x.cds; });
+                var $eilRow=$('<div class="pg-eil-head">').css({
+                  fontSize:'9.5px', fontWeight:'600', color:'#7a828a', background:'#fff',
+                  padding:'4px 10px 2px 14px', whiteSpace:'nowrap', overflow:'hidden',
+                  textOverflow:'ellipsis', letterSpacing:'.01em',
+                  display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'
+                }).attr('title','Select all '+_eil+' schools in this district');
+                var $eilCb=$('<input type="checkbox" class="pg-eil-cb">')
+                  .css({cursor:'pointer',flex:'0 0 auto',margin:'0',width:'13px',height:'13px',accentColor:'#0d6efd'})
+                  .attr('data-eil-cds', _eilCodes.join(','))
+                  .attr('data-eil-label', _eil);
+                (function(all,codes,lbl){
+                  // One authoritative handler, and the intent is read from the LIVE data rather
+                  // than the box's own state — the same rule the child checkboxes follow, and the
+                  // reason rapid clicking cannot invert the direction. An INDETERMINATE parent
+                  // means "not all selected", so clicking it selects the rest.
+                  var act=function(e){
+                    e.preventDefault(); e.stopPropagation();
+                    if(_schoolHideTimer){ clearTimeout(_schoolHideTimer); _schoolHideTimer=null; }
+                    var on=0; for(var i=0;i<codes.length;i++){ if(sbHasSchool(codes[i])) on++; }
+                    sbBulkSchools(all, on<codes.length, lbl);
+                  };
+                  $eilCb.on('mousedown',act);
+                  $eilCb.on('click',function(e){ e.preventDefault(); e.stopPropagation(); });
+                  $eilRow.on('mousedown',act);   // the whole heading row is the target
+                })(_eilAll,_eilCodes,_eil);
+                $eilRow.append($eilCb, $('<span>').css({flex:'1 1 auto',overflow:'hidden',textOverflow:'ellipsis'}).text(_eil));
+                $dd.append($eilRow);
                 _eilBuckets[_eil].forEach(function(s){
                   // Indented (22px vs the heading's own indent) so the school clearly sits
                   // BENEATH its EIL subsection rather than beside it.
@@ -20473,6 +20578,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 });   // EIL buckets in this district
               });     // districts
               if(!filtered.length) $dd.append($('<div>').css({padding:'8px 14px',fontSize:'11px',color:'#adb5bd'}).text(_selAbbr ? 'No schools found for this district.' : 'No schools found'));
+              // Derive the parent states from the Site Breakdown as soon as the list is built,
+              // so reopening (or re-rendering after an import) shows the right tri-state without
+              // waiting for an interaction.
+              try{ sbSyncEilParents(); }catch(e){}
               $dd.toggle(true);
             }
             $inp.on('input',function(){ buildSchoolDd($(this).val()); });
