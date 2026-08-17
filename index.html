@@ -9263,6 +9263,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(!staffAllocAllows(g.id,_cCi,_cWk,u.si,dayK)) return 0;
             var _o=shSchoolCntOv(_slots,u.si,_cCi,_cWk,role.key,dayK); return _o!=null?_o:(parseInt(u.sRow&&u.sRow[role.countKey])||0);
           }
+          // A table representing ONE school (per-school or popup) needs the same allocation gate
+          // the composite path already applies. Without it the school's own table keeps showing
+          // the inherited times and counts for a day it no longer participates in — accurate
+          // numbers matter more here than anywhere.
+          function _soloAllows(dayK){
+            try{
+              if(!editCombo || editCombo.si==null) return true;    // composite: _effSch gates
+              return staffAllocAllows(g.id,_cCi,_cWk,editCombo.si,dayK);
+            }catch(e){ return true; }
+          }
           function _defComposite(role,dayK){
             var _t=0;
             (_compSchools?_compSchools():[]).forEach(function(u){
@@ -9366,9 +9376,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   _brkCtlsU[role.key][day.k]=brkCtlU;
                 } else if(row.type==='count'){
                   $td.css({background:'#f0f4f8'});
-                  var _defC=_compSchools?_defComposite(role,day.k):(getCountsFn()[role.countKey]||0);
+                  var _soloOk=_soloAllows(day.k);
+                  var _defC=_compSchools?_defComposite(role,day.k):(_soloOk?(getCountsFn()[role.countKey]||0):0);
                   var _ovC=null;
-                  if(editableCnt){ _ovC=shCntOv(shData,role.key,day.k); }
+                  // Allocation sits AHEAD of the override, so a stale override can never make an
+                  // excluded day participate again.
+                  if(editableCnt && _soloOk){ _ovC=shCntOv(shData,role.key,day.k); }
                   else if(_compSchools){ var _ecc=_effComposite(role,day.k); if(_ecc!==_defC) _ovC=_ecc; }
                   var $ccu=$('<span class="count-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',color:'#495057',fontWeight:'600'});
                   _shCntPaint($ccu,_ovC,_defC);
@@ -9376,8 +9389,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if(editableCnt) _wireShCnt($td,$ccu,role,day.k);
                   else if(_compSchools) _wireShCntComposite($td,role,day);
                 } else {
-                  var hInfoU2=calcAdjustedHours(dRef,isBillable),cU=getCountsFn()[role.countKey];
-                  if(editableCnt){ var _oCU=shCntOv(shData,role.key,day.k); if(_oCU!=null) cU=_oCU; }
+                  var _soloOk2=_soloAllows(day.k);
+                  var hInfoU2=calcAdjustedHours(dRef,isBillable),cU=_soloOk2?getCountsFn()[role.countKey]:0;
+                  if(editableCnt && _soloOk2){ var _oCU=shCntOv(shData,role.key,day.k); if(_oCU!=null) cU=_oCU; }
                   else if(_compSchools){ cU=_effComposite(role,day.k); }
                   $td.append($('<span class="total-hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'700'}).text(hInfoU2.adjusted!==null&&cU?(Math.round(hInfoU2.adjusted*cU*100)/100):''));
                 }
@@ -9679,7 +9693,237 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }catch(e){}
             return out;
           }
+          // ── Read-only per-school Staffing Hours popup ────────────────────────────────
+          // NO SECOND CALCULATION: every value comes from _pgTipRows (the same computation the
+          // calendar tooltip and Combined view use), which already applies Staffing Allocation,
+          // special-day resolution and the full override hierarchy. This function only chooses
+          // WHICH dates to ask about and renders what comes back.
+          function _schoolShRows(si){
+            var out=[];
+            try{
+              var calId=(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null;
+              var det=guideDetails[String(g.id)]||{};
+              var crs=det.calendarRows||[];
+              var ci=null, calRow=null;
+              for(var i=0;i<crs.length;i++){ if(String(crs[i].calId)===String(calId)){ ci=i; calRow=crs[i]; break; } }
+              if(ci===null) return out;
+              var opts=((det.staffingOptsByCal||{})[String(calId)])||{};
+              var wk=opts.alternateWeeks?'a':'';
+              var WD=['sun','mon','tue','wed','thu','fri','sat'];
+              var first=calRow.firstDay?new Date(calRow.firstDay+'T12:00:00'):null;
+              var last=calRow.lastDay?new Date(calRow.lastDay+'T12:00:00'):null;
+              if(!first||!last||isNaN(first)||isNaN(last)) return out;
+              // One representative DATE per day column. Weekdays take their first occurrence in
+              // range; a Special Day takes the first date actually marked for this school, so a
+              // special column is only offered when it genuinely applies.
+              var days=buildDaysArray(g.id);
+              var seenKey={};
+              days.forEach(function(dy){
+                var when=null;
+                if(dy.isSd){
+                  var mk=det.calMarkers||{};
+                  for(var k in mk){
+                    if(k.indexOf(String(calId)+'|')!==0) continue;
+                    var sc=(mk[k]&&mk[k].schools)||{};
+                    if(String(sc[String(si)]||'')===String(dy.sdId)){ when=new Date(k.split('|')[1]+'T12:00:00'); break; }
+                  }
+                } else {
+                  var d0=new Date(first.getTime());
+                  for(var n=0;n<400 && d0<=last;n++){
+                    if(WD[d0.getDay()]===dy.k){ when=new Date(d0.getTime()); break; }
+                    d0.setDate(d0.getDate()+1);
+                  }
+                }
+                if(!when||isNaN(when)) return;
+                var comp=null;
+                try{ comp=window._pgTipRows(g, ci, WD[when.getDay()], when, wk, true); }catch(e){ return; }
+                var rows=(comp&&comp.rows)||[];
+                rows.forEach(function(r){
+                  if(r.schoolIdx!==si) return;                 // this school only
+                  if(r.noHoursNote) return;                    // a no-hours special day is not an active row
+                  var kk=dy.k+'|'+(r.roleKey||r.label||'');
+                  if(seenKey[kk]) return;
+                  seenKey[kk]=1;
+                  out.push({dayLabel:(dy.isSd?(dy.l||dy.k):({mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'}[dy.k]||dy.k)),
+                            role:r.label||'', start:r.start||'', end:r.end||'',
+                            hours:r.hours, cnt:r.cnt, base:r.base, ovC:!!r.ovC, ovT:!!r.ovT});
+                });
+              });
+            }catch(e){}
+            return out;
+          }
+          function _closeSchoolShPopup(){ try{ $('.sf-sh-popup').remove(); }catch(e){} }
+          // Build the REAL individual-school Staffing Hours table for this school and show it in
+          // inspection mode. buildOneTable is the app's own builder, so structure, palette,
+          // day/weekend/special-day treatment, override notation and TOTALS all come from the one
+          // implementation — the popup cannot drift from the table it claims to mirror.
+          function _schoolShTable(si){
+            var det=guideDetails[String(g.id)]||{};
+            var calRow=(editCombo&&editCombo.calRow)||null;
+            var calId=(calRow&&calRow.calId!=null)?calRow.calId:null;
+            var ci=(editCombo&&editCombo.ci!=null)?editCombo.ci:null;
+            var wk=(editCombo&&editCombo.wk)||'';
+            var sr=(siteRowsFor(g,calId)||[]);
+            var sRow=sr[si]; if(!sRow) return null;
+            // If Staffing Allocation has removed EVERY applicable day, the real table would still
+            // render its role rows carrying the inherited times — which is exactly the stale
+            // reading the spec forbids. Detect it from the authoritative gate and say so instead.
+            try{
+              var _days=buildDaysArray(g.id);
+              var _any=_days.some(function(dy){ return staffAllocAllows(g.id,ci,wk,si,dy.k); });
+              if(_days.length && !_any) return null;
+            }catch(e){}
+            var perSfx=('s'+si)+(ci!==null?('c'+ci):'')+(wk||'');
+            var calSfx=(ci!==null?('c'+ci):'')+(wk||'');
+            // DETACHED COPY: inspecting a school must never create or mutate its slot. A school
+            // with no per-school slot inherits the calendar's, which is exactly what the app
+            // would show if that school were split out.
+            var src=_slots[perSfx]||_slots[calSfx]||{};
+            var shCopy; try{ shCopy=JSON.parse(JSON.stringify(src)); }catch(e){ shCopy={}; }
+            var cFn=(function(row,csr){ return function(){ return getSchoolCounts(row,csr); }; })(sRow,sr);
+            var combo2={ci:ci,si:si,wk:wk,calRow:calRow,sRow:sRow,calSiteRows:sr,pod:null,podKey:null};
+            var res=null;
+            _pgShPopupBuilding=true;                 // suppresses the nested strip/alloc affordances
+            try{ res=buildOneTable(shCopy,cFn,perSfx,calRow,combo2); }catch(e){ res=null; }
+            _pgShPopupBuilding=false;
+            if(!res||!res.$scroll) return null;
+            var $t=res.$scroll;
+            // READ-ONLY, but the SAME cells: each field becomes text in a span carrying the
+            // input's own width/height/alignment, so column widths and row heights are unchanged
+            // and nothing reads as a disabled form control.
+            $t.find('input,select,textarea').each(function(){
+              var $i=$(this), v=($i.is('select')?$i.find('option:selected').text():$i.val())||'';
+              var cs=this.style;
+              $i.replaceWith($('<span class="sf-sh-ro">').css({
+                display:'inline-block', width:cs.width||'auto', minWidth:cs.minWidth||'',
+                textAlign:cs.textAlign||'center', fontSize:cs.fontSize||'', fontWeight:cs.fontWeight||'',
+                color:cs.color||'', lineHeight:cs.lineHeight||'', padding:cs.padding||'',
+                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'
+              }).text(v));
+            });
+            // Editing affordances that survive as plain elements go too.
+            $t.find('button, [title*="Copy"], [title*="Edit"]').remove();
+            // Hover affordances (the "..." copy trigger, the gear) survive as plain spans, so
+            // they are matched by TEXT rather than by class — a class list would go stale the
+            // moment one of them is restyled.
+            $t.find('span,div,a').each(function(){
+              var t=$(this).text().replace(/\s+/g,'').trim();
+              if(t==='\u2026'||t==='...'||t==='\u2699') $(this).remove();
+            });
+            $t.find('[contenteditable]').removeAttr('contenteditable');
+            $t.css({cursor:'default'}).find('*').css('cursor','default');
+            $t.find('td,th').off('click mousedown mouseenter mouseleave');
+            // School-level TOTAL HRS/DAY. The table ALREADY HAS this row — the app renders it
+            // with the right label, styling and structure (a colspan=2 label cell covering the
+            // Role and row-label columns, then one cell per day); it is simply left empty here.
+            // So we POPULATE IT rather than appending our own. That is exactly why the earlier
+            // version produced both a blank row and a shifted one: an appended row took its lead
+            // width from a row that INHERITS the Role column through a rowspan, so it was one
+            // column short and every value sat a place to the left.
+            try{
+              var $tbl=$t.find('table').first();
+              if($tbl.length){
+                var $srcRow=$tbl.find('tr').filter(function(){ return $(this).find('.total-hrs-cell-u').length>0; }).first();
+                if($srcRow.length){
+                  var dayKeys=[];
+                  $srcRow.find('.total-hrs-cell-u').each(function(){ dayKeys.push($(this).attr('data-day')); });
+                  var sums={}; dayKeys.forEach(function(k){ sums[k]=0; });
+                  $tbl.find('.total-hrs-cell-u').each(function(){
+                    var k=$(this).attr('data-day');
+                    if(!(k in sums)) return;
+                    var v=parseFloat(String($(this).text()).replace(/[^0-9.\-]/g,''));
+                    if(!isNaN(v)) sums[k]+=v;
+                  });
+                  var $totRow=$tbl.find('tr').filter(function(){
+                    var c=$(this).children().first();
+                    return /^Total\s*Hrs\s*\/\s*Day$/i.test($(c).text().replace(/\s+/g,' ').trim());
+                  }).first();
+                  if($totRow.length){
+                    $totRow.addClass('sf-sh-day-total');
+                    var $cells=$totRow.children().slice(1);
+                    if($cells.length===dayKeys.length){
+                      $cells.each(function(ix){
+                        var k=dayKeys[ix];
+                        $(this).addClass('sf-sh-day-total-val').attr('data-day',k)
+                               .text(sums[k]?pgFmtHours(sums[k]):'\u2014');
+                      });
+                      $totRow.children().first().addClass('sf-sh-day-total-lbl');
+                    }
+                  }
+                }
+              }
+            }catch(e){}
+            return $t;
+          }
+          function _openSchoolShPopup(si,nm,anchorEl){
+            _closeSchoolShPopup();
+            var calRow=(editCombo&&editCombo.calRow)||null;
+            var $tbl=_schoolShTable(si);
+            var $p=$('<div class="sf-sh-popup pg-view-ok">').css({
+              position:'fixed', zIndex:'12000', background:'#fff', border:'1px solid #dee2e6',
+              borderRadius:'6px', boxShadow:'0 6px 24px rgba(0,0,0,.18)', padding:'8px 10px',
+              display:'flex', flexDirection:'column',
+              maxWidth:Math.max(320,Math.min(880,((window.innerWidth||1024)-40)))+'px',
+              maxHeight:Math.max(200,Math.min(520,((window.innerHeight||800)-90)))+'px'
+            });
+            $p.on('mousedown click',function(e){ e.stopPropagation(); });   // clicks inside never dismiss
+            var $h=$('<div class="sf-sh-popup-hdr">').css({display:'flex',alignItems:'center',gap:'6px',flex:'0 0 auto',
+                    fontSize:'11px',fontWeight:'700',color:'#212529',paddingRight:'20px',marginBottom:'6px',
+                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'});
+            if(calRow) $h.append($('<span class="sf-sh-popup-dot">').css({width:'10px',height:'10px',borderRadius:'50%',flex:'0 0 auto',
+                    background:(calRow.color||'#fff'),border:'1px solid rgb(180,180,180)'}));
+            var _cn=(calRow&&(calRow.name||'').trim())||'';
+            $h.append($('<span class="sf-sh-popup-ttl">').css({overflow:'hidden',textOverflow:'ellipsis'})
+                      .text((_cn?_cn+' \u00b7 ':'')+nm+' \u00b7 Staffing Hours'));
+            var $x=$('<button type="button" class="sf-sh-popup-x" title="Close">').text('\u00d7')
+              .css({position:'absolute',top:'4px',right:'6px',border:'none',background:'transparent',
+                    fontSize:'16px',cursor:'pointer',color:'#6c757d',lineHeight:'1',padding:'0 4px'});
+            $x.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _closeSchoolShPopup(); });
+            $p.append($x).append($h);
+            var _rows=$tbl?$tbl.find('tbody tr').length:0;
+            if(!$tbl||!_rows){
+              $p.append($('<div class="sf-sh-popup-empty">').css({fontSize:'11px',color:'#6c757d',padding:'6px 2px'})
+                .text('No active Staffing Hours for this school \u2014 every applicable day has been removed from Staffing Allocation.'));
+            } else {
+              // The table keeps its own layout; only the CONTAINER scrolls, so header alignment
+              // and column widths are the table's, not the popup's.
+              var $scroll=$('<div class="sf-sh-popup-scroll">').css({overflow:'auto',flex:'1 1 auto',minHeight:'0'});
+              $scroll.append($tbl);
+              $p.append($scroll);
+            }
+            $('body').append($p);
+            try{
+              var rct=anchorEl.getBoundingClientRect();
+              var pw=$p.outerWidth()||360, ph=$p.outerHeight()||220;
+              var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+              var left=rct.left, top=rct.bottom+6;
+              if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+              if(top+ph>vh-8) top=Math.max(8,rct.top-ph-6);
+              $p.css({left:Math.max(8,left)+'px', top:Math.max(8,top)+'px'});
+            }catch(e){ $p.css({left:'20px',top:'20px'}); }
+            _pgSchoolShOpen={si:si,nm:nm,el:anchorEl};
+          }
+          // An OPEN per-school popup re-renders from the authoritative computation whenever the
+          // strip does — and EVERY allocation path rebuilds the strip, so a value changing behind
+          // the popup is reflected immediately instead of going stale. Deferred one tick so the
+          // rebuild that triggered it has finished replacing the name element it anchors to.
+          function _refreshSchoolShPopup(){
+            try{
+              if(!_pgSchoolShOpen) return;
+              if(!document.querySelector('.sf-sh-popup')) return;
+              var _o=_pgSchoolShOpen;
+              setTimeout(function(){
+                try{
+                  if(!document.querySelector('.sf-sh-popup')) return;
+                  var $line=$('.sf-strip-school-nm').filter(function(){ return $(this).text()===_o.nm; }).first();
+                  var el=$line.length?$line[0]:_o.el;
+                  _openSchoolShPopup(_o.si,_o.nm,el);
+                }catch(e){}
+              },0);
+            }catch(e){}
+          }
           function _rebuildSchoolStrip(){
+            if(_pgShPopupBuilding) return;   // display-only build: no strip inside the popup
             if(!$schoolStrip) return;
             $schoolStrip.empty();
             var list=_stripSchools();
@@ -9704,9 +9948,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 // a flex line so the labels sit BESIDE the name while space allows and wrap only
                 // when it runs out; the name itself never wraps.
                 var $line=$('<span class="sf-strip-school">').css({display:'flex',alignItems:'baseline',flexWrap:'wrap',gap:'4px',fontSize:'10px',lineHeight:'14px',color:'#495057'});
-                $line.append($('<span class="sf-strip-school-nm">').css({whiteSpace:'nowrap',fontWeight:'500'}).text(nm2));
+                // The school name opens a read-only Staffing Hours popup for that school. It stays
+                // interactive while locked — inspection is exactly what locked mode is for — and
+                // the struck-through allocation labels beside it stay inert.
+                var $nm2=$('<span class="sf-strip-school-nm pg-view-ok">').css({
+                  whiteSpace:'nowrap',fontWeight:'500',cursor:'pointer',borderBottom:'1px dotted transparent'
+                }).attr('title','View Staffing Hours for '+nm2).text(nm2);
+                $nm2.on('mouseenter',function(){ $(this).css({color:'#0d6efd',borderBottomColor:'#9ec5fe'}); })
+                    .on('mouseleave',function(){ $(this).css({color:'',borderBottomColor:'transparent'}); });
+                (function(_si,_nm){
+                  $nm2.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _openSchoolShPopup(_si,_nm,this); });
+                })(list[k2].si,nm2);
+                $line.append($nm2);
                 _stripRemovedLabels(list[k2].si).forEach(function($x){ $line.append($x); });
                 $names.append($line);
+                if(k2===list.length-1) _refreshSchoolShPopup();
               }
               $grp.append($names);
               $schoolStrip.append($grp);
@@ -9757,6 +10013,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             try{ _pgUndo.offer(g.id,{lead:(on?'All Staffing Allocations':'Staffing Allocation'),tail:(on?' selected.':' cleared.')}); }catch(e){}
           }
           function _rebuildAllocTable(){
+            if(_pgShPopupBuilding) return;   // display-only build: no allocation matrix in the popup
             // The strip is repainted here too: this is the shared repaint point every allocation
             // path already goes through (Select All, Clear, Undo restore, import, snapshot
             // restore, any rerender), so the labels follow without each caller remembering to.
@@ -9766,7 +10023,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var list=_allocSchools();
             if(list.length<2){ $allocWrap.hide(); return; }
             var rec=staffAllocRec(g.id,sfxClass);
-            if(!rec.on){ $allocWrap.hide(); return; }
+            if(!rec.on || _pgAllocIsHidden(g.id,sfxClass)){ $allocWrap.hide(); return; }
             $allocWrap.show();
             var days=buildDaysArray(g.id);
             var ABBR={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
@@ -9829,8 +10086,43 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $titleIn.append(_mkBulk('Select All','sf-alloc-all',function(){ _allocBulk(true); }));
               $titleIn.append(_mkBulk('Clear','sf-alloc-clear',function(){ _allocBulk(false); }));
             }
+            // ── Close control + header-background toggle ──
+            // One shared action, so the × and the header background can never disagree, and both
+            // do exactly what the "Staffing Allocation" checkbox does — this closes the area by
+            // turning allocation OFF, which is the same state that control writes.
+            var _allocClose=function(){
+              try{
+                _pgAllocSetHidden(g.id,sfxClass,true);   // hide only — allocation keeps applying
+                setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+                try{ _pgHist.begin(g.id); }catch(e){}   // display-only: rebaseline so nothing is logged
+                $('.sf-alloc-toggle-cb').prop('checked',false);   // keep the checkbox honest
+                _applyAllocMode();
+              }catch(e){}
+            };
+            var $ax=$('<button type="button" class="sf-alloc-x pg-view-ok" title="Close Staffing Allocation">')
+              .text('\u00d7')
+              .css({border:'none',background:'transparent',fontSize:'16px',cursor:'pointer',
+                    color:'#6c757d',lineHeight:'1',padding:'0 4px',marginLeft:'8px',flexShrink:'0'});
+            $ax.on('mouseenter',function(){ $(this).css('color','#212529'); })
+               .on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+            $ax.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _allocClose(); });
+            // marginLeft:auto pushes the × to the far right whatever else the bar holds.
+            // Anchored to the TABLE's own top-right corner: the title cell is the positioning
+            // context, so the × stays pinned there whatever the table's width, school count or
+            // horizontal scroll — it belongs to the Staffing Allocation table, not to the
+            // Staffing Hours area around it.
+            $titleTh.css({position:'relative'});
+            $ax.css({position:'absolute',top:'2px',right:'4px',marginLeft:'0'});
             $titleTh.append($titleIn);
+            $titleTh.append($ax);   // appended LAST so the cell's text still reads title-first
             var $titleRow=$('<tr class="sf-alloc-title-row">').append($titleTh);
+            // The header's own BACKGROUND toggles the area shut. Buttons inside it already stop
+            // propagation, so Select All / Clear / × keep their own meaning; only the inert space
+            // acts as the toggle.
+            $titleRow.css({cursor:'pointer'}).on('click',function(e){
+              if($(e.target).closest('button, input, select, a, label').length) return;
+              _allocClose();
+            });
             $t.append($('<thead>').append($titleRow).append($hr));
 
             var $tb=$('<tbody>');
@@ -10062,7 +10354,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // event caused the rerender. Enabled: the matrix, rebuilt so pod brackets and columns
           // reflect the current Site Breakdown. Disabled: the school list. Never both.
           function _applyAllocMode(){
-            var on=_allocEligible() && staffAllocRec(g.id,sfxClass).on;
+            // The matrix SHOWS only when allocation is enabled AND not hidden. Hiding it brings
+            // the school strip back exactly as before — what changed is that hiding no longer
+            // disables the allocation itself, so the numbers stay filtered either way.
+            var on=_allocEligible() && staffAllocRec(g.id,sfxClass).on && !_pgAllocIsHidden(g.id,sfxClass);
             if(on){
               if($schoolStrip) $schoolStrip.hide();
               if(!$allocWrap) return;
@@ -10400,7 +10695,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $wrap.append($cb).append($('<span>').text('Staffing Allocation'));
               $wrap.on('mouseenter',function(){ $(this).css('color','#495057'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
               $cb.on('change',function(){
-                staffAllocRec(g.id,sfxKey2).on=this.checked;
+                // Checking shows the matrix and enables allocation. UNCHECKING only HIDES it —
+                // the cells stay in force, so numbers cannot change just because the table was
+                // put away, and reopening finds every setting intact.
+                _pgAllocSetHidden(g.id,sfxKey2,!this.checked);
+                if(this.checked) staffAllocRec(g.id,sfxKey2).on=true;
                 setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
                 try{ _pgHist.begin(g.id); }catch(e){}   // display-only: rebaseline so nothing is logged
                 resRef.applyAlloc();
@@ -13414,7 +13713,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // Per-school/per-role breakdown rows for ONE calendar on a date (calId-scoped, Special-Day-aware).
     // Extracted verbatim from showCalTooltip so the individual and Combined-View tooltips share identical
     // hours logic. Returns {rows, bySchool, billable, calRow, siteRows}.
-    function _computeCalTipRows(gObj, calOrigIdx, dayKey, cellDate, abWeek){
+    // Exposed so the read-only per-school Staffing Hours popup can reuse THIS computation rather
+    // than growing a second one. It already applies Staffing Allocation, special-day resolution
+    // and the whole override hierarchy, so anything built on it agrees with the calendar,
+    // the breakdown and the summaries by construction.
+    try{ window._pgTipRows=function(gObj,ci,dayKey,cellDate,abWeek,force){ return _computeCalTipRows(gObj,ci,dayKey,cellDate,abWeek,force); }; }catch(e){}
+    function _computeCalTipRows(gObj, calOrigIdx, dayKey, cellDate, abWeek, _forceBySchool){
       var _gdet=guideDetails[String(gObj.id)]||{};
       var _sopts=_gdet.staffingOpts||{};
       var _calRowsTip=_gdet.calendarRows||[];
@@ -13492,7 +13796,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
       // Break down by school (School + Special Day columns) when Separate-by-School is enabled
       // OR any Special Day is applied to a subset of schools on this date.
-      var bySchool = _siteRows.length>1 && (_tipCo.bySchool || _anySDApplied || _ovForceBySchool);
+      // _forceBySchool lets a per-school consumer (the read-only Staffing Hours popup) ask this
+      // SAME computation for per-school rows when the calendar would otherwise aggregate them.
+      // It changes only the SHAPE returned, never any value — allocation, special-day
+      // resolution and the override hierarchy below are identical either way.
+      var bySchool = _siteRows.length>1 && (_tipCo.bySchool || _anySDApplied || _ovForceBySchool || !!_forceBySchool);
       // School-view filter: always break down per school while filtering, then skip unselected schools —
       // their rows disappear and every subtotal/total built from the surviving rows follows automatically.
       var _tipVF=_cvfSel(gObj.id,_tipCalId);
@@ -16652,6 +16960,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // from ever running, which is exactly how the list ended up stranded open. Listening on the
   // PRESS as well as focus means dismissal happens as the user reaches elsewhere. Targets are
   // found BY CLASS, so this cannot be orphaned by a cell rebuild discarding its closure.
+  var _pgSchoolShOpen=null;
+  // Set while the per-school popup is building its table THROUGH buildOneTable. The nested build
+  // is for display only, so it must not mount a school strip, an allocation matrix or a Copy to
+  // control, and must not register itself for recalculation — otherwise inspecting a school
+  // would quietly add machinery to the live section.
+  var _pgShPopupBuilding=false;
+  // Which allocation matrices are HIDDEN, keyed gid|suffix. Visibility only — never enablement.
+  var _pgAllocHidden={};
+  function _pgAllocIsHidden(gid,sfx){ return !!_pgAllocHidden[String(gid)+'|'+String(sfx)]; }
+  function _pgAllocSetHidden(gid,sfx,v){ _pgAllocHidden[String(gid)+'|'+String(sfx)]=!!v; }
+  try{ window._pgAllocHiddenMap=function(){ return _pgAllocHidden; }; }catch(e){}
+  // Dismissal for the per-school Staffing Hours popup. Registered ONCE in the capture phase so a
+  // control that stops propagation cannot strand it open — the lesson from the dropdown. It
+  // never calls preventDefault or stopPropagation, so whatever the user clicked still performs
+  // its own action; dismissal rides along rather than consuming the click.
+  function _pgCloseSchoolShPopups(ev){
+    var t=ev&&ev.target; if(!t) return;
+    var open=document.querySelectorAll('.sf-sh-popup');
+    if(!open.length) return;
+    for(var i=0;i<open.length;i++){
+      var el=open[i];
+      if(el===t || el.contains(t)) continue;              // inside the popup
+      if(t.classList && t.classList.contains('sf-strip-school-nm')) continue;  // its own trigger
+      el.parentNode && el.parentNode.removeChild(el);
+      _pgSchoolShOpen=null;
+    }
+  }
+  try{
+    document.addEventListener('mousedown', _pgCloseSchoolShPopups, true);
+    document.addEventListener('touchstart', _pgCloseSchoolShPopups, true);
+  }catch(e){}
+  try{ window._pgCloseSchoolShPopups=_pgCloseSchoolShPopups; }catch(e){}
   function _pgCloseSchoolDds(ev){
     var t=ev&&ev.target; if(!t) return;
     var open=document.querySelectorAll('.pg-school-dd');
