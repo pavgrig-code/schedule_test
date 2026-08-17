@@ -1094,8 +1094,9 @@ $(function(){
         background:col.bg, color:col.fg, pointerEvents:'none'   // never individually clickable
       }).text(txt);
     };
-    var cat=pgGsCategory(sc.gs);
-    if(cat) out.push(mk(String(sc.gs).trim(), PG_GS_COLORS[cat], 'pg-gs-badge').attr('data-gs-cat',cat));
+    // ORDER: Charter FIRST, then GSOffered. Charter is a fixed-width circle and only some
+    // schools have one, so putting the VARIABLE-width GS badge last keeps the GS badges falling
+    // at a consistent horizontal position down a list — which is the whole point of the ordering.
     if(String(sc.charter||'').toUpperCase()==='Y'){
       // Charter is a round "C", not a pill: it reads as a status marker rather than another
       // grade-range label. Width and height are the SAME value (14px, matching the GS badge's
@@ -1110,6 +1111,8 @@ $(function(){
         pointerEvents:'none'   // never individually clickable
       }).text('C'));
     }
+    var cat=pgGsCategory(sc.gs);
+    if(cat) out.push(mk(String(sc.gs).trim(), PG_GS_COLORS[cat], 'pg-gs-badge').attr('data-gs-cat',cat));
     return out;
   }
   function pgDistrictByCds(cds){ return cds?(DISTRICT_BY_CDS[String(cds)]||null):null; }
@@ -20669,7 +20672,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var _eilAll=pgSchoolsForDistrict(dcds).filter(function(x){ return pgEilLabel(x)===_eil; });
                 var _eilCodes=_eilAll.map(function(x){ return x.cds; });
                 var $eilRow=$('<div class="pg-eil-head">').css({
-                  fontSize:'9.5px', fontWeight:'600', color:'#7a828a', background:'#fff',
+                  fontSize:'12px', fontWeight:'bold', color:'black', background:'#fff',
                   padding:'4px 10px 2px 14px', whiteSpace:'nowrap', overflow:'hidden',
                   textOverflow:'ellipsis', letterSpacing:'.01em',
                   display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'
