@@ -8242,6 +8242,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     return true;
   }
+  try{ window._pgAllocAllows=staffAllocAllows; window._pgGuideDetails=function(){ return guideDetails; }; }catch(e){}
   // Absent means CHECKED: every box starts checked, and the map is written in full whenever the
   // matrix renders, so an export always carries an explicit value for every intersection.
   function staffAllocGet(rec,si,dayKey){
@@ -14004,6 +14005,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var calRows=((guideDetails[String(p.gid)]||{}).calendarRows)||[];
       var calName=''; for(var _cx=0;_cx<calRows.length;_cx++){ if(String(calRows[_cx].calId)===String(calId)){ calName=(calRows[_cx].name||'').trim(); break; } }
       var siL=(r.siList||[]).slice().sort(function(x,y){return x-y;});   // Site Breakdown order
+      // Re-derive against the CURRENT Staffing Allocation instead of trusting the list captured
+      // on the row. The row's own gate passes ci=null on this path, and staffAllocAllows treats a
+      // null calendar index as "no allocation context" and allows everything — so a school
+      // removed from this weekday still arrived here. Resolving the calendar's ORIGINAL INDEX
+      // from calId gives the gate the context it needs ('c0' etc.), and doing it at OPEN time
+      // means the list is right no matter when the row was built.
+      (function(){
+        try{
+          var _crs=((guideDetails[String(p.gid)]||{}).calendarRows)||[];
+          var _ci=null;
+          for(var _i=0;_i<_crs.length;_i++){ if(String(_crs[_i].calId)===String(calId)){ _ci=_i; break; } }
+          if(_ci===null) return;                       // unresolved calendar: leave the list alone
+          var _dk=['sun','mon','tue','wed','thu','fri','sat'][new Date(p.dateKey+'T12:00:00').getDay()];
+          if(!_dk) return;
+          var _opts=(((guideDetails[String(p.gid)]||{}).staffingOptsByCal)||{})[String(calId)]||{};
+          if(_opts.alternateWeeks){
+            // A/B weeks: the week this date falls in is not resolvable from here without the
+            // tip's own scheduling context, so a school is dropped only when BOTH weeks exclude
+            // it. Guessing the wrong week could hide a school that DOES staff this day, and a
+            // missing school is a worse error than an extra one.
+            siL=siL.filter(function(si){
+              return staffAllocAllows(p.gid,_ci,'a',si,_dk) || staffAllocAllows(p.gid,_ci,'b',si,_dk);
+            });
+          } else {
+            siL=siL.filter(function(si){ return staffAllocAllows(p.gid,_ci,'',si,_dk); });
+          }
+        }catch(e){}
+      })();
       var base={}, open={}, vals={}, ovAny=false;
       siL.forEach(function(si){
         var b=(r.base&&r.base[si]&&parseInt(r.base[si].cnt,10))||0;
