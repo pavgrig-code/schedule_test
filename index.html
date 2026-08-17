@@ -9437,6 +9437,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $x=$('<button type="button" class="sh-cnt-x">').text('\u00d7').css({position:'absolute',top:'8px',right:'10px',border:'none',background:'transparent',fontSize:'16px',cursor:'pointer',color:'#6c757d',lineHeight:'1',padding:'0 4px'});
             $card.append($('<div class="sh-cnt-popup-title">').css({fontWeight:'700',fontSize:'13px',color:'#212529',marginBottom:'8px',paddingRight:'20px'}).text(isCoach?'Edit Coach Count':'Edit Staff Count'));
             $card.append($x);
+            // The card is a FLEX COLUMN capped to the viewport, so a 50-school day cannot grow it
+            // off screen: title, context header and the action footer stay put while the school
+            // table scrolls between them. The cap is computed from the live viewport at open, so
+            // a small browser height still leaves the footer reachable.
+            var _maxH=Math.max(240, Math.min(560, ((window.innerHeight||800)-80)));
+            $card.css({display:'flex',flexDirection:'column',maxHeight:_maxH+'px'});
             var $hdr=$('<div class="sh-cnt-popup-hdr">').css({display:'flex',alignItems:'center',gap:'7px',flexWrap:'wrap',marginBottom:'10px',color:'#495057',fontSize:'11px'});
             $hdr.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',fontWeight:'600'})
               .append($('<span class="sh-cnt-cal-dot">').css({width:'9px',height:'9px',borderRadius:'50%',background:cr.color||'#adb5bd',display:'inline-block',flexShrink:'0'}))
@@ -9551,7 +9557,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $trT.append($('<td>').css({padding:'5px 6px',fontWeight:'700',color:'#212529'}).text('Total'));
             $trT.append($('<td>').css({padding:'4px 5px',textAlign:'center'}).append($totSpan));
             $tbl.append($trT);
-            $card.append($tbl);
+            // ONE table inside a scroll region keeps the columns aligned; the header row and the
+            // Total row are position:sticky, so both stay visible while the school rows scroll.
+            $headRow.children().css({position:'sticky',top:'0',background:'#fff',zIndex:'1'});
+            $trT.children().css({position:'sticky',bottom:'0',background:'#fff',borderTop:'1px solid #dee2e6'});
+            var $scroll=$('<div class="sh-cnt-popup-scroll">').css({overflowY:'auto',overflowX:'hidden',flex:'1 1 auto',minHeight:'0'});
+            $scroll.append($tbl);
+            $card.append($scroll);
             function paintRow(r){ _shCntPaint(r.$span, r.val!==r.sb?r.val:null, r.sb); }
             function paintTotal(){ var t=0; rowsState.forEach(function(r){ t+=r.val; }); _shCntPaint($totSpan, t!==sbTot?t:null, sbTot); }
             var $foot=$('<div class="sh-cnt-popup-foot">').css({display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'12px'});
@@ -9631,6 +9643,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(!editCombo||editCombo.si!==null) return [];
             return editCombo.pod?(editCombo.podSchools||[]):((editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};}));
           }
+          // Removed-day labels, DERIVED from the live Staffing Allocation every time the strip
+          // is built — never cached — so they follow a day toggle, the school parent, an Undo, an
+          // import, a snapshot restore and any rerender without needing to be told about any of them.
+          // NOT red: an excluded day is an intentional configuration, not an error, so the
+          // STRIKETHROUGH carries the meaning and the colour stays neutral.
+          function _stripDayAbbr(dy){
+            if(dy.isSd) return dy.l||dy.k;              // a Special Day keeps its own name
+            var L=String(dy.l||dy.k);
+            return L.charAt(0).toUpperCase()+L.slice(1,3).toLowerCase();   // Monday -> Mon
+          }
+          function _stripRemovedLabels(si){
+            var out=[];
+            try{
+              var rec=staffAllocRec(g.id,sfxClass);
+              var days=buildDaysArray(g.id);
+              if(!days.length) return out;
+              var gone=days.filter(function(dy){ return !staffAllocGet(rec,si,dy.k); });
+              if(!gone.length) return out;
+              var mk=function(txt){
+                return $('<span class="sf-strip-removed">').css({
+                  fontSize:'9px', background:'#fff0c1', padding:'1px 2px', color:'black',
+                  fontWeight:'200', border:'1px gray solid', borderRadius:'4px',
+                  textDecoration:'line-through', whiteSpace:'nowrap', lineHeight:'1.1',
+                  pointerEvents:'none'            // read-only context, never interactive
+                }).text(txt);
+              };
+              // Every applicable day gone reads as ONE label rather than a run of seven.
+              if(gone.length===days.length){ out.push(mk('All Days').attr('data-all','1')); return out; }
+              gone.forEach(function(dy){ out.push(mk(_stripDayAbbr(dy)).attr('data-day',dy.k)); });
+            }catch(e){}
+            return out;
+          }
           function _rebuildSchoolStrip(){
             if(!$schoolStrip) return;
             $schoolStrip.empty();
@@ -9652,7 +9696,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var $names=$('<div>').css({display:'flex',flexDirection:'column'});
               for(var k2=i;k2<j;k2++){
                 var r2s=list[k2].sRow, nm2=(r2s&&(r2s.school||r2s.schoolAbbr))||('School '+(list[k2].si+1));
-                $names.append($('<span class="sf-strip-school">').css({fontSize:'10px',lineHeight:'14px',color:'#495057',whiteSpace:'nowrap'}).text(nm2));
+                // School name plus, inline, the days its Staffing Allocation excludes. The row is
+                // a flex line so the labels sit BESIDE the name while space allows and wrap only
+                // when it runs out; the name itself never wraps.
+                var $line=$('<span class="sf-strip-school">').css({display:'flex',alignItems:'baseline',flexWrap:'wrap',gap:'4px',fontSize:'10px',lineHeight:'14px',color:'#495057'});
+                $line.append($('<span class="sf-strip-school-nm">').css({whiteSpace:'nowrap',fontWeight:'500'}).text(nm2));
+                _stripRemovedLabels(list[k2].si).forEach(function($x){ $line.append($x); });
+                $names.append($line);
               }
               $grp.append($names);
               $schoolStrip.append($grp);
@@ -9703,6 +9753,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             try{ _pgUndo.offer(g.id,{lead:(on?'All Staffing Allocations':'Staffing Allocation'),tail:(on?' selected.':' cleared.')}); }catch(e){}
           }
           function _rebuildAllocTable(){
+            // The strip is repainted here too: this is the shared repaint point every allocation
+            // path already goes through (Select All, Clear, Undo restore, import, snapshot
+            // restore, any rerender), so the labels follow without each caller remembering to.
+            try{ _rebuildSchoolStrip(); }catch(e){}
             if(!$allocWrap) return;
             $allocWrap.empty();
             var list=_allocSchools();
@@ -9811,8 +9865,53 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       $tr.append($('<td class="sf-alloc-pod sf-alloc-pod-empty">').css(td));   // keeps the columns aligned
                     }
                   }
+                  // "Applicable" = a day this school can actually be allocated to. Anything the
+                  // table renders disabled stays disabled: the parent must never force a day into
+                  // a state the row could not reach on its own.
+                  function _allocDayDisabled(si,dy){
+                    try{
+                      var $c=$tb.find('td.sf-alloc-cell[data-alloc-si="'+si+'"][data-alloc-day="'+dy.k+'"]');
+                      if(!$c.length) return false;
+                      var $b=$c.find('input.sf-alloc-cb');
+                      return $b.length ? !!$b.prop('disabled') : false;
+                    }catch(e){ return false; }
+                  }
                   var nm=(u.sRow&&(u.sRow.school||u.sRow.schoolAbbr))||('School '+(u.si+1));
-                  $tr.append($('<td class="sf-alloc-school">').css(Object.assign({},td,{textAlign:'left',fontWeight:'500'})).text(nm));
+                  // School cell = parent checkbox + name + the same GS/Charter badges the Add
+                  // School dropdown uses, so a school reads identically wherever it appears.
+                  // Badges come from the reference record via the row's CDS; a row typed in
+                  // before the CDS migration (or an import without one) simply gets no badges
+                  // rather than a guessed match by name — names repeat across districts.
+                  var $schTd=$('<td class="sf-alloc-school">').css(Object.assign({},td,{textAlign:'left',fontWeight:'500'}));
+                  var $schIn=$('<span class="sf-alloc-school-in">').css({display:'flex',alignItems:'center',gap:'6px',minWidth:'0'});
+                  var _roS=(_pgvCur.mode==='view');
+                  if(_roS){
+                    // Locked: a parent control that cannot act must not LOOK like one, so the
+                    // row shows the same inert indicator the day cells use.
+                    var _allD=days.filter(function(dy){ return !_allocDayDisabled(u.si,dy); });
+                    var _onD=_allD.filter(function(dy){ return staffAllocGet(rec,u.si,dy.k); }).length;
+                    $schIn.append($('<span class="sf-alloc-school-ind">')
+                      .attr('data-state',_allD.length&&_onD===_allD.length?'all':(_onD?'some':'none'))
+                      .css({display:'inline-block',width:'12px',fontSize:'11px',lineHeight:'1',textAlign:'center',
+                            color:_onD?'#308930':'#c8ccd1'})
+                      .text(_allD.length&&_onD===_allD.length?'\u2713':(_onD?'\u2013':'')));
+                  } else {
+                    var $scb=$('<input type="checkbox" class="sf-alloc-school-cb">')
+                      .attr('data-alloc-si',String(u.si))
+                      .css({cursor:'pointer',margin:'0',width:'12px',height:'12px',flex:'0 0 auto'})
+                      .attr('title','Select all days for '+nm);
+                    $schIn.append($scb);
+                  }
+                  $schIn.append($('<span class="sf-alloc-school-nm">').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(nm));
+                  (function(){
+                    try{
+                      var _cds=u.sRow&&u.sRow.schoolCds;
+                      var _sc=_cds?pgSchoolByCds(_cds):null;
+                      if(_sc) pgSchoolBadges(_sc).forEach(function($b){ $schIn.append($b); });
+                    }catch(e){}
+                  })();
+                  $schTd.append($schIn);
+                  $tr.append($schTd);
                   days.forEach(function(dy,dyi){
                     var $c=$('<td class="sf-alloc-cell">').attr({'data-alloc-si':String(u.si),'data-alloc-day':dy.k})
                       .css(Object.assign({},td,{padding:'2px'},
@@ -9867,10 +9966,63 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       // refreshSummary, the Program Calendars cells and the Discounts figures.
                       try{ updU($tbU); }catch(e){}
                       try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(e){}
+                      try{ var _sp=$(this).closest('tr').data('syncParent'); if(_sp) _sp(); }catch(e){}
+                      try{ _rebuildSchoolStrip(); }catch(e){}
                       try{ _pgUndo.offer(g.id,{lead:_sn,tail:(on?(' added to '+_dn+'.'):(' removed from '+_dn+'.'))}); }catch(e){}
                     });
                     $c.append($cb);
                     $tr.append($c);
+                  });
+                  // Parent state is DERIVED from the day cells, never stored — the same rule the
+                  // EIL parent checkboxes follow, so it stays right however a day was changed.
+                  function _syncSchoolParent(){
+                    try{
+                      var $p=$tr.find('input.sf-alloc-school-cb'); if(!$p.length) return;
+                      var app=days.filter(function(dy){ return !_allocDayDisabled(u.si,dy); });
+                      var on=app.filter(function(dy){ return !!staffAllocGet(staffAllocRec(g.id,sfxClass),u.si,dy.k); }).length;
+                      $p[0].checked = app.length>0 && on===app.length;
+                      $p[0].indeterminate = on>0 && on<app.length;
+                    }catch(e){}
+                  }
+                  $tr.data('syncParent',_syncSchoolParent);
+                  _syncSchoolParent();
+                  if(!_roS) $tr.find('input.sf-alloc-school-cb').on('change',function(e){
+                    // Read intent from the LIVE data, not this box's own state: an INDETERMINATE
+                    // parent means "not all days selected", so clicking it selects the rest.
+                    var recNow=staffAllocRec(g.id,sfxClass);
+                    var app=days.filter(function(dy){ return !_allocDayDisabled(u.si,dy); });
+                    var onNow=app.filter(function(dy){ return !!staffAllocGet(recNow,u.si,dy.k); }).length;
+                    var want=onNow<app.length;
+                    var todo=app.filter(function(dy){ return !!staffAllocGet(recNow,u.si,dy.k)!==want; });
+                    if(!todo.length){ _syncSchoolParent(); return; }
+                    // ONE transaction for the whole row: one undo snapshot, one History sentence,
+                    // one dependency repaint, one Undo offer — never one per day.
+                    try{ _pgUndo.begin(g.id); }catch(e){}
+                    todo.forEach(function(dy){ recNow.cells[staffAllocKey(u.si,dy.k)]=want; });
+                    setGuideDetail(g.id,'staffAlloc',staffAllocStore(g.id));
+                    // Repaint this row's day controls from the data rather than trusting the DOM.
+                    $tr.find('td.sf-alloc-cell').each(function(){
+                      var dk=$(this).attr('data-alloc-day');
+                      var $b=$(this).find('input.sf-alloc-cb');
+                      if($b.length && !$b.prop('disabled')) $b.prop('checked', !!staffAllocGet(recNow,u.si,dk));
+                    });
+                    var _cn=(editCombo&&editCombo.calRow&&editCombo.calRow.name)||'';
+                    var _n=todo.length;
+                    try{
+                      _pgHist.begin(g.id);
+                      _pgHist.evt(g.id,{kind:'edit',action:'Staffing Allocation changed',
+                        desc:(want?'Added ':'Removed ')+nm+(want?' to ':' from ')+_n+' day'+(_n===1?'':'s')+' of Staffing Allocation'+(_cn?(' for '+_cn):'')+'.'});
+                    }catch(e){}
+                    try{ updU($tbU); }catch(e){}
+                    try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(e){}
+                    _syncSchoolParent();
+                    try{ _rebuildSchoolStrip(); }catch(e){}
+                    // The bulk cascade writes downstream state after this task, so rebaseline on
+                    // deferred ticks too or the differ logs a second, automatic record.
+                    try{ _pgHist.begin(g.id); }catch(e){}
+                    setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
+                    setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
+                    try{ _pgUndo.offer(g.id,{lead:nm,tail:(want?(' allocated to '+_n+' day'+(_n===1?'':'s')+'.'):(' cleared from '+_n+' day'+(_n===1?'':'s')+'.'))}); }catch(e){}
                   });
                   $tb.append($tr);
                 })(list[k2],k2,k2===i,j-i,p0);
@@ -13869,6 +14021,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Interactions inside the card must never leak to document-level close/unpin handlers
       // (real clicks fire mousedown AND click; stop them all at the card boundary).
       $card.on('mousedown click pointerdown',function(e){ e.stopPropagation(); });
+      // Same viewport cap as the Staffing Hours popup, tighter because this card floats beside
+      // the Calendar Hours Breakdown rather than in a centred overlay: header and buttons stay
+      // reachable, the school table scrolls internally.
+      var _maxH=Math.max(200, Math.min(420, ((window.innerHeight||800)-120)));
+      $card.css({display:'flex',flexDirection:'column',maxHeight:_maxH+'px'});
       $card.append($('<div>').css({display:'flex',alignItems:'center',gap:'8px',marginBottom:'2px'})
         .append($('<span class="cal-day-cnt-title">').css({fontSize:'11.5px',fontWeight:'700',color:'#212529'}).text((isCoach?'Edit Coach Count':'Edit Staff Count')+' \u2014 '+dLbl))
         .append($('<span class="sh-cnt-x">').css({marginLeft:'auto',cursor:'pointer',color:'#6c757d',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).html('&times;').on('click',function(){ close(); })));
@@ -13931,7 +14088,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $totCell=$('<span class="sh-cnt-popup-total">').css({fontSize:'11px',fontWeight:'700',color:'#212529'}).text(pendSum());
       $trT.append($('<td>').css({padding:'4px 5px',textAlign:'center'}).append($totCell));
       $tbl.append($trT);
-      $card.append($tbl);
+      $hr.children().css({position:'sticky',top:'0',background:'#fff',zIndex:'1'});
+      $trT.children().css({position:'sticky',bottom:'0',background:'#fff'});
+      var $scroll=$('<div class="sh-cnt-popup-scroll">').css({overflowY:'auto',overflowX:'hidden',flex:'1 1 auto',minHeight:'0'});
+      $scroll.append($tbl);
+      $card.append($scroll);
       var $bar=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',marginTop:'7px'});
       var $rstLnk=$('<span class="sh-cnt-popup-reset">').css({fontSize:'10px',color:'#0d6efd',cursor:'pointer',textDecoration:'underline',display:ovAny?'inline':'none'}).text('Reset to Original Counts');
       $rstLnk.on('mousedown',function(e){ e.preventDefault(); e.stopPropagation(); siL.forEach(function(si){ vals[si]=String(base[si]); paintCell(si); }); });
@@ -17104,6 +17265,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $(this).replaceWith($('<span class="sf-alloc-ind">').attr('data-checked',on?'1':'0')
           .css({display:'inline-block',fontSize:'11px',lineHeight:'1',color:on?'#308930':'#c8ccd1'})
           .text(on?'\u2713':''));
+      });
+      // The school PARENT checkbox gets the same treatment, and must be read BEFORE the loop
+      // above blanks its children — its tri-state is the row summary, so a mixed row shows a
+      // dash rather than collapsing to an empty cell that would read as "none allocated".
+      $(root).find('input.sf-alloc-school-cb').each(function(){
+        var st=this.indeterminate?'some':(this.checked?'all':'none');
+        $(this).replaceWith($('<span class="sf-alloc-school-ind">').attr('data-state',st)
+          .css({display:'inline-block',width:'12px',fontSize:'11px',lineHeight:'1',textAlign:'center',
+                color:(st==='none')?'#c8ccd1':'#308930'})
+          .text(st==='all'?'\u2713':(st==='some'?'\u2013':'')));
       });
       $(root).find('.sf-alloc-wrap').each(function(){
         if(!$(this).find('.sf-alloc-table').length) $(this).remove();
