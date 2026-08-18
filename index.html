@@ -9778,8 +9778,56 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // DETACHED COPY: inspecting a school must never create or mutate its slot. A school
             // with no per-school slot inherits the calendar's, which is exactly what the app
             // would show if that school were split out.
-            var src=_slots[perSfx]||_slots[calSfx]||{};
-            var shCopy; try{ shCopy=JSON.parse(JSON.stringify(src)); }catch(e){ shCopy={}; }
+            // INHERIT, NEVER REPLACE. A count override creates a SPARSE per-school slot — often
+            // just {role:{day:{cnt:N}}} with no times at all. Preferring that slot wholesale made
+            // Start/End/Hours vanish for every day, because the times only ever lived on the
+            // CALENDAR slot. The app's own model is inheritance: a per-school value overrides,
+            // an absent one falls back. So merge per DAY, calendar underneath, school on top.
+            // ALTERNATE WEEKS move the hours into week-suffixed slots (c0a / c0b) and leave the
+            // bare c0 empty, so looking only at the combo's own suffix showed blank times for
+            // every day. Pick the first suffix that actually HAS content, preferring the combo's
+            // own week, then the A week the app displays by default.
+            function _firstFilled(){
+              for(var i=0;i<arguments.length;i++){
+                var k=arguments[i], sl=k?_slots[k]:null;
+                if(!sl) continue;
+                for(var rk in sl){ for(var dk in (sl[rk]||{})){
+                  var cell=sl[rk][dk]||{};
+                  if(cell.start||cell.end||cell.cnt!=null) return sl;
+                } }
+              }
+              return {};
+            }
+            var _calBare=(ci!==null?('c'+ci):'');
+            var base=_firstFilled(calSfx,_calBare+'a',_calBare+'b',_calBare);
+            var per=_firstFilled(perSfx,('s'+si)+_calBare+'a',('s'+si)+_calBare+'b',('s'+si)+_calBare);
+            var shCopy={};
+            try{
+              shCopy=JSON.parse(JSON.stringify(base));
+              var pc=JSON.parse(JSON.stringify(per));
+              Object.keys(pc).forEach(function(rk){
+                if(!shCopy[rk]) shCopy[rk]={};
+                Object.keys(pc[rk]||{}).forEach(function(dk){
+                  var b=shCopy[rk][dk]||{}, o=pc[rk][dk]||{};
+                  var m={}; Object.keys(b).forEach(function(f){ m[f]=b[f]; });
+                  // Only fields the school actually specifies win. Two shapes have to be told
+                  // apart: the Edit Coach Count popup, when it first touches a day, SEEDS the
+                  // per-school slot with {start:'',end:''} scaffolding before setting cnt — those
+                  // empty strings are NOT a deliberate "clear this time", they are placeholders,
+                  // and letting them win blanked the day's Start/End/Hours (the reported bug).
+                  // So an EMPTY-STRING time from the school layer defers to a NON-EMPTY calendar
+                  // value; it only wins when the calendar had nothing there either. A cnt (or any
+                  // non-time field, or a genuinely non-empty time) always wins.
+                  Object.keys(o).forEach(function(f){
+                    if(o[f]===undefined) return;
+                    var isTime=(f==='start'||f==='end');
+                    if(isTime && o[f]==='' && b[f]!=null && b[f]!==''){ return; }   // seed placeholder, inherit
+                    m[f]=o[f];
+                  });
+                  shCopy[rk][dk]=m;
+                });
+              });
+            }catch(e){ shCopy={}; }
             var cFn=(function(row,csr){ return function(){ return getSchoolCounts(row,csr); }; })(sRow,sr);
             var combo2={ci:ci,si:si,wk:wk,calRow:calRow,sRow:sRow,calSiteRows:sr,pod:null,podKey:null};
             var res=null;
