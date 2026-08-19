@@ -18318,6 +18318,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Add Discount|Copy To|Options|Clear|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
   function _pgvStripEditAffordances(root){
     try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots').remove(); }catch(e){}
+    // School reordering is edit-only. The build-time guard covers a fresh locked render; locking an
+    // ALREADY-RENDERED guide is an in-place transform, so the drag grab cursor on the name cell must
+    // be cleared here too (the drag handlers are already inert via their own view-mode guards).
+    try{ $(root).find('.sb-name-cell').css('cursor',''); }catch(e){}
     // Staffing Allocation is edit-only for now. The build-time guard covers a fresh locked
     // render; locking an ALREADY-RENDERED guide is an in-place transform, so the control and its
     // matrix are removed here too — and the school strip it replaced is restored, otherwise a
@@ -20607,9 +20611,165 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(isPrimary) setGuideDetail(g.id,'siteRows',siteRows);
     }
 
+    // ══ School reordering (Site Breakdown) — PRESENTATION ONLY ═══════════════════════════
+    // The display order is a per-calendar overlay at det.siteOrderByCal[String(calId)] — a list
+    // of stable per-row ids (_sbId). It is applied ONLY when this card renders; it NEVER reorders
+    // siteRowsByCal and never changes a school's array index (si). Because every staffing slot
+    // ('s{si}c{ci}..'), allocation cell (staffAllocKey(si,..)), count override, total and summary
+    // is keyed by that index, ALL of them are byte-identical after a reorder — the data is not
+    // touched, only the drawing order is. Pod membership is keyed by schoolId, so it is unchanged
+    // too; the Pod brackets simply regroup to the new adjacency. A row with no _sbId yet (added
+    // since the last reorder) sorts to the end in array order. Locked View disables reordering.
+    function _sbOrderMap(){
+      var det=guideDetails[String(g.id)]||(guideDetails[String(g.id)]={});
+      if(!det.siteOrderByCal) det.siteOrderByCal={};
+      return det.siteOrderByCal;
+    }
+    function _sbRowId(r){
+      if(!r) return null;
+      if(r._sbId==null) r._sbId='sbr_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      return r._sbId;
+    }
+    // [{r, ai}] in DISPLAY order — the SAME row objects, each carrying its TRUE array index (ai).
+    function _sbDisplay(){
+      var ord=_sbOrderMap()[String(calId)]||null;
+      var pri={}; if(ord) ord.forEach(function(id,i){ if(pri[id]==null) pri[id]=i; });
+      var arr=siteRows.map(function(r,ai){
+        var key=(r&&r._sbId!=null)?r._sbId:null;
+        var p=(key!=null&&pri[key]!=null)?pri[key]:(1e9+ai);
+        return {r:r, ai:ai, _p:p};
+      });
+      arr.sort(function(a,b){ return (a._p-b._p)||(a.ai-b.ai); });
+      return arr;
+    }
+    function _sbCalName(){
+      var _det=guideDetails[String(g.id)]||{};
+      var cr=(_det.calendarRows||[]).filter(function(c){ return String(c.calId)===String(calId); })[0];
+      return (cr&&cr.name&&String(cr.name).trim())||calLabel||'Site Breakdown';
+    }
+    function _sbRerender(){ $section.replaceWith(buildSiteCard(calId, calLabel, calColor, isPrimary)); }
+    // Move the school at DISPLAY position fromDisp to DISPLAY position toDisp. One transaction:
+    // one Undo snapshot (full-guide → atomic, restores order + Pod layout), one History record,
+    // one Gmail-style toast. Returns true when it actually moved.
+    function _sbReorder(fromDisp, toDisp){
+      if(_pgvCur.mode==='view') return false;               // locked: never reorder
+      var disp=_sbDisplay();
+      if(fromDisp==null||fromDisp<0||fromDisp>=disp.length) return false;
+      toDisp=Math.max(0, Math.min(disp.length-1, toDisp));
+      if(toDisp===fromDisp) return false;
+      var moved=disp[fromDisp].r;
+      var nm=(moved&&(String(moved.school||'').trim()||String(moved.schoolAbbr||'').trim()))||('School '+(disp[fromDisp].ai+1));
+      try{ _pgUndo.begin(g.id); }catch(e){}                 // full-guide snapshot
+      disp.forEach(function(d){ _sbRowId(d.r); });          // stable id on every row
+      var seq=disp.map(function(d){ return d.r; });
+      seq.splice(fromDisp,1); seq.splice(toDisp,0,moved);
+      _sbOrderMap()[String(calId)]=seq.map(function(r){ return r._sbId; });
+      saveSiteRows();                                       // rows (with _sbId) persist in det
+      try{ setGuideDetail(g.id,'siteOrderByCal',_sbOrderMap()); }catch(e){}
+      _sbRerender();                                        // redraw THIS card in the new order
+      try{ refreshSummary(g); }catch(e){}                   // numerically identical; keeps UI coherent
+      // ONE History record: rebaseline swallows the automatic save-diff, deferred rebaselines catch
+      // any late writes (same pattern as add-school / the copy menu).
+      try{ _pgHist.begin(g.id); }catch(e){}
+      try{ _pgHist.evt(g.id,{ kind:'edit', action:'Reordered schools in Site Breakdown',
+        desc:'Moved \u201c'+nm+'\u201d from #'+(fromDisp+1)+' \u2192 #'+(toDisp+1)+' in Site Breakdown for '+_sbCalName() }); }catch(e){}
+      setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
+      setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
+      try{ _pgUndo.offer(g.id,{text:nm+' moved to #'+(toDisp+1)+'.'}); }catch(e){}
+      return true;
+    }
+    // Test/inspection seam: a registry keyed by guide|calendar exposing this card's live reorder
+    // and display-order readers. Refreshed on every card build; jsdom has no layout so the drag
+    // GEOMETRY can't be driven, but the reorder CONTRACT can.
+    try{
+      if(!window._pgSbCards) window._pgSbCards={};
+      window._pgSbCards[String(g.id)+'|'+String(calId)]={
+        reorder:_sbReorder,
+        order:function(){ return _sbDisplay().map(function(d){ return d.ai; }); },
+        names:function(){ return _sbDisplay().map(function(d){ return String((d.r&&d.r.school)||''); }); }
+      };
+    }catch(e){}
+
+    // ── Pointer-based drag to reorder ── Grabs the school-name cell (spec). Presentation-only:
+    // on drop it calls _sbReorder. A move threshold keeps plain clicks (pod select, chip clear)
+    // working. The dragged row is shown as a shadowed, slightly transparent floating clone of the
+    // WHOLE row (never a text ghost); a blue insertion line marks where it will land. All geometry
+    // is guarded so a layout-less environment can't throw. Escape cancels.
+    var _sbDrag=null;
+    function _sbBeginDrag(e0, fromDisp, $srcTr){
+      if(_pgvCur.mode==='view') return;
+      var started=false, y0=e0.clientY, x0=e0.clientX, toDisp=fromDisp, rects=[], $preview=null, $line=null, dy=0;
+      function collectRects(){
+        rects=[];
+        $(_podTbody).children('tr').each(function(){
+          if($(this).data('sbRow')==null) return;                 // skip the totals row
+          var b; try{ b=this.getBoundingClientRect(); }catch(_e){ b={top:0,bottom:0,height:0,left:0,width:0}; }
+          rects.push({tr:this, top:b.top, bottom:b.bottom, mid:(b.top+b.bottom)/2, left:b.left, width:b.width});
+        });
+      }
+      // insertion boundary in [0, N]: how many CURRENT display rows sit above the pointer.
+      function insIndex(y){ var n=0; for(var i=0;i<rects.length;i++){ if(rects[i].mid < y) n++; } return n; }
+      function startVisual(){
+        try{
+          var b=$srcTr[0].getBoundingClientRect(); dy=e0.clientY-b.top;
+          $preview=$('<div class="sb-drag-preview">').css({position:'fixed',left:(b.left)+'px',top:(b.top)+'px',
+            width:(b.width||0)+'px',pointerEvents:'none',zIndex:'100002',opacity:'0.92',
+            boxShadow:'0 10px 24px rgba(0,0,0,.30)',background:'#fff',borderRadius:'4px',overflow:'hidden'});
+          var $t=$('<table>').css({borderCollapse:'collapse',width:(b.width||0)+'px',fontSize:'11px',tableLayout:'fixed'});
+          $t.append($('<tbody>').append($srcTr.clone(true)));
+          $preview.append($t); $('body').append($preview);
+        }catch(_e){ $preview=null; }
+        try{ $srcTr.css('opacity','0.35'); }catch(_e){}
+        try{ $('body').css('user-select','none'); }catch(_e){}
+      }
+      function moveVisual(y){ if($preview){ try{ $preview.css('top',(y-dy)+'px'); }catch(_e){} } }
+      // draw the insertion line at boundary 'ins' (0..N): above row ins, or below the last row.
+      function showLine(ins){
+        if(!rects.length) return;
+        if(!$line){ $line=$('<div class="sb-drop-line">').css({position:'fixed',height:'0',borderTop:'2px solid #0d6efd',
+          zIndex:'100001',pointerEvents:'none',boxShadow:'0 0 0 1px rgba(13,110,253,.20)'}); $('body').append($line); }
+        try{
+          var b, top;
+          if(ins>=rects.length){ b=rects[rects.length-1]; top=b.bottom; }
+          else { b=rects[ins]; top=b.top; }
+          $line.css({left:(b.left)+'px', width:(b.width||0)+'px', top:(top-1)+'px', display:'block'});
+        }catch(_e){}
+      }
+      function cleanup(){
+        try{ $(document).off('.sbdrag'); }catch(_e){}
+        try{ if($preview) $preview.remove(); }catch(_e){}
+        try{ if($line) $line.remove(); }catch(_e){}
+        try{ $srcTr.css('opacity',''); }catch(_e){}
+        try{ $('body').css('user-select',''); }catch(_e){}
+        _sbDrag=null;
+      }
+      function onMove(ev){
+        if(!started){
+          if(Math.abs(ev.clientY-y0)<4 && Math.abs(ev.clientX-x0)<4) return;   // threshold
+          started=true; collectRects(); startVisual();
+        }
+        try{ ev.preventDefault(); }catch(_e){}   // suppress text selection once dragging
+        moveVisual(ev.clientY);
+        var ins=insIndex(ev.clientY);              // insertion boundary 0..N
+        var to=ins; if(fromDisp<to) to--;          // splice target after the source is removed
+        toDisp=Math.max(0, Math.min(rects.length-1, to));
+        showLine(ins);
+      }
+      function finish(commit){
+        var from=fromDisp, to=toDisp;
+        cleanup();
+        if(commit && started && to!=null && to!==from){ _sbReorder(from, to); }
+      }
+      function onUp(){ finish(true); }
+      function onKey(ev){ if(ev.key==='Escape'){ started=false; finish(false); } }
+      _sbDrag={cancel:function(){ started=false; finish(false); }};
+      $(document).on('mousemove.sbdrag',onMove).on('mouseup.sbdrag',onUp).on('keydown.sbdrag',onKey);
+    }
+
     // ── Pod plumbing for this Site Breakdown card ──
     var _podSelKey=String(g.id)+'|'+String(calId);
     var _podTbody=null;   // the card's current tbody; set by buildTable, used to repaint selection highlights
+    var _curDisp=null;    // the card's current DISPLAY order [{r,ai}] (set by buildTable) for row readback
     function savePods(){ setGuideDetail(g.id,'podsByCal',(guideDetails[String(g.id)]||{}).podsByCal); }
     // When this calendar's Staffing Hours are grouped by pods, pod changes (assign/rename/recolor/
     // membership/delete) regroup the tables - rebuild the Staffing and Calendar sections like the
@@ -20635,7 +20795,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!_podTbody) return;
       var sel=(_sbPodSel.key===_podSelKey)?_sbPodSel.ids:[];
       $(_podTbody).children('tr').each(function(i){
-        var r=siteRows[i]; if(!r) return;   // totals row
+        var r=$(this).data('sbRow'); if(!r) return;   // totals row (no row bound) — skip; display-ordered
         var on=sel.indexOf(_podRowUid(r))>=0;   // per-row identity: duplicate schoolIds never conflate
         $(this).toggleClass('sb-pod-selected', on)
                .css('background', on?'#dbeafe':(i%2===1?'#fafafa':''));
@@ -20925,9 +21085,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // the brackets aligned to the rows they group. _podStretches computes the runs; buildTable renders them.
     // _podRefreshBrackets is retained as a no-op (its former callers just trigger a layout pass) and clears any
     // legacy left padding the old overlay reserved.
-    function _podStretches(){
+    // Runs of consecutive same-pod rows IN DISPLAY ORDER (start/end are display positions), so the
+    // Pod brackets group whatever rows the user has placed adjacent. Pass the [{r,ai}] display list.
+    function _podStretches(disp){
       var pods=podsFor(g,calId), out=[], cur=null;
-      siteRows.forEach(function(r,i){
+      var list=disp||siteRows.map(function(r,i){ return {r:r, ai:i}; });
+      list.forEach(function(d,i){
+        var r=d.r;
         var p=(r&&r.schoolId!=null)?podOfSchool(pods,r.schoolId):null;
         if(p && cur && cur.pod===p && cur.end===i-1){ cur.end=i; }
         else if(p){ cur={pod:p,start:i,end:i}; out.push(cur); }
@@ -21188,9 +21352,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ── Pod column state ── The dedicated leading "Pod" column exists only once at least one school in this
       // Site Breakdown is assigned to a pod. _podStretchStart maps a row index to the stretch that begins there
       // (rowspan bracket cell); _podRowCovered marks rows folded under a rowspan above.
-      var _podStretchList=_podStretches();
+      var _disp=_sbDisplay();                 // [{r,ai}] display order (row objects + true index)
+      _curDisp=_disp;                         // card-scope handle for _podRepaintSel readback
+      var _podStretchList=_podStretches(_disp);
       var _podOn=_podStretchList.length>0;
-      var _podStretchStart={}, _podRowCovered={};
+      var _podStretchStart={}, _podRowCovered={};   // keyed by DISPLAY position
       _podStretchList.forEach(function(st){ _podStretchStart[st.start]=st; for(var i=st.start+1;i<=st.end;i++) _podRowCovered[i]=true; });
 
       var $scroll=$('<div style="overflow-x:auto;">');
@@ -21289,15 +21455,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var counts={};
         siteRows.forEach(function(r){ var k=_sbSchoolKey(r); if(k) counts[k]=(counts[k]||0)+1; });
         $tbody.children('tr').each(function(i){
-          var r=siteRows[i]; if(!r) return;   // totals row (no matching siteRows entry) — skip
+          var r=$(this).data('sbRow'); if(!r) return;   // totals row — skip; tbody is display-ordered
           var $cell=$(this).children('td').eq(1);   // School Name cell
           var k=_sbSchoolKey(r), dup=(!!k && counts[k]>1);
           if(dup){ $cell.addClass('sb-dup-school').css({background:'#fff1f0',boxShadow:'inset 3px 0 0 0 #ff4d4f'}).attr('title','Duplicate school \u2014 each school should appear only once in this Site Breakdown.'); }
           else { $cell.removeClass('sb-dup-school').css({background:'',boxShadow:''}).removeAttr('title'); }
         });
       }
-      siteRows.forEach(function(r,ri){
-        var $tr=$('<tr>').css(ri%2===1?{background:'#fafafa'}:{});
+      _disp.forEach(function(d,dpos){
+        var r=d.r, ri=d.ai;   // ri = TRUE array index (copy-to & delete stay correct); dpos = display row
+        var $tr=$('<tr>').css(dpos%2===1?{background:'#fafafa'}:{});
+        $tr.data('sbRow', r).attr('data-ai', String(ri)).attr('data-disp', String(dpos));
 
         function numCell(key){
           var $td=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 4px',textAlign:'center',background:'#f2f4f8'});
@@ -21420,11 +21588,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // stretch, nothing for rows folded under it, or an empty cell for unpodded rows - so the column runs
         // continuously down the left edge and the brackets align to the rows they group.
         if(_podOn){
-          if(_podStretchStart[ri]) $tr.append(_podBracketCell(_podStretchStart[ri]));
-          else if(!_podRowCovered[ri]) $tr.append(_podEmptyCell(ri%2===1?'#fafafa':'#ffffff'));
+          if(_podStretchStart[dpos]) $tr.append(_podBracketCell(_podStretchStart[dpos]));
+          else if(!_podRowCovered[dpos]) $tr.append(_podEmptyCell(dpos%2===1?'#fafafa':'#ffffff'));
         }
-        // Row number cell
-        var $numTd=$('<td class="sb-num-cell">').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(ri+1);
+        // Row number cell — DISPLAY position
+        var $numTd=$('<td class="sb-num-cell">').css({border:'1px solid #dee2e6',padding:'3px 6px',textAlign:'center',fontWeight:'600',fontSize:'11px',color:'#6c757d',background:'#f8f9fb',whiteSpace:'nowrap'}).text(dpos+1);
         $tr.append($numTd);
 
         // ── Pod selection ── Cmd/Ctrl-click on the # cell or the School Name cell toggles this row in the
@@ -21470,6 +21638,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // School searchable single-select
         var $nameTd=$('<td class="sb-name-cell">').css({border:'1px solid #dee2e6',padding:'2px 3px',position:'relative',minWidth:'160px'});
         $nameTd.on('click', _podToggleSelect);
+        // ── Drag to reorder ── grab the school-name cell (Edit mode, multi-row only). A move
+        // threshold inside _sbBeginDrag lets plain clicks (pod select, chip clear) still work.
+        if(siteRows.length>1 && _pgvCur.mode!=='view'){
+          $nameTd.css('cursor','grab');
+          $nameTd.on('mousedown', function(e){
+            if(e.button!==0) return;
+            if(e.metaKey||e.ctrlKey||e.shiftKey) return;                              // modifiers → pod multi-select
+            if($(e.target).closest('input,select,textarea,button,.sb-cell-dots,.pg-school-dd').length) return;
+            _sbBeginDrag(e, dpos, $tr);
+          });
+        }
         var _schoolHideTimer=null;
 
         function buildSchoolCell(){
@@ -21887,7 +22066,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var _lastEdit={};  // role.key → 'coaches' | 'students'
         var _stuInputs={};
         if(_stuCollapsed){
-          if(ri===0){
+          if(dpos===0){
             var $stuVert=$('<td class="sb-stu-vert">').attr('rowspan', siteRows.length+1).css({
               border:'1px solid #dee2e6',background:'#f8f9fb',padding:'4px 2px',width:'1px',
               textAlign:'center',verticalAlign:'middle',cursor:'pointer'
