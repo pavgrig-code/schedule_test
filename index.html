@@ -20698,7 +20698,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var _sbDrag=null;
     function _sbBeginDrag(e0, fromDisp, $srcTr){
       if(_pgvCur.mode==='view') return;
-      var started=false, y0=e0.clientY, x0=e0.clientX, toDisp=fromDisp, rects=[], $preview=null, $line=null, dy=0;
+      var started=false, y0=e0.clientY, x0=e0.clientX, toDisp=fromDisp, rects=[], $preview=null, $line=null, $pvNum=null, dy=0;
       function collectRects(){
         rects=[];
         $(_podTbody).children('tr').each(function(){
@@ -20718,21 +20718,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $t=$('<table>').css({borderCollapse:'collapse',width:(b.width||0)+'px',fontSize:'11px',tableLayout:'fixed'});
           $t.append($('<tbody>').append($srcTr.clone(true)));
           $preview.append($t); $('body').append($preview);
+          try{ $pvNum=$preview.find('.sb-num-cell').first(); }catch(_e2){ $pvNum=null; }
         }catch(_e){ $preview=null; }
         try{ $srcTr.css('opacity','0.35'); }catch(_e){}
         try{ $('body').css('user-select','none'); }catch(_e){}
       }
       function moveVisual(y){ if($preview){ try{ $preview.css('top',(y-dy)+'px'); }catch(_e){} } }
+      // PREVIEW ONLY: paints the proposed final position number into the floating row.
+      // Never writes to the store or the real row; the actual # is renumbered on drop by _sbReorder's rerender.
+      function setPreviewNum(n){ if($pvNum&&$pvNum.length){ try{ $pvNum.text(String(n)); }catch(_e){} } }
       // draw the insertion line at boundary 'ins' (0..N): above row ins, or below the last row.
+      // Pronounced, application-consistent insertion indicator: a rounded blue bar with a
+      // soft glow and round end-caps, sitting exactly in the gutter where the row will land.
+      // ONE marker only (a single reused node); it follows the proposed boundary continuously
+      // and is torn down in cleanup(). No table reflow, so the static rects stay valid.
       function showLine(ins){
         if(!rects.length) return;
-        if(!$line){ $line=$('<div class="sb-drop-line">').css({position:'fixed',height:'0',borderTop:'2px solid #0d6efd',
-          zIndex:'100001',pointerEvents:'none',boxShadow:'0 0 0 1px rgba(13,110,253,.20)'}); $('body').append($line); }
+        if(!$line){
+          $line=$('<div class="sb-drop-line">').css({position:'fixed',height:'3px',borderRadius:'2px',
+            background:'#0d6efd',zIndex:'100001',pointerEvents:'none',
+            boxShadow:'0 0 0 1px rgba(255,255,255,.9), 0 0 7px 1px rgba(13,110,253,.55)'});
+          $('<span class="sb-drop-cap sb-drop-cap-l">').css({position:'absolute',left:'-4px',top:'-3px',width:'8px',height:'8px',
+            borderRadius:'50%',background:'#0d6efd',boxShadow:'0 0 0 1px rgba(255,255,255,.9)'}).appendTo($line);
+          $('<span class="sb-drop-cap sb-drop-cap-r">').css({position:'absolute',right:'-4px',top:'-3px',width:'8px',height:'8px',
+            borderRadius:'50%',background:'#0d6efd',boxShadow:'0 0 0 1px rgba(255,255,255,.9)'}).appendTo($line);
+          $('body').append($line);
+        }
         try{
           var b, top;
-          if(ins>=rects.length){ b=rects[rects.length-1]; top=b.bottom; }
-          else { b=rects[ins]; top=b.top; }
-          $line.css({left:(b.left)+'px', width:(b.width||0)+'px', top:(top-1)+'px', display:'block'});
+          if(ins>=rects.length){ b=rects[rects.length-1]; top=b.bottom; }   // insert at the very end
+          else { b=rects[ins]; top=b.top; }                                 // before rects[ins] (ins===0 = beginning)
+          $line.css({left:(b.left)+'px', width:(b.width||0)+'px', top:(top-1.5)+'px', display:'block'});
         }catch(_e){}
       }
       function cleanup(){
@@ -20753,6 +20769,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var ins=insIndex(ev.clientY);              // insertion boundary 0..N
         var to=ins; if(fromDisp<to) to--;          // splice target after the source is removed
         toDisp=Math.max(0, Math.min(rects.length-1, to));
+        setPreviewNum(toDisp+1);                   // proposed final position (removal shift already in `to`)
         showLine(ins);
       }
       function finish(commit){
