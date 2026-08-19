@@ -10264,7 +10264,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }catch(e){}
             return $t;
           }
-          function _openSchoolShPopup(si,nm,anchorEl){
+          function _openSchoolShPopup(si,nm,anchorEl,keepPos){
             _closeSchoolShPopup();
             var calRow=(editCombo&&editCombo.calRow)||null;
             var $tbl=_schoolShTable(si);
@@ -10326,6 +10326,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               try{ _pgWireSchoolCntEditing($p, $tbl, si); }catch(_e){}
             }
             $('body').append($p);
+            // On a post-Save re-open the anchor node may have been replaced by the save cascade
+            // (updU rebuilds the Staffing Allocation table), so seed the popup with the caller's
+            // FROZEN on-screen position first. If the re-anchor below finds a live node it snaps to
+            // it; if it can't, the popup holds this position instead of collapsing to the top-left.
+            if(keepPos && (keepPos.left||keepPos.top)) $p.css({left:keepPos.left||'', top:keepPos.top||''});
             // ATTACHED TO THE ROW, not the viewport. The popup is still position:fixed (so it is
             // never clipped by an ancestor's overflow), but its top/left are RECOMPUTED from the
             // anchor's live rect on every scroll and resize — so as the school list scrolls it
@@ -10391,6 +10396,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(!cells.length) return;
             function paint(c){ _shCntPaint(c.$span, c.val!==c.base?c.val:null, c.base); }
             function isDirty(){ return cells.some(function(c){ return c.val!==c.openVal; }); }
+            // LIVE per-school totals while typing (spec): recompute THIS popup's own Total Hours
+            // (per role/day) and Total Hrs/Day (footer) from the PENDING counts on every keystroke,
+            // WITHOUT writing to the store, so the rest of the guide still waits for Save. Mirrors
+            // updU's total math but reads pending values from `cells` and the count-independent
+            // hours already shown in each .hrs-cell-u (a SIBLING of the meal-break label, so its
+            // own text is the bare number). Scoped to $tbl (the popup's own table) only.
+            function _pendCnt(rk,dk){
+              for(var i=0;i<cells.length;i++){ if(cells[i].roleKey===rk&&cells[i].dayK===dk){ var v=cells[i].val; return (v==null||isNaN(v))?cells[i].base:v; } }
+              return null;   // (role,day) not editable here -> leave its total untouched
+            }
+            function liveRecalc(){
+              try{
+                $tbl.find('.total-hrs-cell-u[data-role][data-day]').each(function(){
+                  var rk=$(this).attr('data-role'), dk=$(this).attr('data-day');
+                  var cnt=_pendCnt(rk,dk); if(cnt==null) return;
+                  var $h=$tbl.find('.hrs-cell-u[data-role="'+rk+'"][data-day="'+dk+'"]').first();
+                  var h=$h.length?parseFloat($h.text()):NaN;
+                  var tv=(!isNaN(h)&&cnt)?(Math.round(h*cnt*100)/100):'';
+                  $(this).text(tv);
+                  try{ if(typeof _paintHrsTotal==='function') _paintHrsTotal(this.parentNode,tv,false); }catch(_e){}
+                });
+                DAYS.forEach(function(day){
+                  var sum=0;
+                  $tbl.find('.total-hrs-cell-u[data-day="'+day.k+'"]').each(function(){
+                    var $row=$(this).closest('tr');
+                    if($row[0]&&$row[0].style.display!=='none') sum+=parseFloat($(this).text())||0;
+                  });
+                  var dtv=sum>0?(Math.round(sum*100)/100):'';
+                  $tbl.find('.day-total-u[data-day="'+day.k+'"]').text(dtv).each(function(){ try{ if(typeof _paintHrsTotal==='function') _paintHrsTotal(this,dtv,true); }catch(_e){} });
+                });
+              }catch(e){}
+            }
             cells.forEach(paint);
             // Footer (Discard / Save), shown only while dirty. mousedown-preventDefault keeps focus
             // in the field so the FIRST click on a button lands (same trick as the Edit Coach Count
@@ -10407,7 +10444,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             function doDiscard(){
               $p.find('.sf-sh-cnt-input').remove();
               cells.forEach(function(c){ c.val=c.openVal; c.$span.show(); paint(c); });
-              refreshFoot();
+              refreshFoot(); liveRecalc();
             }
             function doSave(){
               // Collect the changed cells and hand them to the SHARED authoritative operation —
@@ -10460,15 +10497,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if(String($inp.val())!==f) $inp.val(f);
                   if(f!=='') c.val=parseInt(f,10);
                   refreshFoot();
+                  liveRecalc();
                 });
                 $inp.on('keydown',function(e2){
                   if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
-                  else if(e2.key==='Escape'){ e2.stopPropagation(); c.val=_pre; $inp.off('blur'); $inp.remove(); c.$span.show(); paint(c); refreshFoot(); }
+                  else if(e2.key==='Escape'){ e2.stopPropagation(); c.val=_pre; $inp.off('blur'); $inp.remove(); c.$span.show(); paint(c); refreshFoot(); liveRecalc(); }
                 });
                 $inp.on('blur',function(){
                   var raw=String($inp.val()||'').trim();
                   c.val=(raw!==''&&/^\d+$/.test(raw))?parseInt(raw,10):_pre;
-                  $inp.remove(); c.$span.show(); paint(c); refreshFoot();
+                  $inp.remove(); c.$span.show(); paint(c); refreshFoot(); liveRecalc();
                 });
                 $inp.trigger('focus'); try{ $inp[0].select(); }catch(_e){}
               });
@@ -10480,17 +10518,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // strip does — and EVERY allocation path rebuilds the strip, so a value changing behind
           // the popup is reflected immediately instead of going stale. Deferred one tick so the
           // rebuild that triggered it has finished replacing the name element it anchors to.
+          // Re-resolve the popup's anchor to a LIVE node after a rebuild. The popup can be opened
+          // from either the Staffing Hours strip (.sf-strip-school-nm) OR a Staffing Allocation
+          // school name (.sf-alloc-school-nm); the save cascade rebuilds the allocation table, so
+          // the original node is detached and must be matched afresh by school name. Prefer the
+          // entry point the popup was opened from, then the other, then the original if it survived.
+          function _resolveSchoolShAnchor(o){
+            try{
+              var fromAlloc=!!(o.el&&o.el.classList&&o.el.classList.contains('sf-alloc-school-nm'));
+              var order=fromAlloc?['.sf-alloc-school-nm','.sf-strip-school-nm']:['.sf-strip-school-nm','.sf-alloc-school-nm'];
+              for(var i=0;i<order.length;i++){
+                var $m=$(order[i]).filter(function(){ return $(this).text()===o.nm; }).first();
+                if($m.length) return $m[0];
+              }
+              if(o.el && document.body.contains(o.el)) return o.el;
+            }catch(e){}
+            return null;
+          }
           function _refreshSchoolShPopup(){
             try{
               if(!_pgSchoolShOpen) return;
-              if(!document.querySelector('.sf-sh-popup')) return;
+              var $cur=$('.sf-sh-popup').first();
+              if(!$cur.length) return;
               var _o=_pgSchoolShOpen;
+              // Freeze the popup's CURRENT position so a re-open whose anchor was replaced by the
+              // save cascade holds its place instead of jumping to the top-left corner.
+              var _pos={left:($cur[0].style.left||''), top:($cur[0].style.top||'')};
               setTimeout(function(){
                 try{
                   if(!document.querySelector('.sf-sh-popup')) return;
-                  var $line=$('.sf-strip-school-nm').filter(function(){ return $(this).text()===_o.nm; }).first();
-                  var el=$line.length?$line[0]:_o.el;
-                  _openSchoolShPopup(_o.si,_o.nm,el);
+                  var el=_resolveSchoolShAnchor(_o);
+                  _openSchoolShPopup(_o.si,_o.nm,el,_pos);
                 }catch(e){}
               },0);
             }catch(e){}
@@ -10771,7 +10829,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       .attr('title','Select all days for '+nm);
                     $schIn.append($scb);
                   }
-                  $schIn.append($('<span class="sf-alloc-school-nm">').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(nm));
+                  // The school name opens the SAME per-school Staffing Hours popup the Staffing
+                  // Hours strip opens (same _openSchoolShPopup, same data source), carrying the
+                  // strip's subtle hover treatment. pg-view-ok keeps it clickable while locked,
+                  // where the popup opens read-only for inspection exactly as it does from the strip.
+                  var $anm=$('<span class="sf-alloc-school-nm pg-view-ok">').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer',borderBottom:'1px dotted transparent'}).attr('title','View Staffing Hours for '+nm).text(nm);
+                  $anm.on('mouseenter',function(){ $(this).css({color:'#0d6efd',borderBottomColor:'#9ec5fe'}); })
+                      .on('mouseleave',function(){ $(this).css({color:'',borderBottomColor:'transparent'}); });
+                  (function(_si,_nm){
+                    $anm.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _openSchoolShPopup(_si,_nm,this); });
+                  })(u.si,nm);
+                  $schIn.append($anm);
                   (function(){
                     try{
                       var _cds=u.sRow&&u.sRow.schoolCds;
