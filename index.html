@@ -4258,6 +4258,236 @@ $(function(){
     $('body').append($ov); setTimeout(function(){$ok.focus();},0);
   }
 
+  // ── Shared anchored-popup behaviour ──────────────────────────────────────────
+  // The single source of truth for CONTEXTUAL popups: anything opened FROM an
+  // element (a cell, a school name, a count, a control) rather than a
+  // viewport-centered modal. It gives every such popup the same three guarantees
+  // the per-school Staffing Hours popup earned the hard way:
+  //   1. the popup follows its anchor as the page/container scrolls (position it
+  //      from the anchor's LIVE rect on a capture-phase scroll+resize listener, so
+  //      scrolls on ANY ancestor are caught, not just the window);
+  //   2. it never blocks page/container scrolling — no wheel handler touches
+  //      preventDefault, and any internal scroll region carries
+  //      overscroll-behavior:contain so hovering it can't chain-freeze the page;
+  //   3. it closes cleanly when its anchor scrolls out of the visible band.
+  // popupEl is already positioned:fixed and in the DOM. Returns a detach() handle;
+  // call it on every close path. opts.onClose runs when the anchor leaves view.
+  // opts.place(rct,bounds) may override placement; the default drops the popup
+  // below the anchor and flips up/left to stay on screen.
+  var _pgAnchoredPopups=[];   // {el, anchor, detach} — live registry, for teardown + tests
+  function _pgPopupVisRect(el){
+    // Bounds the anchor must stay within: nearest scrollable ancestor box ∩ viewport.
+    var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+    var top=0,left=0,right=vw,bottom=vh;
+    var n=el&&el.parentNode;
+    while(n && n.nodeType===1){
+      var st; try{ st=window.getComputedStyle(n); }catch(_e){ st=null; }
+      if(st){
+        if(/(auto|scroll|hidden)/.test(st.overflowY)||/(auto|scroll|hidden)/.test(st.overflowX)){
+          var r=n.getBoundingClientRect();
+          if(r.top>top) top=r.top; if(r.left>left) left=r.left;
+          if(r.right<right) right=r.right; if(r.bottom<bottom) bottom=r.bottom;
+        }
+      }
+      n=n.parentNode;
+    }
+    return {top:top,left:left,right:right,bottom:bottom};
+  }
+  // Pure out-of-view decision, isolated from layout so it's assertable without a
+  // browser: true only when a real rect sits entirely past a real band. A
+  // degenerate (all-zero) rect or a zero-height band can't decide "gone", so it
+  // returns false and the popup is kept and merely repositioned.
+  function _pgAnchorOutOfView(rct,bounds){
+    var haveGeom=(rct.width||rct.height||rct.top||rct.bottom) && (bounds.bottom>bounds.top);
+    return !!(haveGeom && (rct.bottom<=bounds.top || rct.top>=bounds.bottom));
+  }
+  try{ window._pgAnchorOutOfView=_pgAnchorOutOfView; }catch(_e){}
+  // Correct wheel handling for popups that contain scroll regions. The failure mode
+  // this fixes: an overflow:auto region that ISN'T currently overflowing still counts
+  // as the wheel target, so the page behind won't scroll while the pointer is over it;
+  // overscroll-behavior:contain makes that worse by absorbing the wheel instead of
+  // letting it bubble. Here, for every scrollable region inside the popup we attach a
+  // wheel listener that:
+  //   - lets the browser handle the wheel natively when the region CAN scroll in the
+  //     wheel's direction (default action scrolls the region), and stops the event from
+  //     also scrolling the page (overscroll containment, applied only while it scrolls);
+  //   - does NOTHING when the region is at its limit (or can't scroll at all), so the
+  //     event bubbles and the PAGE scrolls — the behaviour that was missing.
+  // It never calls window.scrollBy and never preventDefaults a wheel it doesn't consume,
+  // which is what made the earlier attempts freeze the page.
+  function _pgScrollableRegions(popEl){
+    var out=[];
+    try{
+      var all=popEl.querySelectorAll('*');
+      for(var i=0;i<all.length;i++){
+        var n=all[i], st;
+        try{ st=window.getComputedStyle(n); }catch(_e){ continue; }
+        if(st && (/(auto|scroll)/.test(st.overflowY||'')||/(auto|scroll)/.test(st.overflowX||'')||/(auto|scroll)/.test(st.overflow||''))) out.push(n);
+      }
+    }catch(_e){}
+    return out;
+  }
+  // Popups that scroll are handled app-wide by the delegated _pgDelegatedPopupWheel
+  // listener, so per-popup wiring only needs to CLEAR any stray overscroll-behavior:
+  // contain (the property that absorbed the wheel on a non-overflowing region). No
+  // per-popup wheel listener — one delegated handler avoids double-consuming a wheel.
+  function _pgAttachWheelPassthrough($p){
+    var el=($p&&$p.jquery)?$p[0]:$p; if(!el) return;
+    try{ _pgScrollableRegions(el).forEach(function(r){ r.style.overscrollBehavior='auto'; }); el.style.overscrollBehavior='auto'; }catch(_e){}
+  }
+
+  function _pgAnchorPopup(popupEl, anchorEl, opts){
+    opts=opts||{};
+    var $p=(popupEl&&popupEl.jquery)?popupEl:$(popupEl);
+    var el=$p[0]; if(!el||!anchorEl) return function(){};
+    // Guarantee 2: hovering the popup must never freeze the page. The subtlety that
+    // bit three prior fixes: a scroll region with overflow:auto is a scroll CONTAINER
+    // even when its content does NOT overflow, and overscroll-behavior:contain on a
+    // NON-overflowing container ABSORBS the wheel (there's no boundary to chain from,
+    // so 'contain' just eats it) — that is what blocked the page. The fix is a wheel
+    // handler that consumes the wheel ONLY when the region can actually scroll in the
+    // wheel's direction; otherwise it does nothing and the browser scrolls the page.
+    // This is NOT the old broken pattern: it never calls window.scrollBy, and it only
+    // preventDefaults when it truly consumes. Regions that don't scroll stay inert.
+    _pgAttachWheelPassthrough($p);
+    var gap=(opts.gap!=null)?opts.gap:6;
+    function place(){
+      try{
+        if(!document.body.contains(anchorEl)) return false;
+        var rct=anchorEl.getBoundingClientRect();
+        var bounds=_pgPopupVisRect(anchorEl);
+        if(_pgAnchorOutOfView(rct,bounds)) return false;   // anchor gone → signal close
+        if(typeof opts.place==='function'){ opts.place(rct,bounds); return true; }
+        var pw=$p.outerWidth()||280, ph=$p.outerHeight()||180;
+        var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+        var left=rct.left, top=rct.bottom+gap;
+        if(opts.align==='right') left=rct.right-pw;
+        if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+        if(top+ph>vh-8) top=Math.max(8,rct.top-ph-gap);   // flip above when no room below
+        $p.css({left:Math.max(8,left)+'px', top:Math.max(8,top)+'px'});
+        return true;
+      }catch(e){ return true; }
+    }
+    if(place()===false && !opts.keepOnPlaceFail){ /* anchor already gone: leave caller's initial css */ }
+    var detached=false;
+    function detach(){
+      if(detached) return; detached=true;
+      try{ window.removeEventListener('scroll',track,true); }catch(_e){}
+      try{ window.removeEventListener('resize',track,true); }catch(_e){}
+      for(var i=_pgAnchoredPopups.length-1;i>=0;i--){ if(_pgAnchoredPopups[i].el===el) _pgAnchoredPopups.splice(i,1); }
+    }
+    function track(){
+      if(!document.body.contains(el)){ detach(); return; }
+      if(place()===false){ detach(); if(typeof opts.onClose==='function'){ try{ opts.onClose(); }catch(_e){} } }
+    }
+    try{
+      window.addEventListener('scroll',track,true);
+      window.addEventListener('resize',track,true);
+    }catch(e){}
+    _pgAnchoredPopups.push({el:el, anchor:anchorEl, detach:detach});
+    return detach;
+  }
+  // Test/inspection seam: how many anchored popups are live, and force a reposition.
+  try{
+    window._pgAnchoredPopupCount=function(){ return _pgAnchoredPopups.length; };
+    window._pgAnchoredPopupsRetrack=function(){ _pgAnchoredPopups.slice().forEach(function(a){
+      try{ if(!document.body.contains(a.el)){ a.detach(); return; } }catch(_e){}
+    }); return _pgAnchoredPopups.length; };
+    window._pgAnchorPopupTest=function(popupEl,anchorEl,opts){ return _pgAnchorPopup(popupEl,anchorEl,opts); };
+  }catch(_e){}
+
+  // Guarantee 2, applied app-wide as ONE delegated handler. The earlier CSS-only
+  // approach (overscroll-behavior:contain on every popup) was WRONG and was itself the
+  // block: a scroll region that isn't overflowing is still the wheel's target, and
+  // 'contain' on it absorbs the wheel instead of letting it reach the page. Here a
+  // single capture-phase wheel listener runs the correct passthrough for any wheel
+  // whose target sits inside a contextual popup: it lets a region that CAN scroll take
+  // the wheel (and stops it chaining to the page), and stays completely inert when the
+  // region is at its limit or can't scroll — so the page scrolls, which is the fix. It
+  // NEVER calls window.scrollBy and never preventDefaults a wheel it doesn't consume.
+  // Centered modals aren't in the selector list, so they're untouched.
+  var _PG_POPUP_SEL='.sh-cnt-popup,.sf-sh-popup,.cal-day-cnt-popup,.combo-dropdown,'
+    +'.sb-copyto-dd,.sb-cell-menu,.sb-pod-menu,.sb-pod-colors,.pg-school-dd,'
+    +'.sf-action-menu,.tp-dd,.brk-dd,#shiftdet-staff-dd,#sess-color-pop,'
+    +'.pg-action-menu,.pg-snap-submenu,.cal-ctx-menu,.ws-menu';
+  function _pgClosestPopup(node){
+    var n=node;
+    while(n && n.nodeType===1){
+      try{ if(n.matches && n.matches(_PG_POPUP_SEL)) return n; }catch(_e){}
+      n=n.parentNode;
+    }
+    return null;
+  }
+  // THE REAL ROOT CAUSE (found from a screenshot + reading the layout, after four wrong
+  // fixes): the page's vertical scroll is NOT on window/document. <body> is
+  // overflow:hidden and the scroll container is the visible PANEL div (#planning-panel /
+  // #schedule-panel / …), each overflow-y:auto. A contextual popup is position:fixed on
+  // <body>, so the scrollable panel is NOT in the popup's ancestor chain — which means
+  // "let the wheel bubble" scrolls NOTHING (the fixed popup's only ancestors, body/html,
+  // don't scroll). Every prior fix assumed bubbling would reach the page; it can't. The
+  // fix: when the wheel over a popup isn't consumed by a scroll region INSIDE the popup,
+  // explicitly scroll the visible panel container ourselves. This differs from the very
+  // first broken attempt (window.scrollBy) in the one way that matters — it scrolls the
+  // ACTUAL container, not the window.
+  function _pgActivePanelScroller(){
+    var ids=['planning-panel','schedule-panel','people-panel','staff-schedule-panel','workspace-panel'];
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el) continue;
+      // Visible = laid out. Prefer one that can actually scroll; fall back to any visible.
+      var vis=false; try{ vis=el.offsetParent!==null || (el.getClientRects&&el.getClientRects().length>0); }catch(_e){ vis=true; }
+      if(vis && el.scrollHeight>el.clientHeight) return el;
+    }
+    // None currently overflow — return the visible one anyway (nothing to scroll, but correct target).
+    for(var j=0;j<ids.length;j++){
+      var e2=document.getElementById(ids[j]); if(!e2) continue;
+      var v2=false; try{ v2=e2.offsetParent!==null || (e2.getClientRects&&e2.getClientRects().length>0); }catch(_e){ v2=true; }
+      if(v2) return e2;
+    }
+    return null;
+  }
+  function _pgDelegatedPopupWheel(ev){
+    try{
+      var pop=_pgClosestPopup(ev.target);
+      if(!pop) return;                       // wheel isn't over any contextual popup — leave it alone
+      var dy=ev.deltaY||0;
+      // 1) If a scroll region INSIDE the popup can take this wheel, let it — consume into
+      //    the region and stop it from doing anything else.
+      var region=null, t=ev.target;
+      while(t && t!==pop.parentNode){
+        if(t.nodeType===1){
+          var st; try{ st=window.getComputedStyle(t); }catch(_e){ st=null; }
+          var ovy=st?(st.overflowY||''):'', ov=st?(st.overflow||''):'';
+          var scrollable=/(auto|scroll)/.test(ovy)||/(auto|scroll)/.test(ov);
+          if(scrollable && t.scrollHeight>t.clientHeight){
+            var rTop=t.scrollTop<=0, rBot=t.scrollTop+t.clientHeight>=t.scrollHeight-1;
+            if(!((dy<0&&rTop)||(dy>0&&rBot))){ region=t; break; }   // can move in this direction
+          }
+        }
+        if(t===pop) break;
+        t=t.parentNode;
+      }
+      if(region){ region.scrollTop+=dy; if(ev.cancelable) ev.preventDefault(); return; }
+      // 2) Otherwise the popup can't consume it. Bubbling would scroll nothing (fixed popup,
+      //    body is overflow:hidden), so scroll the visible panel container ourselves.
+      if(dy!==0){
+        var panel=_pgActivePanelScroller();
+        if(panel && panel.scrollHeight>panel.clientHeight){
+          panel.scrollTop+=dy;
+          if(ev.cancelable) ev.preventDefault();
+        }
+      }
+    }catch(_e){}
+  }
+  try{
+    if(document.addEventListener) document.addEventListener('wheel', _pgDelegatedPopupWheel, {passive:false, capture:true});
+  }catch(_e){ try{ document.addEventListener('wheel',_pgDelegatedPopupWheel,true); }catch(_e2){} }
+  try{
+    window._pgPopupWheelSel=function(){ return _PG_POPUP_SEL; };
+    window._pgActivePanelScroller=_pgActivePanelScroller;
+  }catch(_e){}
+
+
   var _pgRefreshList=null;
   // Staff mode shared action menu
   var $staffMenu=$('<div>').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',minWidth:'120px',padding:'4px',display:'none',fontSize:'12px'});
@@ -9249,6 +9479,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         function buildOneTable(shData,getCountsFn,sfxClass,isBillable,editCombo){
           var editableCnt=!!(editCombo&&editCombo.si!==null);   // per-school table: inline count editor
+          var _perSchoolU=(typeof _pgShPopupBuilding!=='undefined' && _pgShPopupBuilding);   // compact styling: the per-school Staffing Hours POPUP ONLY. _pgShPopupBuilding is set solely around the popup's own buildOneTable call, so the main aggregate table, the pod tables AND the separated individual-school tables in the panel all keep the main-table dimensions and full day names untouched
           // Composite table: popup editor. IMPORTANT: the contributing-school list is computed LIVE on
           // every use (not snapshotted at build) so schools added to or removed from the Site Breakdown
           // are summed immediately - no guide switch or rebuild required.
@@ -9281,6 +9512,61 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             });
             return _t;
           }
+          // ── Per-school EFFECTIVE hours, from the SAME merge the per-school Staffing Hours table
+          // uses ── _schoolShTable merges the calendar slot (underneath) with the school slot (on
+          // top), per DAY, with the seed-placeholder rule (an empty-string school time defers to a
+          // non-empty calendar time). The Edit Coach/Staff Count popup's Hours column must show the
+          // SAME value each school contributes to the table's Hours cell, so it merges identically
+          // here and reads hours from the one authoritative calcAdjustedHours. Kept as a helper so
+          // the popup Hours and the per-school table Hours cannot diverge.
+          function _mergeSchoolCell(si,roleKey,dayK){
+            var _ci=_cCi, _wk=_cWk;
+            var _calBareX=(_ci!==null?('c'+_ci):'');
+            var calSfxX=_calBareX+(_wk||'');
+            var perSfxX=('s'+si)+_calBareX+(_wk||'');
+            function _ff(){
+              for(var i=0;i<arguments.length;i++){
+                var k=arguments[i], sl=k?_slots[k]:null;
+                if(!sl) continue;
+                for(var rk in sl){ for(var dk in (sl[rk]||{})){
+                  var cell=sl[rk][dk]||{};
+                  if(cell.start||cell.end||cell.cnt!=null) return sl;
+                } }
+              }
+              return {};
+            }
+            var base=_ff(calSfxX,_calBareX+'a',_calBareX+'b',_calBareX);
+            var per=_ff(perSfxX,('s'+si)+_calBareX+'a',('s'+si)+_calBareX+'b',('s'+si)+_calBareX);
+            var b=(base[roleKey]&&base[roleKey][dayK])||{start:'',end:''};
+            var o=(per[roleKey]&&per[roleKey][dayK])||{};
+            var m={start:b.start||'',end:b.end||''};
+            Object.keys(o).forEach(function(f){
+              if(o[f]===undefined) return;
+              var isTime=(f==='start'||f==='end');
+              if(isTime && o[f]==='' && b[f]!=null && b[f]!==''){ return; }   // seed placeholder → inherit
+              m[f]=o[f];
+            });
+            return m;
+          }
+          // Effective hours + the SAME meal-break indicator the table's Hours cell shows. Returns
+          // {hours, label, color}: label is '' when the shift has no indicator (Billable under 5h),
+          // 'Billable' at/over the threshold, or '-30m'/'-60m' for a Non-Billable meal break — the
+          // exact strings buildBreakControl renders, resolved through the calendar's own settings.
+          function _schoolEffHours(si,role,dayK){
+            var cr=(editCombo&&editCombo.calRow)||null;
+            if(!staffAllocAllows(g.id,_cCi,_cWk,si,dayK)) return {hours:0,label:'',color:'',excluded:true};
+            var cell=_mergeSchoolCell(si,role.key,dayK);
+            var hInfo=calcAdjustedHours(cell,isBillable);
+            var h=(hInfo.adjusted!=null)?hInfo.adjusted:0;
+            var raw=calcHours(cell.start,cell.end);
+            var label='',color='';
+            if(raw!==null){
+              var _r=_mbResolve(cr!=null?cr:isBillable);
+              if(_r.isBillable){ if(raw>=5){ label='Billable'; color=STATUS_COLORS.billable; } }
+              else { var mins=mealBreakMinsForCal(_r.calRow,raw); if(mins>0){ label='-'+mins+'m'; color=STATUS_COLORS.nonbillable; } }
+            }
+            return {hours:h,label:label,color:color,excluded:false};
+          }
           function _effComposite(role,dayK){ var _t=0; (_compSchools?_compSchools():[]).forEach(function(u){ _t+=_effSch(u,role,dayK); }); return _t; }  // 'isBillable' receives the Program Calendar row (or boolean); it flows to calcAdjustedHours/buildBreakControl, which apply that calendar's meal-break settings
           ROLES.forEach(function(r){ if(!shData[r.key]) shData[r.key]={}; DAYS.forEach(function(d){ if(!shData[r.key][d.k]) shData[r.key][d.k]={start:'',end:''}; }); });
           var _p={};
@@ -9290,16 +9576,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           function closeMn(){ $stMn.hide(); $(document).off('click.'+_mnUid); }
           $section.on('remove',function(){ $stMn.remove(); closeMn(); });
           var $scr=$('<div>').css({overflowX:'auto'});
-          var $tblU=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+          var $tblU=$('<table>').css({borderCollapse:'collapse',width:_perSchoolU?'auto':'100%',fontSize:'11px'});
           var $thU=$('<thead>'), $hrU=$('<tr>');
           function thU(t,cs){ return $('<th>').css(Object.assign({},TH_CSS,cs||{})).text(t); }
-          $hrU.append(thU('Role',{textAlign:'left',minWidth:'76px',padding:'4px 6px'}));
-          $hrU.append(thU('',{minWidth:'68px',background:'#f8f9fb',padding:'4px 6px'}));
+          $hrU.append(thU('Role',{textAlign:'left',minWidth:_perSchoolU?'56px':'76px',padding:'4px 6px'}));
+          $hrU.append(thU('',{minWidth:_perSchoolU?'52px':'68px',background:'#f8f9fb',padding:'4px 6px'}));
           var _lastSdIdxU=DAYS.reduce(function(acc,d,i){ return d.isSd?i:acc; },-1);
           DAYS.forEach(function(d,di){
             var W=d.k==='sat'||d.k==='sun';
             var _isSepU=(_lastSdIdxU>=0 && di===_lastSdIdxU);
-            var $thU=$('<th>').css(Object.assign({},TH_CSS,{minWidth:'92px',padding:'3px 4px',fontSize:'9.5px',background:W?'#dde8f5':TH_CSS.background,color:W?'#3d5a80':'#495057'},_isSepU?{borderRight:'2px solid #9aafc5'}:{}));
+            var $thU=$('<th>').css(Object.assign({},TH_CSS,{minWidth:_perSchoolU?'52px':'92px',padding:'3px 4px',fontSize:'9.5px',background:W?'#dde8f5':TH_CSS.background,color:W?'#3d5a80':'#495057'},_isSepU?{borderRight:'2px solid #9aafc5'}:{}));
             if(d.isSd){
               var sdColor2=(getSdById(g.id,d.sdId)||{color:'#ffffff'}).color||'#ffffff';
               var $inner2=$('<span>').css({display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'4px'});
@@ -9307,7 +9593,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $inner2.append($('<span>').text(d.l));
               $thU.attr('data-sd-hdr',d.sdId).append($inner2);
             } else {
-              $thU.text(d.l);
+              var _abbrU={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
+              $thU.text(_perSchoolU?(_abbrU[d.k]||d.l):d.l);
             }
             $hrU.append($thU);
           });
@@ -9368,10 +9655,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 } else if(row.type==='hours'){
                   var hInfoU=calcAdjustedHours(dRef,isBillable);
                   var invU=dRef.start&&dRef.end&&hInfoU.raw===null;
-                  $td.css('position','relative');
-                  $td.append($('<span class="hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'600',color:invU?'#dc3545':'#212529'}).text(hInfoU.adjusted!==null?hInfoU.adjusted:(invU?'!':'')));
+                  var $hcU=$('<span class="hrs-cell-u">').attr({'data-role':role.key,'data-day':day.k}).css({fontSize:'11px',fontWeight:'600',color:invU?'#dc3545':'#212529'}).text(hInfoU.adjusted!==null?hInfoU.adjusted:(invU?'!':''));
                   var brkCtlU=buildBreakControl(dRef,function(){ updU($tbU); setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); },isBillable);
-                  $td.append(brkCtlU.$lbl);
+                  if(_perSchoolU){
+                    var $hwU=$('<span class="hrs-wrap-u">').css({display:'inline-flex',alignItems:'baseline',gap:'5px',whiteSpace:'nowrap'});
+                    brkCtlU.$lbl.css({position:'static',top:'',right:''});
+                    $hwU.append($hcU).append(brkCtlU.$lbl);
+                    $td.append($hwU);
+                  } else {
+                    $td.css('position','relative');
+                    $td.append($hcU).append(brkCtlU.$lbl);
+                  }
                   if(!_brkCtlsU[role.key]) _brkCtlsU[role.key]={};
                   _brkCtlsU[role.key][day.k]=brkCtlU;
                 } else if(row.type==='count'){
@@ -9487,7 +9781,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(_anyPod) $headRow.append($('<th class="sh-cnt-pod-cell">').css({textAlign:'left',padding:'4px 4px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700',whiteSpace:'nowrap',width:'1px'}).text('Pod'));
             $headRow.append(
               $('<th>').css({textAlign:'left',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text('School'),
-              $('<th>').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text(lbl));
+              $('<th>').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text(lbl),
+              $('<th class="sh-cnt-hrs-h">').css({textAlign:'center',padding:'4px 6px',borderBottom:'1px solid #dee2e6',color:'#6c757d',fontSize:'10px',fontWeight:'700'}).text('Hours'));
             $tbl.append($headRow);
             // Pod column: the pod NAME sits left of its bracket rail (the shared layout), with the rail
             // spanning the pod's rows via rowspan. The name is capped (ellipsis + title tooltip) so a long
@@ -9553,27 +9848,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   var _f=String($inp.val()||'').replace(/\D+/g,'');   // numeric-only as typed
                   if(String($inp.val())!==_f) $inp.val(_f);
                   if(_f!=='') r.val=parseInt(_f,10);   // live: Total + footer track typing, no blur required
-                  paintRow(r); paintTotal(); refreshFooter();
+                  paintRow(r); paintTotal(); paintHours(); refreshFooter();
                 });
                 $inp.on('keydown',function(e2){
                   if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
-                  else if(e2.key==='Escape'){ e2.stopPropagation(); r.val=_preEdit; $inp.off('blur'); $inp.remove(); r.$span.show(); paintRow(r); paintTotal(); refreshFooter(); }
+                  else if(e2.key==='Escape'){ e2.stopPropagation(); r.val=_preEdit; $inp.off('blur'); $inp.remove(); r.$span.show(); paintRow(r); paintTotal(); paintHours(); refreshFooter(); }
                 });
                 $inp.on('blur',function(){
                   var raw=String($inp.val()||'').trim();
                   r.val=(raw!==''&&/^\d+$/.test(raw))?parseInt(raw,10):_preEdit;
                   $inp.remove(); r.$span.show();
-                  paintRow(r); paintTotal(); refreshFooter();
+                  paintRow(r); paintTotal(); paintHours(); refreshFooter();
                 });
                 $inp.trigger('focus'); try{ $inp[0].select(); }catch(_e){}
               });
-              $tr.append($ctd); $tbl.append($tr);
+              $tr.append($ctd);
+              // Hours cell — the school's effective contribution to the table's Hours cell for this
+              // day/role, from the shared _schoolEffHours (same merge + calcAdjustedHours the table
+              // uses), with the same Billable / -30m / -60m meal-break indicator beside it.
+              var $htd=$('<td class="sh-cnt-hrs-cell">').css({padding:'3px 5px',textAlign:'center',borderBottom:'1px solid #f1f3f5',whiteSpace:'nowrap'});
+              r.$hrs=$('<span class="sh-cnt-hrs-val">').css({fontSize:'11px',color:'#495057',fontWeight:'600'});
+              r.$brk=$('<span class="sh-cnt-hrs-brk">').css({fontSize:'8px',marginLeft:'3px',lineHeight:'1'});
+              $htd.append(r.$hrs).append(r.$brk);
+              $tr.append($htd);
+              r.$tr=$tr;
+              $tbl.append($tr);
             });
             var $totSpan=$('<span class="sh-cnt-popup-total">').css({fontSize:'11px',color:'#212529',fontWeight:'700'});
+            var $hrsTotSpan=$('<span class="sh-cnt-popup-hrs-total">').css({fontSize:'11px',color:'#212529',fontWeight:'700'});
             var $trT=$('<tr class="sh-cnt-popup-total-row">');
             if(_anyPod) $trT.append($('<td class="sh-cnt-pod-cell">').css({width:'1px'}));
             $trT.append($('<td>').css({padding:'5px 6px',fontWeight:'700',color:'#212529'}).text('Total'));
             $trT.append($('<td>').css({padding:'4px 5px',textAlign:'center'}).append($totSpan));
+            $trT.append($('<td class="sh-cnt-hrs-total-cell">').css({padding:'4px 5px',textAlign:'center'}).append($hrsTotSpan));
             $tbl.append($trT);
             // ONE table inside a scroll region keeps the columns aligned; the header row and the
             // Total row are position:sticky, so both stay visible while the school rows scroll.
@@ -9583,7 +9890,40 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $scroll.append($tbl);
             $card.append($scroll);
             function paintRow(r){ _shCntPaint(r.$span, r.val!==r.sb?r.val:null, r.sb); }
-            function paintTotal(){ var t=0; rowsState.forEach(function(r){ t+=r.val; }); _shCntPaint($totSpan, t!==sbTot?t:null, sbTot); }
+            function paintTotal(){ var t=0,base=0; rowsState.forEach(function(r){ if(r.excluded) return; t+=r.val; base+=r.sb; }); _shCntPaint($totSpan, t!==base?t:null, base); }
+            // Hours format matches the Staffing Hours table cell: a bare adjusted number (2dp, trailing
+            // zeros trimmed), never a "hrs" suffix — so a school's popup Hours reads identically to its
+            // contribution in the table. A zero shows as an em-dash, like the table's empty Hours cell.
+            function _fmtEffH(h){ if(!(h>0)) return '\u2014'; var r=Math.round(h*100)/100; return Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,''); }
+            function paintHours(){
+              // Each school's STAFFING-HOURS CONTRIBUTION = effective Hours (after the calendar's
+              // meal-break rules) x effective Coach/Staff Count. NOT the bare scheduled hours: a
+              // 3.5h shift with 2 coaches contributes 7.0, and overriding the count 2->3 makes it
+              // 10.5 immediately (r.val is the effective count, tracking overrides + live edits).
+              // The Total is the sum of these products, which reconciles with the Staffing Hours
+              // table's Total-Hours row (adjusted hours x count), day/role for day/role.
+              var tot=0;
+              rowsState.forEach(function(r){
+                var eh=_schoolEffHours(r.si,role,dayO.k);
+                // A school excluded from this day WHILE the popup is open must leave the popup
+                // entirely — its row, its Hours and its Count all drop out (spec: same effective
+                // school set for rows, Hours, Counts and totals). Hiding the row removes it from
+                // view; excluded rows contribute nothing to either total.
+                r.excluded=!!eh.excluded;
+                if(r.$tr){ r.$tr.toggle(!r.excluded); }
+                if(r.excluded){ r.effHrs=0; r.staffHrs=0; return; }
+                var effH=eh.hours||0, cnt=(r.val!=null?r.val:0);
+                r.effHrs=effH;
+                r.staffHrs=effH*cnt;               // this school's staffing-hours contribution
+                tot+=r.staffHrs;
+                if(r.$hrs) r.$hrs.text(_fmtEffH(r.staffHrs));
+                // Same meal-break indicator the Staffing Hours cell shows — it explains how the
+                // per-hour effective Hours were derived (Billable / -30m / -60m), which is exactly
+                // what feeds this product. No separate meal-break calc here (spec).
+                if(r.$brk){ if(eh.label){ r.$brk.text(eh.label).css('color',eh.color||'').show(); } else { r.$brk.text('').hide(); } }
+              });
+              if($hrsTotSpan) $hrsTotSpan.text(_fmtEffH(tot));
+            }
             var $foot=$('<div class="sh-cnt-popup-foot">').css({display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'12px'});
             function mkBtn(txt,primary){ return $('<button type="button">').on('mousedown',function(e){ e.preventDefault(); })   // keep focus in the field: no blur, no re-render, so the FIRST click lands
               .text(txt).css(primary
@@ -9601,7 +9941,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               e.stopPropagation();
               $card.find('.sh-cnt-popup-row input').remove();   // an editor may still be open (buttons don't take focus)
               rowsState.forEach(function(r){ r.val=r.sb; r.$span.show(); paintRow(r); });
-              paintTotal(); refreshFooter();
+              paintTotal(); paintHours(); refreshFooter();
             });
             var _footSig=null;
             function refreshFooter(){
@@ -9615,23 +9955,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               if(isDirty()){ if(anyDiff()) $foot.append($resetC); $foot.append($discard).append($save); }
               else { $foot.append($cancel); if(anyDiff()) $foot.append($resetC); }
             }
-            function close(){ $ov.remove(); }
+            function close(){ if(_pgShCntRepaint===_shCntLiveRepaint) _pgShCntRepaint=null; try{ if(window._pgShCntRepaintNow===_shCntLiveRepaint) window._pgShCntRepaintNow=null; }catch(_e){} $ov.remove(); }
             function doSave(){
-              try{ _pgUndo.begin(g.id); }catch(_u){}
-              rowsState.forEach(function(r){
-                var key=('s'+r.si)+((_cCi!=null)?('c'+_cCi):'')+(_cWk||'');
-                if(!_slots[key]) _slots[key]={};
-                var sl=_slots[key];
-                if(!sl[role.key]) sl[role.key]={};
-                var dd=sl[role.key][dayO.k]||(sl[role.key][dayO.k]={start:'',end:''});
-                if(r.val===r.sb) delete dd.cnt; else dd.cnt=r.val;
+              // Collect the override writes and hand them to the SHARED authoritative operation —
+              // the SAME one the per-school Staffing Hours popup calls — so both entry points
+              // write and propagate identically. close() first: the overlay is gone before the
+              // table repaints.
+              var writes=rowsState.map(function(r){
+                return {slotKey:('s'+r.si)+((_cCi!=null)?('c'+_cCi):'')+(_cWk||''),roleKey:role.key,dayK:dayO.k,val:r.val,base:r.sb};
               });
               close();
-              updU($tbU);
-              setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
-              // the notification reads the change itself: one count becomes "Monday Coach Count: 2 → 3",
-              // several become a school count, and a save that wrote no value shows nothing at all
-              try{ _pgUndo.offer(g.id,{auto:true}); }catch(_u){}
+              _pgCommitCntOverrides(writes);
             }
             function tryClose(){
               if(!isDirty()){ close(); return; }
@@ -9647,7 +9981,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $x.on('click',function(e){ e.stopPropagation(); tryClose(); });
             $ov.on('mousedown',function(e){ if(e.target===$ov[0]) tryClose(); });
             $card.on('mousedown',function(e){ e.stopPropagation(); });
-            rowsState.forEach(paintRow); paintTotal(); refreshFooter();
+            // Live-repaint: a change behind the open popup (Start/End time, meal break, allocation)
+            // re-runs the count + hours paint in place. Allocation is re-read inside paintHours, so an
+            // excluded school's row/Hours/Count all drop together and the totals follow.
+            function _shCntLiveRepaint(){ try{ rowsState.forEach(paintRow); paintTotal(); paintHours(); refreshFooter(); }catch(_e){} }
+            _pgShCntRepaint=_shCntLiveRepaint;
+            try{ window._pgShCntRepaintNow=_shCntLiveRepaint; }catch(_e){}
+            rowsState.forEach(paintRow); paintTotal(); paintHours(); refreshFooter();
             $card.append($foot); $ov.append($card); $('body').append($ov);
             if(_pgvCur.mode==='view'){ try{ _pgvDocPopup($ov[0]); }catch(e){} }
           }
@@ -9752,7 +10092,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }catch(e){}
             return out;
           }
-          function _closeSchoolShPopup(){ try{ $('.sf-sh-popup').remove(); }catch(e){} }
+          function _closeSchoolShPopup(){
+            try{ if(_pgSchoolShTrack) _pgSchoolShTrack(); }catch(e){}   // stop tracking before removal
+            try{ $('.sf-sh-popup').remove(); }catch(e){}
+            _pgSchoolShOpen=null;
+            // Drop the pending-edit state + the outside-click bridge so a closed popup can never
+            // hold a stale "dirty" that blocks the next one, or point the listener at a dead popup.
+            try{ _pgSchoolShCntState=null; }catch(e){}
+            try{ _pgSchoolShTryCloseNow=null; }catch(e){}
+          }
           // Build the REAL individual-school Staffing Hours table for this school and show it in
           // inspection mode. buildOneTable is the app's own builder, so structure, palette,
           // day/weekend/special-day treatment, override notation and TOTALS all come from the one
@@ -9842,11 +10190,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $t.find('input,select,textarea').each(function(){
               var $i=$(this), v=($i.is('select')?$i.find('option:selected').text():$i.val())||'';
               var cs=this.style;
+              // Read-only value: size to CONTENT and NEVER clip. The live cell's width can be a
+              // calc(100% - 22px) reservation for a hover copy trigger that does not exist in this
+              // read-only popup, and inheriting it (plus overflow:hidden/ellipsis) truncated times
+              // like "12:00pm" in the compact columns. width:auto + no overflow clip lets the value
+              // show in full and the column grow just enough to fit it.
               $i.replaceWith($('<span class="sf-sh-ro">').css({
-                display:'inline-block', width:cs.width||'auto', minWidth:cs.minWidth||'',
+                display:'inline-block', width:'auto', minWidth:'',
                 textAlign:cs.textAlign||'center', fontSize:cs.fontSize||'', fontWeight:cs.fontWeight||'',
                 color:cs.color||'', lineHeight:cs.lineHeight||'', padding:cs.padding||'',
-                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'
+                whiteSpace:'nowrap'
               }).text(v));
             });
             // Editing affordances that survive as plain elements go too.
@@ -9859,6 +10212,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               if(t==='\u2026'||t==='...'||t==='\u2699') $(this).remove();
             });
             $t.find('[contenteditable]').removeAttr('contenteditable');
+            // The picker/value wrappers reserve a right-hand 22px slot (width:calc(100% - 22px))
+            // for a hover copy "..." trigger. That trigger is removed in this read-only popup, so
+            // the reservation is dead space that only widens the compact columns. Reclaim it: any
+            // wrapper still carrying that calc width sizes to content instead.
+            $t.find('div').each(function(){
+              var w=(this.style&&this.style.width)||'';
+              if(w.indexOf('22px')>=0){ this.style.width='auto'; }
+            });
             $t.css({cursor:'default'}).find('*').css('cursor','default');
             $t.find('td,th').off('click mousedown mouseenter mouseleave');
             // School-level TOTAL HRS/DAY. The table ALREADY HAS this row — the app renders it
@@ -9915,6 +10276,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               maxHeight:Math.max(200,Math.min(520,((window.innerHeight||800)-90)))+'px'
             });
             $p.on('mousedown click',function(e){ e.stopPropagation(); });   // clicks inside never dismiss
+            // NO wheel interception on the container. A position:fixed overlay does NOT trap the
+            // page's scroll — the earlier "fixed overlay traps the wheel" premise was wrong, and
+            // both the forward-only and the forward+preventDefault fixes built on it made things
+            // worse: preventDefault killed the page's native scroll while window.scrollBy failed
+            // to move it whenever the real scroll container was an ancestor rather than the
+            // window, so hovering the popup froze the page. Wheel events over the header / padding
+            // simply bubble and the page scrolls natively, which is exactly the spec's ask.
             var $h=$('<div class="sf-sh-popup-hdr">').css({display:'flex',alignItems:'center',gap:'6px',flex:'0 0 auto',
                     fontSize:'11px',fontWeight:'700',color:'#212529',paddingRight:'20px',marginBottom:'6px',
                     whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'});
@@ -9926,7 +10294,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $x=$('<button type="button" class="sf-sh-popup-x" title="Close">').text('\u00d7')
               .css({position:'absolute',top:'4px',right:'6px',border:'none',background:'transparent',
                     fontSize:'16px',cursor:'pointer',color:'#6c757d',lineHeight:'1',padding:'0 4px'});
-            $x.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _closeSchoolShPopup(); });
+            // The x routes through _pgSchoolShTryClose so unsaved Count edits raise the same
+            // Save-changes confirmation the Edit Coach Count popup uses, instead of silently
+            // dropping them.
+            $x.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgSchoolShTryClose(); });
             $p.append($x).append($h);
             var _rows=$tbl?$tbl.find('tbody tr').length:0;
             if(!$tbl||!_rows){
@@ -9938,18 +10309,172 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var $scroll=$('<div class="sf-sh-popup-scroll">').css({overflow:'auto',flex:'1 1 auto',minHeight:'0'});
               $scroll.append($tbl);
               $p.append($scroll);
+              // No overscroll-behavior:contain here — on a NON-overflowing region that property
+              // absorbs the wheel and blocks the page (the bug that kept coming back). Scroll
+              // handling is the app-wide delegated wheel listener (_pgDelegatedPopupWheel): it
+              // lets this region scroll when it can, and lets the page scroll when it can't.
+            }
+            // ── INLINE COUNT OVERRIDE EDITING ──────────────────────────────────────────
+            // The popup's # Coaches / # Staff cells become click-to-edit numeric fields held as
+            // PENDING edits: nothing is written until Save. Save writes through the SAME override
+            // op the Edit Coach Count popup uses — the school's own slot key, delete-if-equals-
+            // base cleanup, one _pgUndo transaction, one dependency repaint — so an override made
+            // here is indistinguishable from one made there. Discard restores the last SAVED
+            // values (not the base). Closing / clicking-out with unsaved edits raises the shared
+            // Save-changes confirmation. Locked View disables all of it (read-only popup).
+            if($tbl && _rows){
+              try{ _pgWireSchoolCntEditing($p, $tbl, si); }catch(_e){}
             }
             $('body').append($p);
-            try{
-              var rct=anchorEl.getBoundingClientRect();
-              var pw=$p.outerWidth()||360, ph=$p.outerHeight()||220;
-              var vw=window.innerWidth||1024, vh=window.innerHeight||768;
-              var left=rct.left, top=rct.bottom+6;
-              if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
-              if(top+ph>vh-8) top=Math.max(8,rct.top-ph-6);
-              $p.css({left:Math.max(8,left)+'px', top:Math.max(8,top)+'px'});
-            }catch(e){ $p.css({left:'20px',top:'20px'}); }
+            // ATTACHED TO THE ROW, not the viewport. The popup is still position:fixed (so it is
+            // never clipped by an ancestor's overflow), but its top/left are RECOMPUTED from the
+            // anchor's live rect on every scroll and resize — so as the school list scrolls it
+            // travels WITH its row instead of hanging in place. If the row scrolls fully out of
+            // its scroll container (or the viewport), the popup closes itself — but if there are
+            // unsaved Count edits, the same Save-changes confirmation runs first so the anchor
+            // vanishing can never silently discard them (spec).
+            var _shDetach=_pgAnchorPopup($p, anchorEl, {
+              gap:6,
+              place:function(rct,bounds){
+                var pw=$p.outerWidth()||360, ph=$p.outerHeight()||220;
+                var vw=window.innerWidth||1024, vh=window.innerHeight||768;
+                var left=rct.left, top=rct.bottom+6;
+                if(left+pw>vw-8) left=Math.max(8,vw-pw-8);
+                if(top+ph>vh-8) top=Math.max(8,rct.top-ph-6);
+                $p.css({left:Math.max(8,left)+'px', top:Math.max(8,top)+'px'});
+              },
+              onClose:function(){ _pgSchoolShTryClose(); }
+            });
+            _pgSchoolShTrack=_shDetach;
             _pgSchoolShOpen={si:si,nm:nm,el:anchorEl};
+            // Expose the guarded close to the module-level outside-click listener while open.
+            try{ _pgSchoolShTryCloseNow=_pgSchoolShTryClose; }catch(_e){}
+          }
+          // Unsaved-change guard shared by the x, the outside-click path and the anchor-lost path.
+          // With no pending Count edits it closes normally; with pending edits it raises the same
+          // Continue editing / Discard changes / Save changes dialog the Edit Coach Count popup uses.
+          function _pgSchoolShTryClose(){
+            var st=_pgSchoolShCntState;
+            if(!st || !st.isDirty || !st.isDirty()){ _closeSchoolShPopup(); return; }
+            _xsDialog('Save changes to this school?',[
+              {label:'Continue editing'},
+              {label:'Discard changes',fn:function(){ _closeSchoolShPopup(); }},
+              {label:'Save changes',primary:true,fn:function(){ try{ st.save(); }catch(_e){} _closeSchoolShPopup(); }}
+            ]);
+          }
+          // Builds the pending-edit layer over the popup's already-rendered (read-only) count
+          // cells. Reads the CURRENT effective/base counts from the live slots, wires each
+          // applicable cell to a click-to-edit input, and shows Discard/Save only while dirty.
+          function _pgWireSchoolCntEditing($p, $tbl, si){
+            _pgSchoolShCntState=null;
+            if(_pgvCur.mode==='view') return;   // locked: popup stays read-only, no editing/footer
+            var ci=(editCombo&&editCombo.ci!=null)?editCombo.ci:null;
+            var wk=(editCombo&&editCombo.wk)||'';
+            var sr=(siteRowsFor(g,(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null)||[]);
+            var sRow=sr[si]||{};
+            var slotKey=('s'+si)+(ci!==null?('c'+ci):'')+(wk||'');
+            // The role/day set the popup exposes, taken straight from the rendered count cells so
+            // the editor cannot drift from what the table shows (excluded days never render a
+            // count-cell-u, so they are unreachable here — allocation is applied before overrides).
+            var cells=[];
+            $tbl.find('.count-cell-u[data-role][data-day]').each(function(){
+              var $span=$(this);
+              var roleKey=$span.attr('data-role'), dayK=$span.attr('data-day');
+              // base = this school's Site Breakdown count for the role (the override's fallback)
+              var role=ROLES.filter(function(r){ return r.key===roleKey; })[0];
+              if(!role) return;
+              var base=parseInt(sRow[role.countKey])||0;
+              var saved=shSchoolCntOv(_slots,si,ci,wk,roleKey,dayK);
+              var openVal=(saved!=null)?saved:base;
+              cells.push({$span:$span,$td:$span.closest('td'),roleKey:roleKey,role:role,dayK:dayK,base:base,openVal:openVal,val:openVal});
+            });
+            if(!cells.length) return;
+            function paint(c){ _shCntPaint(c.$span, c.val!==c.base?c.val:null, c.base); }
+            function isDirty(){ return cells.some(function(c){ return c.val!==c.openVal; }); }
+            cells.forEach(paint);
+            // Footer (Discard / Save), shown only while dirty. mousedown-preventDefault keeps focus
+            // in the field so the FIRST click on a button lands (same trick as the Edit Coach Count
+            // footer, where a re-render between mousedown and mouseup used to swallow the click).
+            var $foot=$('<div class="sf-sh-cnt-foot">').css({display:'none',justifyContent:'flex-end',gap:'8px',flex:'0 0 auto',marginTop:'8px',paddingTop:'6px',borderTop:'1px solid #eef1f4'});
+            function mkBtn(txt,primary){ return $('<button type="button">').on('mousedown',function(e){ e.preventDefault(); })
+              .text(txt).css(primary
+              ?{background:'#1a73e8',color:'#fff',border:'1px solid #1a73e8',borderRadius:'6px',padding:'4px 12px',fontSize:'11px',fontWeight:'600',cursor:'pointer'}
+              :{background:'#fff',color:'#3c4043',border:'1px solid #dadce0',borderRadius:'6px',padding:'4px 12px',fontSize:'11px',fontWeight:'600',cursor:'pointer'}); }
+            var $discard=mkBtn('Discard',false).addClass('sf-sh-cnt-discard');
+            var $save=mkBtn('Save',true).addClass('sf-sh-cnt-save');
+            $foot.append($discard).append($save);
+            function refreshFoot(){ $foot.css('display', isDirty()?'flex':'none'); }
+            function doDiscard(){
+              $p.find('.sf-sh-cnt-input').remove();
+              cells.forEach(function(c){ c.val=c.openVal; c.$span.show(); paint(c); });
+              refreshFoot();
+            }
+            function doSave(){
+              // Collect the changed cells and hand them to the SHARED authoritative operation —
+              // the SAME _pgCommitCntOverrides the Edit Coach/Staff Count popup calls — so the
+              // override write, the main-table repaint (updU on THIS section's $tbU, which is what
+              // makes the aggregate Staffing Hours + Total Hours update at once), the deferred
+              // _updateHours fan-out and the single Undo transaction are IDENTICAL across both
+              // entry points. (The prior bug repainted only the popup's own detached table.)
+              $p.find('.sf-sh-cnt-input').remove();
+              cells.forEach(function(c){ c.val=(c.val==null||isNaN(c.val))?c.openVal:c.val; });
+              if(!isDirty()){ refreshFoot(); return; }
+              var writes=[];
+              cells.forEach(function(c){
+                if(c.val===c.openVal) return;          // untouched this session
+                writes.push({slotKey:slotKey,roleKey:c.roleKey,dayK:c.dayK,val:c.val,base:c.base});
+                c.openVal=c.val;                        // this is now the saved baseline
+              });
+              _pgCommitCntOverrides(writes);
+              cells.forEach(paint);
+              refreshFoot();
+              // Re-render the popup so every dependent value inside it (Total Hrs/Day, the count
+              // notation) reflects the saved state, then it is clean again.
+              _refreshSchoolShPopup();
+            }
+            $discard.on('click',function(e){ e.stopPropagation(); doDiscard(); });
+            $save.on('click',function(e){ e.stopPropagation(); doSave(); });
+            // Wire each count cell: click → inline numeric input pre-filled with the effective value.
+            cells.forEach(function(c){
+              // ITEM 1 — capture the cell's ORIGINAL palette background so mouseleave restores it
+              // EXACTLY. Clearing to '' used to blank the cell, which carries an inline #f0f4f8
+              // from the builder (or whatever the read-only transform left).
+              var _origBg=c.$td[0].style.background||c.$td[0].style.backgroundColor||'#f0f4f8';
+              // ITEM 2 — persistent editable affordance: a subtle inset ring on the cell plus a
+              // dashed underline on the value mark it as a field so it's discoverable at a glance,
+              // WITHOUT altering the palette background (so item 1's restore stays exact) and while
+              // the rest of the popup stays inspection-only.
+              c.$td.addClass('sf-sh-cnt-editable').css({cursor:'pointer',boxShadow:'inset 0 0 0 1px rgba(107,143,192,.55)'}).attr('title','Click to edit this count');
+              c.$span.css({borderBottom:'1px dashed #6b8fc0',cursor:'pointer'});
+              c.$td.on('mouseenter.shcnt',function(){ c.$td.css({background:'rgb(220 238 255)',boxShadow:'inset 0 0 0 1px #6b8fc0'}); });
+              c.$td.on('mouseleave.shcnt',function(){ c.$td.css({background:_origBg,boxShadow:'inset 0 0 0 1px rgba(107,143,192,.55)'}); });
+              c.$td.on('click.shcnt',function(e){
+                e.stopPropagation();
+                if(c.$td.find('.sf-sh-cnt-input').length) return;
+                var _pre=c.val;
+                var $inp=$('<input type="text" inputmode="numeric" class="sf-sh-cnt-input">').css({width:'34px',fontSize:'10.5px',padding:'1px 3px',border:'1px solid #b6c9e2',borderRadius:'3px',textAlign:'center'}).val(String(c.val));
+                c.$span.hide(); c.$td.append($inp);
+                $inp.on('click',function(e2){ e2.stopPropagation(); });
+                $inp.on('input',function(){
+                  var f=String($inp.val()||'').replace(/\D+/g,'');
+                  if(String($inp.val())!==f) $inp.val(f);
+                  if(f!=='') c.val=parseInt(f,10);
+                  refreshFoot();
+                });
+                $inp.on('keydown',function(e2){
+                  if(e2.key==='Enter'){ e2.preventDefault(); $inp.trigger('blur'); }
+                  else if(e2.key==='Escape'){ e2.stopPropagation(); c.val=_pre; $inp.off('blur'); $inp.remove(); c.$span.show(); paint(c); refreshFoot(); }
+                });
+                $inp.on('blur',function(){
+                  var raw=String($inp.val()||'').trim();
+                  c.val=(raw!==''&&/^\d+$/.test(raw))?parseInt(raw,10):_pre;
+                  $inp.remove(); c.$span.show(); paint(c); refreshFoot();
+                });
+                $inp.trigger('focus'); try{ $inp[0].select(); }catch(_e){}
+              });
+            });
+            $p.append($foot);
+            _pgSchoolShCntState={ isDirty:isDirty, save:doSave, discard:doDiscard };
           }
           // An OPEN per-school popup re-renders from the authoritative computation whenever the
           // strip does — and EVERY allocation path rebuilds the strip, so a value changing behind
@@ -10430,6 +10955,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // ONE representation is on screen, so a pod/Site-Breakdown change repaints the
             // allocation table's brackets instead of resurrecting the school list beside it.
             _applyAllocMode();
+            // An open Edit Coach/Staff Count popup shows per-school Hours from the same slots this
+            // repaint reflects, so refresh it in place — Start/End time or meal-break edits made
+            // behind it update its Hours and Total Hours immediately.
+            try{ if(typeof _pgShCntRepaint==='function') _pgShCntRepaint(); }catch(_e){}
             var c=getCountsFn();
             ROLES.forEach(function(role){
               var _anyOvC=(editableCnt||_compSchools)&&DAYS.some(function(_d){return (editableCnt?(shCntOv(shData,role.key,_d.k)||0):_effComposite(role,_d.k))>0;});
@@ -10475,6 +11004,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _dtv=sum>0?(Math.round(sum*100)/100):''; $tbl.find('.day-total-u[data-sfx="'+sfxClass+'"][data-day="'+day.k+'"]').text(_dtv).each(function(){ _paintHrsTotal(this,_dtv,true); });
             });
             setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0);
+          }
+
+          // ── Authoritative Count-override SAVE (shared) ─────────────────────────────
+          // The SINGLE operation BOTH count-editing entry points call — the Edit Coach/Staff
+          // Count popup AND the per-school Staffing Hours popup — so they write the identical
+          // override and fire the identical dependency pipeline. `writes` is a list of
+          // {slotKey, roleKey, dayK, val, base}; a value equal to base deletes the override
+          // (same cleanup). It then repaints THIS section's main staffing table via updU($tbU)
+          // — counts, Hours, Total Hours, day totals, and any open Edit Coach Count popup via
+          // _pgShCntRepaint inside updU — and defers _updateHours, which fans out to the calendar
+          // cells, hover/hourly breakdowns, Program Summary, Program Calendars, Planning Guide
+          // Summary and the dependent financials. One _pgUndo transaction wraps it; the offer
+          // text reads the change itself.
+          function _pgCommitCntOverrides(writes){
+            try{ _pgUndo.begin(g.id); }catch(_u){}
+            (writes||[]).forEach(function(w){
+              if(!_slots[w.slotKey]) _slots[w.slotKey]={};
+              var sl=_slots[w.slotKey];
+              if(!sl[w.roleKey]) sl[w.roleKey]={};
+              var dd=sl[w.roleKey][w.dayK]||(sl[w.roleKey][w.dayK]={start:'',end:''});
+              if(w.val===w.base) delete dd.cnt; else dd.cnt=w.val;
+            });
+            try{ updU($tbU); }catch(_e){}
+            setTimeout(function(){ try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(_e){} },0);
+            try{ _pgUndo.offer(g.id,{auto:true}); }catch(_u){}
           }
 
           var FOOT_CU={border:BDR,background:'#f0f4f8',fontWeight:'700',fontSize:'10px',color:'#495057',padding:'4px 6px',textAlign:'center',borderTop:'2px solid #7f9ab5'};
@@ -17014,6 +17568,29 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // control, and must not register itself for recalculation — otherwise inspecting a school
   // would quietly add machinery to the live section.
   var _pgShPopupBuilding=false;
+  // Live-repaint hook for an OPEN Edit Coach/Staff Count popup: the popup sets this to its
+  // Hours-repaint function while open and clears it on close, so an underlying change (Start/End
+  // time, meal break, allocation) made in the staffing table behind it updates the popup's Hours
+  // and Total Hours in place without a reopen. Null when no popup is open.
+  var _pgShCntRepaint=null;
+  // Teardown for the open per-school popup's scroll/resize tracking listener; null when none.
+  var _pgSchoolShTrack=null;
+  // Pending inline Count-edit state for the OPEN per-school popup: {isDirty,save,discard}, or null
+  // when the popup is closed or has no editable counts (locked View, or no applicable cells). The
+  // outside-click dismissal consults this so unsaved edits raise the Save-changes confirmation
+  // instead of being silently dropped.
+  var _pgSchoolShCntState=null;
+  // Module-level bridge to the section-scoped _pgSchoolShTryClose (which owns _xsDialog +
+  // _closeSchoolShPopup). Set while a per-school popup is open; the capture-phase outside-click
+  // listener calls it so its close path gets the same unsaved-change guard as the x.
+  var _pgSchoolShTryCloseNow=null;
+  // Test seam: the pure out-of-view decision the tracker makes, isolated from layout so it can be
+  // asserted without a browser. Returns true when a row with the given rect is fully outside the
+  // given visible band (and geometry is real enough to decide).
+  try{ window._pgSchoolShOutOfView=function(rct,bounds){
+    var haveGeom=(rct.width||rct.height||rct.top||rct.bottom) && (bounds.bottom>bounds.top);
+    return !!(haveGeom && (rct.bottom<=bounds.top || rct.top>=bounds.bottom));
+  }; }catch(e){}
   // Which allocation matrices are HIDDEN, keyed gid|suffix. Visibility only — never enablement.
   var _pgAllocHidden={};
   function _pgAllocIsHidden(gid,sfx){ return !!_pgAllocHidden[String(gid)+'|'+String(sfx)]; }
@@ -17027,10 +17604,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var t=ev&&ev.target; if(!t) return;
     var open=document.querySelectorAll('.sf-sh-popup');
     if(!open.length) return;
+    // Ignore clicks inside the Save-changes confirmation itself — it is portalled to <body>
+    // OUTSIDE the popup, so a naive "outside the popup" test would treat pressing its buttons
+    // as an outside click and tear the popup down underneath the dialog.
+    if(t.closest && t.closest('.xs-ui')) return;
     for(var i=0;i<open.length;i++){
       var el=open[i];
       if(el===t || el.contains(t)) continue;              // inside the popup
       if(t.classList && t.classList.contains('sf-strip-school-nm')) continue;  // its own trigger
+      // Unsaved Count edits: do NOT silently remove the popup. Hand off to the guarded close,
+      // which raises Continue editing / Discard changes / Save changes. Only one per-school
+      // popup is ever open, so the first dirty match owns the decision.
+      if(_pgSchoolShCntState && _pgSchoolShCntState.isDirty && _pgSchoolShCntState.isDirty()){
+        if(typeof _pgSchoolShTryCloseNow==='function'){ _pgSchoolShTryCloseNow(); return; }
+      }
       el.parentNode && el.parentNode.removeChild(el);
       _pgSchoolShOpen=null;
     }
@@ -18737,7 +19324,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var DISC_EDGE={borderLeft:'2px solid #b9c6d6'}, DISC_TINT={background:'#eef3f9'};
       var _cols=[['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Meal Breaks',{}],['Price/Hr',{minWidth:'74px'}],['Scheduled Hours',{minWidth:'92px',textAlign:'right'}],['Unallocated (Remaining) Hours',{minWidth:'104px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['Amount',{minWidth:'92px',textAlign:'right'}]];
       if(_discOn){
-        _cols.push(['Net Price/Hr',Object.assign({minWidth:'80px',textAlign:'right'},DISC_EDGE,DISC_TINT)]);
+        _cols.push(['PPH (Net)',Object.assign({minWidth:'80px',textAlign:'right'},DISC_EDGE,DISC_TINT)]);
         _cols.push(['Savings',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
         _cols.push(['Net Amount',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
       }
@@ -19106,6 +19693,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             ['price','savings','amount'].forEach(function(k,ki){
               var css=Object.assign({},csTdStyle,{textAlign:'right',whiteSpace:'nowrap',padding:'4px 10px',color:(k==='savings'?'#1a7f37':'#212529'),background:'#f6f9fc'});
               if(ki===0) css.borderLeft='2px solid #b9c6d6';
+              // PPH (Net): the discounted per-hour rate gets a solid green chip (bold white text)
+              // so the net rate stands out from the base pricing columns. Calculation unchanged.
+              if(k==='price'){ css.background='rgb(74, 193, 65)'; css.color='rgb(255, 255, 255)'; css.fontWeight='700'; }
               $tr.append($('<td class="pg-cal-disc-'+k+'">').attr('data-disc-cal',String(capturedCalId==null?'':capturedCalId)).css(css).text('\u2014'));
             });
           }
