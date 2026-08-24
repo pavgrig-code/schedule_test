@@ -11067,17 +11067,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             };
             // Compact one-item context menu for an overridden Weeks circle (self-contained — the session
             // menu shell is not in this scope). Trash icon + "Remove Override"; outside-click / Escape close.
-            var _wovCtxMenu=function(ev,onPick){
+            var _wovCtxMenu=function(ev,label,onPick){
               $('.sf-wkov-ctx').remove();
               var $m=$('<div class="sf-wkov-ctx">').css({position:'fixed',zIndex:1000007,background:'#fff',
                 border:'1px solid #d9dee6',borderRadius:'8px',boxShadow:'0 6px 20px rgba(20,30,40,.18)',
                 padding:'4px',minWidth:'150px'});
-              function close(){ $m.remove(); $(document).off('.sfwovctx'); }
+              function close(){ $m.remove(); $(document).off('.sfwovctx'); try{ document.removeEventListener('scroll',close,true); }catch(e){} }
               var $it=$('<div class="sf-wkov-ctx-item">').css({fontSize:'12.5px',color:'#343a40',padding:'6px 12px',
                 borderRadius:'5px',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap'});
               $it.on('mouseenter',function(){ $(this).css('background','#eef3f9'); }).on('mouseleave',function(){ $(this).css('background','transparent'); });
               $it.append($('<span class="sf-wkov-ctx-icon">').css({display:'inline-flex',width:'16px',justifyContent:'center'}).html(_pgIcon('trash')||'\uD83D\uDDD1'));
-              $it.append(document.createTextNode('Remove Override'));
+              $it.append(document.createTextNode(label||'Remove Override'));
               $it.on('click',function(e){ e.stopPropagation(); close(); onPick(); });
               $m.append($it);
               $('body').append($m);
@@ -11090,6 +11090,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               setTimeout(function(){
                 $(document).on('mousedown.sfwovctx',function(e2){ if(!$m[0].contains(e2.target)) close(); });
                 $(document).on('keydown.sfwovctx',function(e2){ if(e2.key==='Escape') close(); });
+                try{ document.addEventListener('scroll',close,true); }catch(e){}   // one-shot menu: close on any scroll rather than float detached
               },0);
             };
             // ── Section circle color pickers (Rotation / Weeks), display-only ── A ~10px dot after the
@@ -11227,6 +11228,49 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               try{ _pgUndo.offer(g.id,{text:(nm+' rotation extended to Week '+N+'.')}); }catch(e){}
               return true;
             }
+            // ── Remove-from-Rotation op ── Right-click a configured Rotation Week circle -> structurally
+            // splice THAT week out of the school's rotation: higher weeks shift DOWN one (numbering stays
+            // contiguous, no gaps). If the result would fall below the 2-week minimum, drop the school's
+            // ENTIRE rotation (both cells cleared -> treated as no rotation). Then trim any trailing global
+            // column that is now empty across ALL schools (never below the minimum, never a column another
+            // school still uses). Weeks overrides are NOT deleted; inherited states + every date->week
+            // mapping recompute from the new config via _wkRecalc. One atomic tx: full-snapshot Undo (which
+            // restores length, ordering, the removed week's state, any auto-removed column, and all
+            // mappings) + ONE History sentence.
+            function _wkRotRemoveWeek(si, nm, W){
+              if(_wkRO) return false;
+              var cfg=_wkRotCfg(g.id,_wkCalId,false); if(!cfg||!cfg.cells) return false;
+              var oldLen=_wkRotLen(g.id,_wkCalId,si);
+              if(oldLen<=0) return false;                 // no rotation configured
+              W=Number(W); if(!(W>=1&&W<=oldLen)) return false;   // blank / out of range -> no menu offered it
+              try{ _pgUndo.begin(g.id); }catch(e){}       // full-guide snapshot BEFORE mutation
+              var keyOf=function(w){ return String(si)+'|'+String(w); };
+              var newLen=oldLen-1, wholeRemoved=false;
+              if(newLen<_WKROT_MIN_WEEKS){
+                for(var w=1; w<=oldLen; w++){ delete cfg.cells[keyOf(w)]; }   // drop the whole rotation
+                wholeRemoved=true;
+              } else {
+                var states=[]; for(var w=1; w<=oldLen; w++){ states.push(cfg.cells[keyOf(w)]); }
+                states.splice(W-1,1);                     // remove week W, higher weeks shift down
+                for(var w=1; w<=oldLen; w++){ delete cfg.cells[keyOf(w)]; }
+                for(var i=0;i<states.length;i++){ cfg.cells[keyOf(i+1)]=states[i]; }
+              }
+              // Trim trailing global columns now empty across every school (>= the minimum).
+              var _colUsed=function(col){ var suf='|'+String(col); for(var k in cfg.cells){ if(k.indexOf('|')>=0 && k.slice(k.indexOf('|'))===suf) return true; } return false; };
+              var cnt=cfg.count||_WKROT_MIN_WEEKS;
+              while(cnt>_WKROT_MIN_WEEKS && !_colUsed(cnt)) cnt--;
+              cfg.count=cnt;
+              try{ setGuideDetail(g.id,'wkRot',guideDetails[String(g.id)].wkRot); }catch(e){}
+              _wkRerender(); try{ _wkRecalc(); }catch(e){}
+              var action = wholeRemoved ? ('Removed Week Rotation for '+nm+'.') : ('Removed Week '+W+' from '+nm+' rotation.');
+              try{ _pgHist.begin(g.id); }catch(e){}
+              try{ _pgHist.evt(g.id,{kind:'delete', action:action, desc:action}); }catch(e){}
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
+              var undoTxt = wholeRemoved ? ('Week Rotation removed for '+nm+'.') : ('Week '+W+' removed from rotation.');
+              try{ _pgUndo.offer(g.id,{text:undoTxt}); }catch(e){}
+              return true;
+            }
             // Test/inspection seam: drive the header ops + read config without simulating Ctrl geometry.
             try{
               if(!window._pgWkRotCtl) window._pgWkRotCtl={};
@@ -11239,7 +11283,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 setRotation:function(si,N){ var nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } return _wkSetRotation(si,nm,N); },
                 grow:function(si){ var nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } return _wkGrowRotation(si,nm); },
                 setHover:function(v){ _wkSetHover(!!v); return _wkHover.on; },
-                weekHasChecked:function(w){ return _wkRotWeekHasChecked(g.id,_wkCalId,list,w); }
+                weekHasChecked:function(w){ return _wkRotWeekHasChecked(g.id,_wkCalId,list,w); },
+                removeFromRotation:function(si,W,nm){ if(nm==null){ nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } } return _wkRotRemoveWeek(si,nm,W); }
               };
             }catch(e){}
             function _wkRerender(){ try{ _rebuildAllocTable(); }catch(e){} }
@@ -11412,7 +11457,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             } else {
               $wkTitleTh=$('<th class="sf-wkrot-title sf-wkrot-title-expanded" colspan="'+(_wkWeeks+1)+'">')
                 .css(Object.assign({},th,_titleCss,{borderLeft:SEP_BORDER}));
-              var $wkIn=$('<span style="display:inline-flex;align-items:center;">').append($('<span>').text('Rotation')).append(_circColorControl('rot'));
+              var $wkLbl=$('<span class="sf-wkrot-lbl">').text('Rotation').css({cursor:'pointer'}).attr('title','Collapse Week Rotation');
+              if(!_wkRO){
+                $wkLbl.on('mouseenter',function(){ $(this).css({textDecoration:'underline',color:'#1a1d21'}); })
+                      .on('mouseleave',function(){ $(this).css({textDecoration:'none',color:''}); })
+                      .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkRotSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
+              }
+              var $wkIn=$('<span style="display:inline-flex;align-items:center;">').append($wkLbl).append(_circColorControl('rot'));
               var $wkColl=$('<button type="button" class="sf-wkrot-toggle pg-view-ok" title="Collapse Week Rotation" aria-label="Collapse Week Rotation" aria-expanded="true" style="color:#5f6368;background:none;border:none;padding:0 0 0 4px;cursor:pointer;">').append(_pgChvSvg('left'));
               $wkColl.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
               $wkColl.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkRotSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
@@ -11438,7 +11489,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               } else {
                 $wovTitleTh=$('<th class="sf-wkov-title sf-wkov-title-expanded" colspan="'+_wovN+'">')
                   .css(Object.assign({},th,_titleCss,{borderLeft:SEP_BORDER}));
-                var $ovIn=$('<span style="display:inline-flex;align-items:center;">').append($('<span>').text('Weeks')).append(_circColorControl('wov'));
+                var $ovLbl=$('<span class="sf-wkov-lbl">').text('Weeks').css({cursor:'pointer'}).attr('title','Collapse Weeks');
+                if(!_wkRO){
+                  $ovLbl.on('mouseenter',function(){ $(this).css({textDecoration:'underline',color:'#1a1d21'}); })
+                        .on('mouseleave',function(){ $(this).css({textDecoration:'none',color:''}); })
+                        .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkOvSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
+                }
+                var $ovIn=$('<span style="display:inline-flex;align-items:center;">').append($ovLbl).append(_circColorControl('wov'));
                 if(!_wkRO && _wkOvHasAnyCal(g.id,_wkCalId)){
                   var $ovReset=$('<button type="button" class="sf-wkov-reset pg-view-ok">').text('Reset')
                     .attr({title:'Reset all Weeks overrides to Week Rotation','aria-label':'Reset Week overrides'})
@@ -11730,6 +11787,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                               .attr({'role':'checkbox','aria-checked':(_st===true?'true':'false'),'aria-label':'Week '+wnum,'tabindex':'0'})
                               .on('click',function(e){ e.stopPropagation(); _wkToggle(); })
                               .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); _wkToggle(); } });
+                            // Right-click a configured Rotation Week circle -> a one-item "Remove from
+                            // Rotation" menu (trash icon). Blank cells have no circle, so none there.
+                            $circ.on('contextmenu',function(ev){
+                              ev.preventDefault(); ev.stopPropagation();
+                              if(_pgvCur.mode==='view') return;   // live guard for in-place lock
+                              _wovCtxMenu(ev, 'Remove from Rotation', function(){ _wkRotRemoveWeek(u.si, nm, wnum); });
+                            });
                             // The cell padding around the circle toggles too (a larger hit target).
                             $wcell.css('cursor','pointer').on('click',function(e){ if(e.target!==this) return; _wkToggle(); });
                           }
@@ -11805,7 +11869,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                               $circ.on('contextmenu',function(ev){
                                 ev.preventDefault(); ev.stopPropagation();
                                 if(_pgvCur.mode==='view') return;   // live guard: locking an open guide is in-place, so re-check here
-                                _wovCtxMenu(ev, function(){ _wovRemoveOverride(u.si, nm, monIso, _mi+1); });
+                                _wovCtxMenu(ev, 'Remove Override', function(){ _wovRemoveOverride(u.si, nm, monIso, _mi+1); });
                               });
                             }
                             $ocell.css('cursor','pointer').on('click',function(e){ if(e.target!==this) return; _doClick(e); });
