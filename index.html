@@ -8630,6 +8630,35 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   function _circPaint($c,checked,pal){ if(pal&&checked){ $c.css({background:pal.bg,borderColor:pal.bd,color:pal.tx}); } }
   function _circHexA(hex,a){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.replace(/./g,'$&$&'); var n=parseInt(hex,16)||0; return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
   try{ if(typeof window!=='undefined'){ window._pgCircPalette=_CIRC_PALETTE; window._pgCircIdx=_circIdx; window._pgCircPal=_circPal; window._pgCircSet=_circSet; } }catch(e){}
+  // ── Rotation-Week Staffing Hours overrides (scaffold for future per-week editing) ──────────────
+  // A school with Week Rotation may LATER carry its own Start/End/Count for an individual Rotation
+  // Week (1..len), independent of its Base Staffing Hours. Stored det.wkRotHrs[calId]['si|w|role|day']
+  // = {start,end,count}. This is a SEPARATE layer from det.wkOv, which decides whether an ACTUAL
+  // calendar week participates; this layer decides what Staffing Hours a Rotation Week CONTAINS.
+  // No editor writes it yet, so the resolver returns null and a Rotation Week view inherits Base
+  // verbatim — Base is never duplicated per week. The effective hierarchy this prepares:
+  //   Base Staffing Hours -> Rotation-Week Hours/Count overrides -> Week Rotation participation
+  //   -> Actual Weeks overrides -> Calendar effective Staffing Hours.
+  function _wkRotHrsCfg(gid,calId,create){
+    var det=guideDetails[String(gid)]; if(!det) return null;
+    if(!det.wkRotHrs){ if(!create) return null; det.wkRotHrs={}; }
+    var k=String(calId);
+    if(!det.wkRotHrs[k]){ if(!create) return null; det.wkRotHrs[k]={}; }
+    return det.wkRotHrs[k];
+  }
+  function _wkRotHrsKey(si,w,role,day){ return String(si)+'|'+String(w)+'|'+String(role)+'|'+String(day); }
+  // The effective override cell for one Rotation Week / role / day, or null (inherit Base). Read-only
+  // for now — the future per-week editor will write through _wkRotHrsCfg(...,true) + setGuideDetail.
+  function _wkRotHrsOverride(gid,calId,si,w,role,day){
+    var c=_wkRotHrsCfg(gid,calId,false); if(!c) return null;
+    var v=c[_wkRotHrsKey(si,w,role,day)];
+    return (v&&typeof v==='object')?v:null;
+  }
+  function _wkRotHrsHasAny(gid,calId,si){
+    var c=_wkRotHrsCfg(gid,calId,false); if(!c) return false;
+    var pre=String(si)+'|'; for(var k in c){ if(k.indexOf(pre)===0) return true; } return false;
+  }
+  try{ if(typeof window!=='undefined'){ window._pgWkRotHrsOverride=_wkRotHrsOverride; window._pgWkRotHrsCfg=_wkRotHrsCfg; window._pgWkRotHrsHasAny=_wkRotHrsHasAny; } }catch(e){}
   // ── READ-ONLY Week circles for a school — reused by the 4 non-matrix surfaces (Staffing Hours popup
   // header, separated-by-school header, Calendar breakdown, Edit Count popup). Mirrors the master-matrix
   // circle markup (span.sf-wkrot-circle, .is-checked = filled/in-rotation, outlined = configured-out) but
@@ -10427,7 +10456,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // inspection mode. buildOneTable is the app's own builder, so structure, palette,
           // day/weekend/special-day treatment, override notation and TOTALS all come from the one
           // implementation — the popup cannot drift from the table it claims to mirror.
-          function _schoolShTable(si){
+          function _schoolShTable(si, viewWk){
             var det=guideDetails[String(g.id)]||{};
             var calRow=(editCombo&&editCombo.calRow)||null;
             var calId=(calRow&&calRow.calId!=null)?calRow.calId:null;
@@ -10498,6 +10527,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 });
               });
             }catch(e){ shCopy={}; }
+            // ── Rotation Week VIEW context ──────────────────────────────────────────────────
+            // viewWk falsy = Base (exactly today's table). A week number layers that Rotation
+            // Week's Start/End/Count overrides on top of Base; with no overrides stored yet the
+            // resolver returns null for every cell, so a Week view is byte-identical to Base —
+            // the table is simply now OPERATING in that Rotation Week's context. Days allocation
+            // is already reflected in shCopy, so a Week view respects it exactly as Base does.
+            if(viewWk){
+              try{
+                Object.keys(shCopy).forEach(function(rk){
+                  Object.keys(shCopy[rk]||{}).forEach(function(dk){
+                    var ov=_wkRotHrsOverride(g.id,calId,si,viewWk,rk,dk);
+                    if(!ov) return;
+                    var cell=shCopy[rk][dk]||(shCopy[rk][dk]={});
+                    if(ov.start!=null) cell.start=ov.start;
+                    if(ov.end!=null)   cell.end=ov.end;
+                    if(ov.count!=null) cell.cnt=ov.count;
+                  });
+                });
+              }catch(e){}
+            }
             var cFn=(function(row,csr){ return function(){ return getSchoolCounts(row,csr); }; })(sRow,sr);
             var combo2={ci:ci,si:si,wk:wk,calRow:calRow,sRow:sRow,calSiteRows:sr,pod:null,podKey:null};
             var res=null;
@@ -10586,10 +10635,108 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }catch(e){}
             return $t;
           }
+          // ── Base / Rotation Week view selector (per-school Staffing Hours popup) ─────────────
+          // For a school WITH Week Rotation, the popup header carries a compact "Base" pill plus one
+          // clickable circle per configured Rotation Week. These are VIEW selectors: clicking one
+          // switches the table into that schedule's context in place, without opening anything,
+          // moving the popup, or changing data. Returns null for a school with no rotation, so an
+          // unconfigured popup is visually unchanged.
+          //   Two visual languages, deliberately separate (spec): a circle's FILL/OUTLINE + palette
+          //   color still means "does this Rotation Week participate"; the blue SELECTION RING means
+          //   "this is the schedule you are currently viewing". They never share a treatment.
+          var _SHV_SEL_RING='0 0 0 2px #fff, 0 0 0 3.5px #4285f4';
+          function _shViewSelector(si, calId){
+            var len=(calId!=null)?_wkRotLen(g.id,calId,si):0;
+            if(len<=0) return null;   // no rotation -> no Base/selector, popup unchanged
+            var pal=_circPal('rot',g.id,calId);
+            var $wrap=$('<span class="sf-shv-sel-wrap">').css({display:'inline-flex',alignItems:'center',gap:'4px',flex:'0 0 auto',marginLeft:'8px'});
+            var $base=$('<button type="button" class="sf-shv-base">').text('Base')
+              .attr({'data-shv':'0','aria-label':'View Base Staffing Hours'})
+              .css({font:'inherit',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'2px 6px',
+                    border:'1px solid #ced4da',borderRadius:'9px',background:'#fff',color:'#495057',cursor:'pointer'});
+            $base.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _shSetView(0); });
+            $wrap.append($base);
+            for(var w=1;w<=len;w++){
+              (function(wn){
+                var checked=_wkRotChecked(g.id,calId,si,wn);
+                var $c=$('<span class="sf-wkrot-circle sf-shv-wk">').attr({'data-shv':String(wn),role:'button',tabindex:'0',
+                        'aria-label':'View Rotation Week '+wn+(checked?' (in rotation)':' (not in rotation)')}).text(String(wn));
+                if(checked) $c.addClass('is-checked');
+                _circPaint($c,checked,pal);
+                $c.css({cursor:'pointer'})
+                  .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _shSetView(wn); })
+                  .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); _shSetView(wn); } });
+                $wrap.append($c);
+              })(w);
+            }
+            return $wrap;
+          }
+          // Paint the selection accent onto whichever control matches the current view. Base pill
+          // gets a filled blue chip; the viewed Week circle gets the blue outer ring. Neither
+          // touches the participation fill/outline.
+          function _shPaintViewSel(){
+            var $p=$('.sf-sh-popup'); if(!$p.length) return;
+            var v=_pgSchoolShViewWk||0;
+            $p.find('.sf-shv-base').each(function(){
+              var sel=!v;
+              $(this).toggleClass('sf-shv-cur',sel).css({
+                background:sel?'#eaf1fe':'#fff', borderColor:sel?'#4285f4':'#ced4da',
+                color:sel?'#1a3d7c':'#495057', boxShadow:sel?'0 0 0 1px #4285f4':''});
+            });
+            $p.find('.sf-shv-wk').each(function(){
+              var sel=(String(v)===String($(this).attr('data-shv')));
+              $(this).toggleClass('sf-shv-cur',sel).css('boxShadow', sel?_SHV_SEL_RING:'');
+            });
+          }
+          // Rebuild ONLY the popup body table for the current view, in the existing scroll region,
+          // preserving the popup's position, anchor and (where possible) scroll offset. Count
+          // editing is wired ONLY in Base view; a Rotation Week view is a read-only preview until
+          // the future per-week editor exists, so it can never write Base by accident.
+          function _shRenderBody(){
+            var $p=$('.sf-sh-popup'); if(!$p.length) return;
+            if(!_pgSchoolShOpen) return;
+            var si=_pgSchoolShOpen.si;   // the school this popup is anchored to (NOT a builder-scope si)
+            var $scroll=$p.find('.sf-sh-popup-scroll').first();
+            var vw=_pgSchoolShViewWk||0;
+            var $tbl=_schoolShTable(si, vw);
+            if($scroll.length){
+              var _top=$scroll[0].scrollTop||0;
+              $scroll.empty();
+              if($tbl) $scroll.append($tbl);
+              try{ $scroll[0].scrollTop=_top; }catch(_e){}
+            } else {
+              // No scroll region means the initial open found no rows; rebuild handles the same.
+              $p.find('.sf-sh-popup-empty').remove();
+            }
+            _pgSchoolShCntState=null;
+            if($tbl && !vw){ try{ _pgWireSchoolCntEditing($p, $tbl, si); }catch(_e){} }
+          }
+          // Switch the viewed schedule (0=Base, or a Week number). Pure view change: no data write,
+          // no recalc, no History/Undo. Leaving Base with unsaved Count edits raises the shared
+          // Save-changes dialog first, so a switch can never silently drop pending Base edits.
+          function _shSetView(v){
+            if(!_pgSchoolShOpen) return;
+            v=v||0;
+            if((_pgSchoolShViewWk||0)===v){ _shPaintViewSel(); return; }
+            var st=_pgSchoolShCntState;
+            var leavingBase=!(_pgSchoolShViewWk||0);
+            if(leavingBase && st && st.isDirty && st.isDirty()){
+              _xsDialog('Save changes to this school?',[
+                {label:'Continue editing'},
+                {label:'Discard changes',fn:function(){ _pgSchoolShViewWk=v; _shRenderBody(); _shPaintViewSel(); }},
+                {label:'Save changes',primary:true,fn:function(){ try{ st.save(); }catch(_e){} _pgSchoolShViewWk=v; _shRenderBody(); _shPaintViewSel(); }}
+              ]);
+              return;
+            }
+            _pgSchoolShViewWk=v;
+            _shRenderBody();
+            _shPaintViewSel();
+          }
           function _openSchoolShPopup(si,nm,anchorEl,keepPos){
             _closeSchoolShPopup();
+            _pgSchoolShViewWk=0;   // every fresh open starts in Base view (spec)
             var calRow=(editCombo&&editCombo.calRow)||null;
-            var $tbl=_schoolShTable(si);
+            var $tbl=_schoolShTable(si,_pgSchoolShViewWk);
             var $p=$('<div class="sf-sh-popup pg-view-ok">').css({
               position:'fixed', zIndex:'12000', background:'#fff', border:'1px solid #dee2e6',
               borderRadius:'6px', boxShadow:'0 6px 24px rgba(0,0,0,.18)', padding:'8px 10px',
@@ -10614,7 +10761,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $h.append($('<span class="sf-sh-popup-ttl">').css({overflow:'hidden',textOverflow:'ellipsis'})
                       .text((_cn?_cn+' \u00b7 ':'')+nm+' \u00b7 Staffing Hours'));
             // Read-only Week Rotation circles for this school (full configured set), after the title.
-            try{ var _wkc=_wkRotCirclesFor(g.id,(calRow&&calRow.calId!=null)?calRow.calId:null,si,{}); if(_wkc){ _wkc.css({marginLeft:'8px',flex:'0 0 auto'}); $h.append(_wkc); } }catch(e){}
+            // Base / Rotation Week view selector (replaces the inert read-only circles here): the
+            // circles now double as view selectors. Null for a school with no rotation, so the
+            // header is unchanged for those.
+            try{ var _shvSel=_shViewSelector(si,(calRow&&calRow.calId!=null)?calRow.calId:null); if(_shvSel) $h.append(_shvSel); }catch(e){}
             var $x=$('<button type="button" class="sf-sh-popup-x" title="Close">').text('\u00d7')
               .css({position:'absolute',top:'4px',right:'6px',border:'none',background:'transparent',
                     fontSize:'16px',cursor:'pointer',color:'#6c757d',lineHeight:'1',padding:'0 4px'});
@@ -10676,6 +10826,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             });
             _pgSchoolShTrack=_shDetach;
             _pgSchoolShOpen={si:si,nm:nm,el:anchorEl};
+            try{ _shPaintViewSel(); }catch(e){}   // Base selected by default
             // Expose the guarded close to the module-level outside-click listener while open.
             try{ _pgSchoolShTryCloseNow=_pgSchoolShTryClose; }catch(_e){}
           }
@@ -18777,6 +18928,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // PRESS as well as focus means dismissal happens as the user reaches elsewhere. Targets are
   // found BY CLASS, so this cannot be orphaned by a cell rebuild discarding its closure.
   var _pgSchoolShOpen=null;
+  // Which schedule the OPEN per-school Staffing Hours popup is showing: 0 = Base (default on
+  // every open), or a Rotation Week number 1..len. View-only state — switching it never writes
+  // guideDetails, recalculates, or logs History/Undo. Only one popup is open at a time.
+  var _pgSchoolShViewWk=0;
   // Set while the per-school popup is building its table THROUGH buildOneTable. The nested build
   // is for display only, so it must not mount a school strip, an allocation matrix or a Copy to
   // control, and must not register itself for recalculation — otherwise inspecting a school
