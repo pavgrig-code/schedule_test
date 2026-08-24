@@ -4637,6 +4637,7 @@ $(function(){
   _PG_ICONS.snapshot='<svg data-icon="snapshot" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.8" y="4.2" width="12.4" height="9" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 4.2l.9-1.6h3l.9 1.6" stroke="#1a73e8" stroke-width="1" stroke-linejoin="round"/><circle cx="8" cy="8.7" r="2.3" fill="#fff" stroke="#1a73e8" stroke-width="1"/></svg>';
   _PG_ICONS.snapshotTake='<svg data-icon="snapshotTake" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.8" y="4.2" width="12.4" height="9" rx="1.6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M5.6 4.2l.9-1.6h3l.9 1.6" stroke="#1a73e8" stroke-width="1" stroke-linejoin="round"/><path d="M8 6.6v4.2M5.9 8.7h4.2" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round"/></svg>';
   _PG_ICONS.snapshotView='<svg data-icon="snapshotView" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.6" y="2.4" width="9.4" height="7" rx="1.3" fill="#fff" stroke="#1a73e8" stroke-width="1"/><rect x="4.6" y="4.6" width="9.4" height="7" rx="1.3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/><path d="M6.6 7.1h5.4M6.6 9.1h3.6" stroke="#1a73e8" stroke-width="1" stroke-linecap="round"/></svg>';
+   _PG_ICONS.trash='<svg data-icon="trash" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.8 4.3h10.4" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/><path d="M6.2 4.3V3.2c0-.5.4-.9.9-.9h1.8c.5 0 .9.4.9.9v1.1" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/><path d="M4.3 4.3l.6 8.1c.04.6.5 1 1.1 1h4c.6 0 1.06-.4 1.1-1l.6-8.1" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.6 6.6v4.2M9.4 6.6v4.2" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/></svg>';
   // Fill a menu-icon span with an SVG string (data-icon...) or a plain glyph, whichever was passed.
   function _pgSetMenuIcon($span, icon){ if(typeof icon==='string' && icon.charAt(0)==='<') $span.html(icon); else $span.text(icon); return $span; }
   function _buildGuideMenuItem(icon,label,opt){
@@ -11049,6 +11050,48 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
               try{ _pgUndo.offer(g.id,{lead:'Weeks',tail:' overrides reset to Week Rotation.'}); }catch(e){}
             };
+            var _wovRemoveOverride=function(si,nm,monIso,wnum){
+              if(_wkRO) return;
+              if(_wkOvState(g.id,_wkCalId,si,monIso)===undefined) return;
+              try{ _pgUndo.begin(g.id); }catch(e){}
+              _wkOvSet(g.id,_wkCalId,si,monIso,undefined);
+              try{ setGuideDetail(g.id,'wkOv',(guideDetails[String(g.id)]||{}).wkOv); }catch(e){}
+              _wkRerender();
+              try{ _wkRecalc(); }catch(e){}
+              var lbl=_wovLbl(monIso);
+              try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Weeks override removed',desc:'Removed the Weeks override for week of '+lbl+' for '+nm+'.'}); }catch(e){}
+              try{ _pgHist.begin(g.id); }catch(e){}
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
+              setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
+              try{ _pgUndo.offer(g.id,{lead:'Week override',tail:' removed.'}); }catch(e){}
+            };
+            // Compact one-item context menu for an overridden Weeks circle (self-contained — the session
+            // menu shell is not in this scope). Trash icon + "Remove Override"; outside-click / Escape close.
+            var _wovCtxMenu=function(ev,onPick){
+              $('.sf-wkov-ctx').remove();
+              var $m=$('<div class="sf-wkov-ctx">').css({position:'fixed',zIndex:1000007,background:'#fff',
+                border:'1px solid #d9dee6',borderRadius:'8px',boxShadow:'0 6px 20px rgba(20,30,40,.18)',
+                padding:'4px',minWidth:'150px'});
+              function close(){ $m.remove(); $(document).off('.sfwovctx'); }
+              var $it=$('<div class="sf-wkov-ctx-item">').css({fontSize:'12.5px',color:'#343a40',padding:'6px 12px',
+                borderRadius:'5px',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',whiteSpace:'nowrap'});
+              $it.on('mouseenter',function(){ $(this).css('background','#eef3f9'); }).on('mouseleave',function(){ $(this).css('background','transparent'); });
+              $it.append($('<span class="sf-wkov-ctx-icon">').css({display:'inline-flex',width:'16px',justifyContent:'center'}).html(_pgIcon('trash')||'\uD83D\uDDD1'));
+              $it.append(document.createTextNode('Remove Override'));
+              $it.on('click',function(e){ e.stopPropagation(); close(); onPick(); });
+              $m.append($it);
+              $('body').append($m);
+              $m.css({left:'-9999px',top:'0px',visibility:'hidden'});
+              var mw=$m[0].offsetWidth||160, mh=$m[0].offsetHeight||40, vw=window.innerWidth||1024, vh=window.innerHeight||768;
+              var left=(ev&&ev.clientX)||0, top=(ev&&ev.clientY)||0;
+              if(left+mw>vw-4) left=Math.max(4,vw-mw-4);
+              if(top+mh>vh-4) top=Math.max(4,vh-mh-4);
+              $m.css({left:left+'px',top:top+'px',visibility:'visible'});
+              setTimeout(function(){
+                $(document).on('mousedown.sfwovctx',function(e2){ if(!$m[0].contains(e2.target)) close(); });
+                $(document).on('keydown.sfwovctx',function(e2){ if(e2.key==='Escape') close(); });
+              },0);
+            };
             // ── Section circle color pickers (Rotation / Weeks), display-only ── A ~10px dot after the
             // section label opens a compact palette (same interaction as the Program Calendar picker). A
             // pick persists the section's palette index and rebuilds the staffing section so every circle
@@ -11758,6 +11801,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                                      'title':_lb+(ovSt!==undefined?' (\u2318-click resets to Rotation)':'')})
                               .on('click',function(e){ e.stopPropagation(); _doClick(e); })
                               .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); _doClick(e); } });
+                            if(ovSt!==undefined){
+                              $circ.on('contextmenu',function(ev){
+                                ev.preventDefault(); ev.stopPropagation();
+                                if(_pgvCur.mode==='view') return;   // live guard: locking an open guide is in-place, so re-check here
+                                _wovCtxMenu(ev, function(){ _wovRemoveOverride(u.si, nm, monIso, _mi+1); });
+                              });
+                            }
                             $ocell.css('cursor','pointer').on('click',function(e){ if(e.target!==this) return; _doClick(e); });
                           }
                           $ocell.append($circ);
