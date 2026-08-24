@@ -9493,7 +9493,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var _dgv=sum>0?(Math.round(sum*100)/100):''; $tbl.find('.day-grand-total'+_sfx+'[data-day="'+day.k+'"]').text(_dgv).each(function(){ _paintHrsTotal(this,_dgv,true); });
       });
       var $calSec=$('#cal-section-'+g.id);
-      if($calSec.length && $calSec[0]._updateHours) $calSec[0]._updateHours();
+      // During a coordinated recalc pass (_wkRecalc) every per-table updateDayTotals would repaint the
+      // SAME final calendar hours; defer to the pass's single run instead (byte-identical end state).
+      if(_pgSumSquelch>0){ _pgCalHoursPend=true; }
+      else if($calSec.length && $calSec[0]._updateHours) $calSec[0]._updateHours();
     }
 
     // Initial visibility for conditional role groups
@@ -11016,7 +11019,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               try{ _pgUndo.begin(g.id); }catch(e){}
               _wkOvSet(g.id,_wkCalId,si,monIso,val);
               try{ setGuideDetail(g.id,'wkOv',(guideDetails[String(g.id)]||{}).wkOv); }catch(e){}
-              _wkRerender();
+              if(!_wovPaintOne(si,monIso)) _wkRerender();   // surgical: exactly this circle changed
+              try{ _wovSyncResetBtn(); }catch(e){}
               try{ _wkRecalc(); }catch(e){}
               var lbl=_wovLbl(monIso);
               try{
@@ -11056,7 +11060,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               try{ _pgUndo.begin(g.id); }catch(e){}
               _wkOvSet(g.id,_wkCalId,si,monIso,undefined);
               try{ setGuideDetail(g.id,'wkOv',(guideDetails[String(g.id)]||{}).wkOv); }catch(e){}
-              _wkRerender();
+              if(!_wovPaintOne(si,monIso)) _wkRerender();   // surgical: exactly this circle changed
+              try{ _wovSyncResetBtn(); }catch(e){}
               try{ _wkRecalc(); }catch(e){}
               var lbl=_wovLbl(monIso);
               try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Weeks override removed',desc:'Removed the Weeks override for week of '+lbl+' for '+nm+'.'}); }catch(e){}
@@ -11064,6 +11069,59 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
               setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },400);
               try{ _pgUndo.offer(g.id,{lead:'Week override',tail:' removed.'}); }catch(e){}
+            };
+            // ── Surgical Weeks repaint ── One explicit override changes exactly ONE circle's visuals
+            // (fill, override ring, palette paint, tooltip/aria) plus possibly the header Reset button.
+            // Repainting just those is byte-identical to a full matrix rebuild (t98 proves it) and
+            // removes the multi-second rebuild of the 2,000+-cell matrix from every Weeks click on
+            // large data. Handlers read live state, so nothing else needs refreshing.
+            var _wovBuildResetBtn=function(){
+              var $b=$('<button type="button" class="sf-wkov-reset pg-view-ok">').text('Reset')
+                .attr({title:'Reset all Weeks overrides to Week Rotation','aria-label':'Reset Week overrides'})
+                .css({marginLeft:'6px',fontSize:'10px',fontWeight:'600',lineHeight:'1',padding:'2px 6px',
+                      cursor:'pointer',color:'#495057',background:'#fff',border:'1px solid #ced4da',
+                      borderRadius:'4px',flex:'0 0 auto'});
+              $b.on('mouseenter',function(){ $(this).css({background:'#f1f3f5',color:'#212529'}); })
+                .on('mouseleave',function(){ $(this).css({background:'#fff',color:'#495057'}); });
+              $b.on('click',function(e){ e.preventDefault(); e.stopPropagation();
+                var $msg=$('<div>').css({fontSize:'12px',color:'#495057',lineHeight:'1.5'})
+                  .text('This will remove all changes made in the Weeks section and return the weeks to the schedule determined by Week Rotation.');
+                showConfirmPopup('Reset Week Overrides?','Reset Week Overrides',false,function(){ _wovResetAll(); },$msg);
+              });
+              return $b;
+            };
+            var _wovPaintOne=function(si, monIso){
+              var _mi=_wovMons.indexOf(monIso); if(_mi<0) return false;
+              var $c=$t.find('td.sf-wkov-cell[data-wkov-si="'+si+'"][data-wkov-idx="'+(_mi+1)+'"] .sf-wkrot-circle');
+              if(!$c.length) return false;
+              var eff=!_wkDisabledOn(g.id,_wkCalId,si,monIso);
+              var ovSt=_wkOvState(g.id,_wkCalId,si,monIso);
+              $c.toggleClass('is-checked',eff).toggleClass('sf-wkov-ov',ovSt!==undefined);
+              $c.css({background:'',borderColor:'',color:''});           // _circPaint only paints checked; clear first
+              _circPaint($c,eff,_circPal('wov',g.id,_wkCalId));
+              var _lb='Week '+(_mi+1)+' ('+_wovLbl(monIso)+')'+(eff?' on':' off')+(ovSt!==undefined?' \u2014 explicit override':' \u2014 inherited');
+              if($c.hasClass('is-interactive')){
+                $c.attr({'aria-checked':eff?'true':'false','aria-label':_lb,
+                         'title':_lb+(ovSt!==undefined?' (\u2318-click resets to Rotation)':'')});
+              } else {
+                $c.attr({'aria-label':_lb,'title':_lb});
+              }
+              return true;
+            };
+            // A ROTATION toggle for a school flips that school's inherited Weeks circles; with the
+            // in-pass matrix rebuild skipped, repaint that one row surgically (identical output).
+            var _wovPaintRow=function(si){
+              if(!_wovN || _wovCollapsed) return;
+              for(var _ri=0;_ri<_wovMons.length;_ri++){ _wovPaintOne(si,_wovMons[_ri]); }
+            };
+            var _wovSyncResetBtn=function(){
+              if(!$wovTitleTh||!$wovTitleTh.length) return;
+              var _has=(!_wkRO && _wkOvHasAnyCal(g.id,_wkCalId));
+              var $ex=$wovTitleTh.find('.sf-wkov-reset');
+              if(_has && !$ex.length){
+                var $dot=$wovTitleTh.find('.sf-circ-color').first();
+                if($dot.length) $dot.after(_wovBuildResetBtn());
+              } else if(!_has && $ex.length){ $ex.remove(); }
             };
             // Compact one-item context menu for an overridden Weeks circle (self-contained — the session
             // menu shell is not in this scope). Trash icon + "Remove Override"; outside-click / Escape close.
@@ -11284,6 +11342,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 grow:function(si){ var nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } return _wkGrowRotation(si,nm); },
                 setHover:function(v){ _wkSetHover(!!v); return _wkHover.on; },
                 weekHasChecked:function(w){ return _wkRotWeekHasChecked(g.id,_wkCalId,list,w); },
+                rerender:function(){ _wkRerender(); },
                 removeFromRotation:function(si,W,nm){ if(nm==null){ nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } } return _wkRotRemoveWeek(si,nm,W); }
               };
             }catch(e){}
@@ -11292,7 +11351,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // the Staffing Hours table + its calendar cells (_recalcAll) and the Summary / combined
             // calendar / PG totals / discounts (refreshSummary). Collapse/expand keep the plain _wkRerender.
             function _wkRecalc(){
-              try{ var _ss=document.getElementById('staffing-section-'+g.id); if(_ss&&_ss._recalcAll) _ss._recalcAll(); }catch(e){}
+              // The mutation is complete before this runs, so every refreshSummary fired from inside
+              // _recalcAll would compute the identical final state; coalesce them into the single full
+              // refreshSummary below — same end DOM, one summary computation instead of many.
+              _pgSumSquelch++; _pgCalHoursPend=false;
+              try{ var _ss=document.getElementById('staffing-section-'+g.id); if(_ss&&_ss._recalcAll) _ss._recalcAll(); }
+              catch(e){}
+              finally{ _pgSumSquelch--; }
+              if(_pgCalHoursPend){ _pgCalHoursPend=false;
+                try{ var _cs=document.getElementById('cal-section-'+g.id); if(_cs&&_cs._updateHours) _cs._updateHours(); }catch(e){}
+              }
               try{ if(typeof refreshSummary==='function') refreshSummary(g); }catch(e){}
             }
 
@@ -11496,21 +11564,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                         .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkOvSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
                 }
                 var $ovIn=$('<span style="display:inline-flex;align-items:center;">').append($ovLbl).append(_circColorControl('wov'));
-                if(!_wkRO && _wkOvHasAnyCal(g.id,_wkCalId)){
-                  var $ovReset=$('<button type="button" class="sf-wkov-reset pg-view-ok">').text('Reset')
-                    .attr({title:'Reset all Weeks overrides to Week Rotation','aria-label':'Reset Week overrides'})
-                    .css({marginLeft:'6px',fontSize:'10px',fontWeight:'600',lineHeight:'1',padding:'2px 6px',
-                          cursor:'pointer',color:'#495057',background:'#fff',border:'1px solid #ced4da',
-                          borderRadius:'4px',flex:'0 0 auto'});
-                  $ovReset.on('mouseenter',function(){ $(this).css({background:'#f1f3f5',color:'#212529'}); })
-                          .on('mouseleave',function(){ $(this).css({background:'#fff',color:'#495057'}); });
-                  $ovReset.on('click',function(e){ e.preventDefault(); e.stopPropagation();
-                    var $msg=$('<div>').css({fontSize:'12px',color:'#495057',lineHeight:'1.5'})
-                      .text('This will remove all changes made in the Weeks section and return the weeks to the schedule determined by Week Rotation.');
-                    showConfirmPopup('Reset Week Overrides?','Reset Week Overrides',false,function(){ _wovResetAll(); },$msg);
-                  });
-                  $ovIn.append($ovReset);
-                }
+                if(!_wkRO && _wkOvHasAnyCal(g.id,_wkCalId)){ $ovIn.append(_wovBuildResetBtn()); }
                 var $ovColl=$('<button type="button" class="sf-wkov-toggle pg-view-ok" title="Collapse Weeks" aria-label="Collapse Weeks" aria-expanded="true" style="color:#5f6368;background:none;border:none;padding:0 0 0 4px;cursor:pointer;">').append(_pgChvSvg('left'));
                 $ovColl.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
                 $ovColl.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkOvSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
@@ -11778,7 +11832,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                             var _wkToggle=function(){
                               var ns=!$circ.hasClass('is-checked');
                               $circ.toggleClass('is-checked',ns).attr('aria-checked',ns?'true':'false');
+                              _circPaint($circ.css({background:'',borderColor:'',color:''}),ns,_circPal('rot',g.id,_wkCalId));
                               _wkRotSetCell(g.id,_wkCalId,u.si,wnum,ns);   // same boolean write as the old checkbox
+                              try{ _wovPaintRow(u.si); }catch(e){}          // this school's inherited Weeks circles follow the rotation
                               try{ _wkRecalc(); }catch(e){}                 // rotation gates hours -> refresh Staffing Hours, Calendar, Summary
                               try{ _pgHist.begin(g.id); }catch(e){}         // stay History-silent (rebaseline)
                               setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(e){} },0);
@@ -11856,22 +11912,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                           if(_wkRO){
                             $circ.addClass('sf-wkrot-circle-ro').attr({'role':'img','aria-label':_lb,'title':_lb});
                           } else {
+                            // State is read LIVE at fire time (not captured at build): surgical repaints
+                            // leave these handlers bound, so captured eff/ovSt would go stale after the
+                            // first click and flip the wrong way.
                             var _doClick=function(ev){
-                              var reset=!!(ev&&ev.metaKey)&&ovSt!==undefined;
-                              _wovApply(u.si, nm, monIso, _mi+1, reset?undefined:!eff);
+                              var effNow=!_wkDisabledOn(g.id,_wkCalId,u.si,monIso);
+                              var ovNow=_wkOvState(g.id,_wkCalId,u.si,monIso);
+                              var reset=!!(ev&&ev.metaKey)&&ovNow!==undefined;
+                              _wovApply(u.si, nm, monIso, _mi+1, reset?undefined:!effNow);
                             };
                             $circ.addClass('is-interactive')
                               .attr({'role':'checkbox','aria-checked':eff?'true':'false','aria-label':_lb,'tabindex':'0',
                                      'title':_lb+(ovSt!==undefined?' (\u2318-click resets to Rotation)':'')})
                               .on('click',function(e){ e.stopPropagation(); _doClick(e); })
                               .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); _doClick(e); } });
-                            if(ovSt!==undefined){
-                              $circ.on('contextmenu',function(ev){
-                                ev.preventDefault(); ev.stopPropagation();
-                                if(_pgvCur.mode==='view') return;   // live guard: locking an open guide is in-place, so re-check here
-                                _wovCtxMenu(ev, 'Remove Override', function(){ _wovRemoveOverride(u.si, nm, monIso, _mi+1); });
-                              });
-                            }
+                            $circ.on('contextmenu',function(ev){
+                              ev.preventDefault(); ev.stopPropagation();
+                              if(_pgvCur.mode==='view') return;   // live guard: locking an open guide is in-place, so re-check here
+                              if(_wkOvState(g.id,_wkCalId,u.si,monIso)===undefined) return;   // live: menu only while an explicit override exists
+                              _wovCtxMenu(ev, 'Remove Override', function(){ _wovRemoveOverride(u.si, nm, monIso, _mi+1); });
+                            });
                             $ocell.css('cursor','pointer').on('click',function(e){ if(e.target!==this) return; _doClick(e); });
                           }
                           $ocell.append($circ);
@@ -12021,9 +12081,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               // (legacy) matrices re-anchor to their strip.
               if(!_isMaster && !$allocWrap.parent().length && $schoolStrip && $schoolStrip.parent().length) $allocWrap.insertAfter($schoolStrip);
               $allocWrap.show();
-              _rebuildAllocTable();   // re-derives Pod column + brackets; checkbox values persist in the store
+              // During a coordinated rotation/weeks recalc pass the mutation's own path has already
+              // updated the matrix (inline circle flip, surgical Weeks paint, or an explicit
+              // _wkRerender for structural ops), so this per-table rebuild would reproduce the
+              // identical DOM — skip it; every other flow rebuilds exactly as before.
+              if(!(_pgSumSquelch>0 && $allocWrap.children().length)) _rebuildAllocTable();
             } else {
-              if($allocWrap){ if(_isMaster) _rebuildAllocTable(); else $allocWrap.detach(); }
+              if($allocWrap){ if(_isMaster){ if(!(_pgSumSquelch>0)) _rebuildAllocTable(); } else $allocWrap.detach(); }
             }
           }
           // A master allocation VALUE change (day/parent/Select-All/Clear) ripples to every
@@ -18404,7 +18468,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $container[0].__pgCalc={ calendars:_guideCalc, totals:{ hours:Math.round(_guideCalc.reduce(function(a,c){return a+c.totalHours;},0)*100)/100, amount:Math.round(_guideCalc.reduce(function(a,c){return a+c.amount;},0)*100)/100 } };
     return $container;
   }
-  function refreshSummary(g){ var $s=$('#summary-section-'+g.id); if($s.length) $s.replaceWith(buildSummarySection(g)); _maybeRefreshCombined(g); pgCalcCellsRefresh(g); pgDiscRefresh(g); }
+  function refreshSummary(g){
+    if(_pgSumSquelch>0) return;   // a coordinated pass is running; it ends with one full refreshSummary
+    var $new=null, _cals=[];
+    try{ $new=buildSummarySection(g); _cals=($new&&$new[0]&&$new[0].__pgCalc&&$new[0].__pgCalc.calendars)||[]; }catch(e){}
+    var _prevB=_pgSnapBatchC; _pgSnapBatchC={gid:String(g.id), cals:_cals};
+    try{
+      var $s=$('#summary-section-'+g.id); if($s.length&&$new) $s.replaceWith($new);
+      _maybeRefreshCombined(g); pgCalcCellsRefresh(g); pgDiscRefresh(g);
+    } finally { _pgSnapBatchC=_prevB; }
+  }
 
   // ── Planning Guide View/Edit mode ──
   // Mode is remembered per guide (localStorage; keyed per-user once the backend
@@ -19239,7 +19312,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // (__pgCalc.calendars: {calId, staffingHours, unallocatedHours, totalHours, ...}). The
   // JSON export already reuses it, so reading the same snapshot keeps the Program Calendars
   // calculated columns on ONE calculation path that cannot drift from the Summary.
+  // One summary computation per refresh pass: refreshSummary computes the Summary ONCE and, for the
+  // duration of its own synchronous helpers (PC cells, discounts), serves that same fresh snapshot to
+  // every nested pgCalcSnapshot call. Outside a pass the always-recompute semantics are unchanged, so
+  // no caller can ever see data older than it would have computed itself. Exactness: the batch snapshot
+  // is computed AFTER the mutation, and nothing inside refreshSummary mutates guide data (paint only),
+  // so every skipped rebuild would have produced byte-identical numbers.
+  var _pgSumSquelch=0;      // >0 = a coordinated recalc pass will run ONE final refreshSummary itself
+  var _pgCalHoursPend=false; // a squelched calendar-hours repaint is owed to the pass's final flush
+  var _pgSnapBatchC=null;   // {gid, cals} — set ONLY for the synchronous span of one refreshSummary
   function pgCalcSnapshot(g){
+    if(_pgSnapBatchC && g && String(g.id)===_pgSnapBatchC.gid) return _pgSnapBatchC.cals;
     try{
       var $s=buildSummarySection(g);
       return ($s && $s[0] && $s[0].__pgCalc && $s[0].__pgCalc.calendars) ? $s[0].__pgCalc.calendars : [];
