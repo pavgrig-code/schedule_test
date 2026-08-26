@@ -10740,6 +10740,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // One atomic save of Rotation-Week Start/End/Count overrides. writes: [{roleKey,dayK,field
           // ('start'|'end'|'count'), val, base}]. A value equal to Base PRUNES that field (inherit),
           // an empty entry is removed entirely, so the store only ever holds real differences.
+          var _pgWkFromPopupSave=false;   // set by the popup's own doSave so the commit tail doesn't double-refresh it
           function _pgCommitWkRotHrs(writes, vw, calId, si, nm){
             if(!writes||!writes.length) return;
             try{ _pgUndo.begin(g.id); }catch(_u){}
@@ -10808,6 +10809,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }catch(e){}
             try{ _pgHist.begin(g.id); setTimeout(function(){ try{ _pgHist.begin(g.id); }catch(_e){} },400); }catch(e){}
             try{ _pgUndo.offer(g.id,{text:'Rotation Week '+vw+' Staffing Hours saved.'}); }catch(_u){}
+            // ONE authoritative store, ONE pipeline (spec): whichever entry point saved, re-render the
+            // OTHER. The section week views repaint from the shared store; an open per-school popup that
+            // did not itself initiate this save refreshes in place on its current week.
+            try{ setTimeout(function(){ try{ _pgShvSecSyncAll(); }catch(_e){} },0); }catch(_e){}
+            if(!_pgWkFromPopupSave){
+              try{ if(_pgSchoolShOpen){ _pgSchoolShViewWk=_pgSchoolShViewWk||0; _refreshSchoolShPopup(); } }catch(_e){}
+            }
           }
           // Week-view editor: Start, End and Count become click-to-edit, with the SAME pending
           // Discard/Save workflow as Base Count editing (and the same _pgSchoolShCntState slot, so
@@ -10916,7 +10924,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 writes.push({roleKey:c.roleKey,dayK:c.dayK,field:c.kind,val:c.val,base:c.base});
                 c.openVal=c.val;
               });
-              _pgCommitWkRotHrs(writes, vw, calId, si, nm);
+              _pgWkFromPopupSave=true;
+              try{ _pgCommitWkRotHrs(writes, vw, calId, si, nm); } finally { _pgWkFromPopupSave=false; }
               // Keep the popup open ON THE SAVED WEEK. The refresh is DEFERRED (setTimeout inside
               // _refreshSchoolShPopup), so the keep-view flag rides into the reopened popup, which
               // then renders this Week's body with the saved notation.
@@ -14726,6 +14735,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!sp){ sp=document.createElement('span'); sp.className='sf-cell-cnt'; sp.style.cssText='position:absolute;right:2px;bottom:1px;font-size:8px;color:#393838;line-height:1;pointer-events:none;'; el.appendChild(sp); }
       sp.textContent=String(n);
     }
+    // Peak-staffing highlight (spec): with Show Staff Counts on, the date(s) carrying the MAXIMUM
+    // effective daily Staff Count across the currently displayed matrix get a green chip. Derived from
+    // the SAME rendered count spans every pass (never a cached max), so it moves the moment any count
+    // changes. Combined View highlights the combined-day rollup cells; otherwise the per-calendar cells.
+    function _applyMaxCntHighlight(){
+      if(!$section[0]) return;
+      var _all=$section[0].querySelectorAll('.sf-cell-cnt');
+      for(var _i=0;_i<_all.length;_i++){ var _s=_all[_i]; _s.style.background=''; _s.style.color='#393838'; _s.style.padding=''; _s.style.borderRadius=''; _s.classList.remove('sf-cell-cnt-max'); }
+      var _d4=guideDetails[String(g.id)]||{};
+      if(!_d4.showStaffCounts) return;
+      var _combined=!!_d4.combinedView && $section[0].querySelector('.cal-combined-day');
+      var _spans=[];
+      if(_combined){ _spans=[].slice.call($section[0].querySelectorAll('.cal-combined-day > .sf-cell-cnt')); }
+      else { var _c2=$section[0].querySelectorAll('.sf-cell-cnt'); for(var _j=0;_j<_c2.length;_j++){ if(!_c2[_j].closest('.cal-combined-day')) _spans.push(_c2[_j]); } }
+      var _max=0;
+      _spans.forEach(function(sp){ var v=parseInt(sp.textContent,10)||0; if(v>_max) _max=v; });
+      if(_max<=0) return;
+      _spans.forEach(function(sp){
+        if((parseInt(sp.textContent,10)||0)===_max){
+          sp.style.background='green'; sp.style.color='white'; sp.style.padding='2px 3px'; sp.style.borderRadius='2px';
+          sp.classList.add('sf-cell-cnt-max');
+        }
+      });
+    }
     function updateCalendarCellHours($td,dateKey,dayKey,ctx){
       var el=$td[0]||$td;
       var hrsEl=el.querySelector('.cal-hours');
@@ -14950,6 +14983,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       for(var _ci=0;_ci<_cCells.length;_ci++){ var _ce=_cCells[_ci], _cl=_ce.querySelector('.cal-date-label'); if(!_cl) continue;
         var _cdk=_ce.getAttribute('data-date-key');
         _setChangeDot(_cl,_cdk?dayHasChangesAnyCal(g.id,_cdk,_calRows):false); }
+      try{ _applyMaxCntHighlight(); }catch(_e){}   // peak-count chip, from the just-painted counts
     }
 
     // Build one calendar block per valid calendarRow
@@ -17111,6 +17145,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         return n>0?base:_tipTotalLabel0(n);
       }
       function _tipTotalLabel0(n){ n=(n!=null&&n>0)?(n|0):0; return 'Total ('+n+(n===1?' school':' schools')+')'; }
+      // Schools that actually CONTRIBUTE scheduled Hours on this date (spec): derived from the SAME
+      // breakdown rows the reader sees, never counted separately. A school counts only when it has a
+      // row with a positive Total (hours>0 and count>0). Schools excluded by Days Staffing Allocation,
+      // Rotation participation, Specific-Week overrides, zero/removed Staffing Hours, a no-hours Special
+      // Day, or a date-specific change never produce a positive-Total row, so they drop out automatically.
+      function _tipContribSchoolCount(rws, bySchool){
+        if(!rws||!rws.length) return 0;
+        var set={};
+        rws.forEach(function(r){
+          if(!r || !(r.total>0)) return;
+          if(bySchool){ if(r.schoolIdx!=null) set[r.schoolIdx]=1; }
+          else if(r.base){ Object.keys(r.base).forEach(function(si){ var b=r.base[si]; if(b&&(parseInt(b.cnt,10)||0)>0) set[si]=1; }); }
+          else if(r.siList){ r.siList.forEach(function(si){ set[si]=1; }); }
+        });
+        return Object.keys(set).length;
+      }
 
       function _valCell(r,field){
         function fmt12(v){ if(!v)return'—'; var p=v.split(':'),h=parseInt(p[0]),m=parseInt(p[1]||'0'); var hd=h===0?12:h>12?h-12:h; return hd+':'+(m<10?'0':'')+m+(h<12?'am':'pm'); }
@@ -17938,17 +17988,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $trow=$('<tr>').css({background:'#f0f4f8'});
       var $grandTd=$('<td>').css({padding:'5px 5px',textAlign:'center',fontWeight:'700',color:'#0d6efd'}).text(grand);
       _live.total=$grandTd;
-      [$('<td>').attr('colspan',colspan).css({padding:'5px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text(_tipTotalLabel((function(){
-        // Schools participating on THIS date: excluded ones were filtered out of the rows above,
-        // so counting them here would contradict what the reader can actually see.
-        var _r=(_siteRows||[]), _n=0;
-        for(var _i=0;_i<_r.length;_i++){
-          if(!_r[_i]) continue;
-          var _sk=null; try{ _sk=(resolveSchoolKey(_i)||{}).srcKey; }catch(_e){}
-          if(staffAllocAllows(gObj.id,ciForTip,wkForTip,_i,_sk||dayKeyForTip) && !_wkDisabledOn(gObj.id,_tipCalId,_i,dateKeyForTip)) _n++;
-        }
-        return _n;
-      })(),_allocGrand)),
+      [$('<td>').attr('colspan',colspan).css({padding:'5px 5px',fontWeight:'700',fontSize:'10.5px',color:'#495057'}).text(_tipTotalLabel(
+        // Only schools with effective scheduled Hours on this date, taken from the SAME rows shown above.
+        _tipContribSchoolCount(rows, bySchool)
+      ,_allocGrand)),
        $grandTd
       ].forEach(function($c){ $trow.append($c); });
       $tFoot.append($('<tbody>').append($trow));
