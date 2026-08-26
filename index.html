@@ -14735,6 +14735,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(!sp){ sp=document.createElement('span'); sp.className='sf-cell-cnt'; sp.style.cssText='position:absolute;right:2px;bottom:1px;font-size:8px;color:#393838;line-height:1;pointer-events:none;'; el.appendChild(sp); }
       sp.textContent=String(n);
     }
+    // Allocation Hours badge (spec): a small yellow badge showing the date's effective Allocation Hours
+    // total, painted immediately AFTER the cell's Hours total. Only shown when allocation hours exist
+    // (>0) for that date; never an empty badge or a 0. `hostEl` is the hours-text element (.cal-hours in a
+    // separate matrix, .cal-combined-sum in Combined View); its textContent is reset each pass, so the
+    // badge is re-appended after. The value comes from allocDayTotal — the SAME authoritative per-date
+    // Allocation Hours calc used by the breakdown/tooltip and already folded into the cell's Hours total.
+    function _paintAllocBadge(hostEl, ah){
+      if(!hostEl) return;
+      var b=null;
+      for(var ch=hostEl.firstElementChild; ch; ch=ch.nextElementSibling){ if(ch.classList&&ch.classList.contains('sf-alloc-h')){ b=ch; break; } }
+      if(!(ah>0)){ if(b) b.parentNode.removeChild(b); return; }
+      if(!b){ b=document.createElement('span'); b.className='sf-alloc-h'; b.style.cssText='margin-left:4px;display:inline-block;border:1px solid gray;border-radius:30%;padding:1px 2px;font-size:8.5px;background:yellow;'; hostEl.appendChild(b); }
+      b.textContent=String(ah);
+    }
     // Peak-staffing highlight (spec): with Show Staff Counts on, the date(s) carrying the MAXIMUM
     // effective daily Staff Count across the currently displayed matrix get a green chip. Derived from
     // the SAME rendered count spans every pass (never a cached max), so it moves the moment any count
@@ -14746,17 +14760,31 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _d4=guideDetails[String(g.id)]||{};
       if(!_d4.showStaffCounts) return;
       var _combined=!!_d4.combinedView && $section[0].querySelector('.cal-combined-day');
-      var _spans=[];
-      if(_combined){ _spans=[].slice.call($section[0].querySelectorAll('.cal-combined-day > .sf-cell-cnt')); }
-      else { var _c2=$section[0].querySelectorAll('.sf-cell-cnt'); for(var _j=0;_j<_c2.length;_j++){ if(!_c2[_j].closest('.cal-combined-day')) _spans.push(_c2[_j]); } }
-      var _max=0;
-      _spans.forEach(function(sp){ var v=parseInt(sp.textContent,10)||0; if(v>_max) _max=v; });
-      if(_max<=0) return;
-      _spans.forEach(function(sp){
-        if((parseInt(sp.textContent,10)||0)===_max){
-          sp.style.background='green'; sp.style.color='white'; sp.style.padding='2px 3px'; sp.style.borderRadius='2px';
-          sp.classList.add('sf-cell-cnt-max');
+      // Group the displayed count chips, then highlight the peak WITHIN each group. Combined View is a
+      // single group (the combined matrix); when Program Calendars render as separate matrices each is
+      // its OWN group (keyed by data-cal-id), so every calendar highlights its own maximum independently.
+      var _groups={};
+      if(_combined){
+        var _cs=$section[0].querySelectorAll('.cal-combined-day > .sf-cell-cnt');
+        for(var _j=0;_j<_cs.length;_j++){ (_groups.C=_groups.C||[]).push(_cs[_j]); }
+      } else {
+        var _c2=$section[0].querySelectorAll('.sf-cell-cnt');
+        for(var _k=0;_k<_c2.length;_k++){ var _sp=_c2[_k];
+          if(_sp.closest('.cal-combined-day')) continue;
+          var _cell=_sp.closest('.cal-day-cell'); var _key='K'+(_cell?(_cell.getAttribute('data-cal-id')||''):'');
+          (_groups[_key]=_groups[_key]||[]).push(_sp);
         }
+      }
+      Object.keys(_groups).forEach(function(gk){
+        var _spans=_groups[gk], _max=0;
+        _spans.forEach(function(sp){ var v=parseInt(sp.textContent,10)||0; if(v>_max) _max=v; });
+        if(_max<=0) return;
+        _spans.forEach(function(sp){
+          if((parseInt(sp.textContent,10)||0)===_max){
+            sp.style.background='green'; sp.style.color='white'; sp.style.padding='2px 3px'; sp.style.borderRadius='2px';
+            sp.classList.add('sf-cell-cnt-max');
+          }
+        });
       });
     }
     function updateCalendarCellHours($td,dateKey,dayKey,ctx){
@@ -14862,10 +14890,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // keeps a filtered combined total equal to the sum of the calendars still participating.
       // Combined View sums the per-calendar carrier cells, so adding here counts each allocation
       // exactly ONCE in both rendering paths.
-      if(!(_cvfC && !schoolIdxs.length)) total+=allocDayTotal(g.id,_ccCalId,dateKey);
+      var _allocDay=(!(_cvfC && !schoolIdxs.length))?allocDayTotal(g.id,_ccCalId,dateKey):0;
+      total+=_allocDay;
 
       total=Math.round(total*100)/100;
       hrsEl.textContent=total>0?(total+' hrs'):'';
+      // Allocation Hours badge for this calendar+date; carry the value on the carrier cell so Combined View can roll it up.
+      try{ _paintAllocBadge(hrsEl,_allocDay); if(_allocDay>0){ el.setAttribute('data-alloc-h',String(_allocDay)); } else { el.removeAttribute('data-alloc-h'); } }catch(_e){}
       try{ _paintCellCnt(el, _cellCnt); }catch(_e){}
     }
 
@@ -14881,6 +14912,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         sum=Math.round(sum*100)/100;
         var disp=cell.querySelector('.cal-combined-sum');
         if(disp) disp.textContent=sum>0?(sum+' hrs'):'';
+        // Combined Allocation Hours = sum of the per-calendar carriers' allocation-day totals (the same
+        // aggregation the combined hours use). Painted as the yellow badge right after the combined total.
+        var _ahC=0, _ahN=cell.querySelectorAll('[data-alloc-h]');
+        for(var _k3=0;_k3<_ahN.length;_k3++){ _ahC+=parseFloat(_ahN[_k3].getAttribute('data-alloc-h'))||0; }
+        _ahC=Math.round(_ahC*100)/100;
+        try{ _paintAllocBadge(disp,_ahC); }catch(_e){}
         // Combined Staff Count = the same rollup the hours use: sum the per-calendar carriers'
         // effective counts (each computed once, calId-scoped) — never re-added from rendered text.
         var _cs=0, _cn=cell.querySelectorAll('[data-eff-cnt]');
