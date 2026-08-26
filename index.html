@@ -880,6 +880,8 @@ $(function(){
     return out;
   }
   function xsDayTotal(gid,calId,dateKey){ var _cr=_xsCalRow(gid,calId); var t=0; getExtraShifts(gid,calId,dateKey).forEach(function(s){ t+=xsShiftTotal(s,_cr); }); return Math.round(t*100)/100; }
+  // Total effective Staff Count contributed by Extra Shifts on this calendar+date (valid rows only).
+  function xsDayCnt(gid,calId,dateKey){ var _cr=_xsCalRow(gid,calId); var t=0; getExtraShifts(gid,calId,dateKey).forEach(function(s){ xsValidRows(s,_cr).forEach(function(r){ t+=r.cnt; }); }); return t; }
   // ── Allocated Hours ── rows entered in the Unallocated Hours section's Allocated Hours table,
   // stored at det.unschedByCal[calId].rows as {date, total, notes}. They are TRUE SCHEDULED HOURS:
   // they add to their date's Calendar total and to the calendar's Scheduled Hours, and by the same
@@ -10947,6 +10949,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     refreshFoot(); liveRecalc();
                   });
                   $tp.addClass('sf-shv-tp');
+                  try{ $tp.find('input').css('width','60px'); }catch(_e){}   // full '11:00 PM' fits, no clipping (spec)
                   c._$tp=$tp;
                   c.$el.hide(); c.$td.find('.shv-orig').hide(); c.$td.append($tp);
                   $tp.on('click',function(e2){ e2.stopPropagation(); });
@@ -11878,6 +11881,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // the Staffing Hours table + its calendar cells (_recalcAll) and the Summary / combined
             // calendar / PG totals / discounts (refreshSummary). Collapse/expand keep the plain _wkRerender.
             function _wkRecalc(){
+            // Rotation changed: the separated-section headers' circles must stay a LIVE representation
+            // of the same Rotation state (spec invariant). Deferred so it repaints after this pass.
+            setTimeout(function(){ try{ _pgShvSecSyncAll(); }catch(e){} },0);
               // The mutation is complete before this runs, so every refreshSummary fired from inside
               // _recalcAll would compute the identical final state; coalesce them into the single full
               // refreshSummary below — same end DOM, one summary computation instead of many.
@@ -13051,7 +13057,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // the per-school Staffing Hours popup. Fill/outline still = participation; the blue ring
           // = the schedule being viewed. Pure view switch: no data change, no recalc, no History.
           if(combo.si!==null && !combo.allocOnly){
-            (function(cSi,cCalId,resR,$hdrR){
+            (function(cSi,cCalId,resR,$hdrR,shDataR){
               try{
                 if(cCalId==null || _wkRotLen(g.id,cCalId,cSi)<=0) return;
                 var secVw=0, $prev=null;
@@ -13061,17 +13067,43 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   .css({font:'inherit',fontSize:'10px',fontWeight:'700',lineHeight:'1',padding:'2px 6px',border:'1px solid #ced4da',borderRadius:'9px',background:'#fff',color:'#495057',cursor:'pointer'});
                 $wrap.append($base);
                 var len=_wkRotLen(g.id,cCalId,cSi);
-                for(var w=1;w<=len;w++){ (function(wn){
-                  var ck=_wkRotChecked(g.id,cCalId,cSi,wn);
-                  var $c=$('<span class="sf-wkrot-circle sf-shv-sec-wk">').attr({'data-shv':String(wn),role:'button',tabindex:'0',
-                          'aria-label':'View Rotation Week '+wn+(ck?' (in rotation)':' (not in rotation)')}).text(String(wn));
-                  if(ck) $c.addClass('is-checked');
-                  _circPaint($c,ck,pal);
-                  $c.css({cursor:'pointer'})
-                    .on('click',function(e){ e.preventDefault(); e.stopPropagation(); setV(wn); })
-                    .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); setV(wn); } });
-                  $wrap.append($c);
-                })(w); }
+                var _vKey=g.id+'|'+cCalId+'|'+cSi;
+                // Copy To SOURCE resolver (spec): while a Rotation Week is the selected view, every
+                // Copy To operation sources that week's EFFECTIVE schedule (stored overrides layered
+                // over this school's own values — inherited values included). Base view: null = as-is.
+                resR.shvEffSrc=function(){
+                  if(!secVw || secVw<0) return null;
+                  try{
+                    var out=JSON.parse(JSON.stringify(shDataR||{}));
+                    Object.keys(out).forEach(function(rk){ Object.keys(out[rk]||{}).forEach(function(dk){
+                      var ov=_wkRotHrsOverride(g.id,cCalId,cSi,secVw,rk,dk);
+                      if(ov && out[rk][dk]){ if(ov.start!=null) out[rk][dk].start=ov.start; if(ov.end!=null) out[rk][dk].end=ov.end; }
+                    }); });
+                    return out;
+                  }catch(e){ return null; }
+                };
+                // The same compact "..." action menu the Base table uses, for Week views.
+                var $secMn=$('<div class="sf-action-menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',display:'none',fontSize:'12px'});
+                $('body').append($secMn);
+                var _secUid='shvm-'+Math.random().toString(36).slice(2);
+                function _secMnClose(){ $secMn.hide(); $(document).off('click.'+_secUid); }
+                function _secMI(lb,cb){ return $('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ ev.stopPropagation(); _secMnClose(); cb(); }); }
+                function buildCircles(){
+                  $wrap.find('.sf-shv-sec-wk').remove();
+                  pal=_circPal('rot',g.id,cCalId);
+                  for(var w=1;w<=len;w++){ (function(wn){
+                    var ck=_wkRotChecked(g.id,cCalId,cSi,wn);
+                    var $c=$('<span class="sf-wkrot-circle sf-shv-sec-wk">').attr({'data-shv':String(wn),role:'button',tabindex:'0',
+                            'aria-label':'View Rotation Week '+wn+(ck?' (in rotation)':' (not in rotation)')}).text(String(wn));
+                    if(ck) $c.addClass('is-checked');
+                    _circPaint($c,ck,pal);
+                    $c.css({cursor:'pointer'})
+                      .on('click',function(e){ e.preventDefault(); e.stopPropagation(); setV(wn); })
+                      .on('keydown',function(e){ if(e.key===' '||e.key==='Enter'||e.keyCode===32||e.keyCode===13){ e.preventDefault(); setV(wn); } });
+                    $wrap.append($c);
+                  })(w); }
+                }
+                buildCircles();
                 function paint(){
                   $wrap.find('.sf-shv-sec-base').css(secVw
                     ?{background:'#fff',borderColor:'#ced4da',color:'#495057',boxShadow:''}
@@ -13091,7 +13123,47 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     var ent=map[rk+'|'+dk]; if(!ent) return;
                     if(!allow(dk)) return;
                     var eff=(f==='start')?ent.s:ent.e, base=(f==='start')?ent.bs:ent.be;
-                    $td.css({cursor:'pointer'}).attr('title','Click to edit for Rotation Week '+vw);
+                    $td.css({cursor:'pointer',position:'relative'}).attr('title','Click to edit for Rotation Week '+vw);
+                    // Same "..." Copy actions as the Base table, acting on THIS Rotation Week (spec):
+                    // source = the cell's effective value (inherited included); each target stores a
+                    // week override only where it differs from Base (prune inside the commit).
+                    (function(){
+                      var $dt=$('<div class="sf-shv-dt">').css({position:'absolute',top:'3px',right:'4px',fontSize:'10px',color:'#adb5bd',cursor:'pointer',padding:'0 2px',borderRadius:'3px',display:'none',userSelect:'none',lineHeight:'1',zIndex:'5'}).text('\u2026');
+                      $dt.on('mouseenter',function(){ $(this).css({background:'#e9ecef',color:'#495057'}); }).on('mouseleave',function(){ $(this).css({background:'none',color:'#adb5bd'}); });
+                      $td.on('mouseenter.shvdt',function(){ $dt.show(); }).on('mouseleave.shvdt',function(){ $dt.hide(); });
+                      $dt.on('click',function(e){
+                        e.stopPropagation(); _secMnClose(); $secMn.empty();
+                        var ent0=map[rk+'|'+dk]; var cv=(f==='start')?(ent0&&ent0.s):(ent0&&ent0.e);
+                        if(!cv) return;
+                        var dLbl=(DAYS.find(function(dd){ return dd.k===dk; })||{l:dk}).l;
+                        var _allT=(function(){
+                          var _srcDay2=DAYS.find(function(dd){ return dd.k===dk; });
+                          if(_srcDay2&&_srcDay2.isSd) return [dk,'mon','tue','wed','thu','fri'];
+                          if(dk==='sat') return ['mon','tue','wed','thu','fri','sat'];
+                          if(dk==='sun') return ['mon','tue','wed','thu','fri','sun'];
+                          return ['mon','tue','wed','thu','fri'];
+                        })();
+                        function _push(writes,rk2,dk2){
+                          var e2=map[rk2+'|'+dk2]; if(!e2) return;
+                          writes.push({roleKey:rk2,dayK:dk2,field:f,val:cv,base:(f==='start')?e2.bs:e2.be});
+                        }
+                        function _apply(writes){
+                          if(!writes.length) return;
+                          if(resR.shvCommit){ resR.shvCommit(writes, vw, cSi, nm); }
+                          var keep=secVw; secVw=-1; setV(keep);
+                        }
+                        $secMn.append(_secMI('Copy across '+dLbl+' (vertically)',function(){
+                          var writes=[]; ROLES.forEach(function(r2){ _push(writes,r2.key,dk); }); _apply(writes);
+                        }));
+                        $secMn.append(_secMI('Copy to all on weekdays',function(){
+                          var writes=[]; ROLES.forEach(function(r2){ _allT.forEach(function(dk2){ _push(writes,r2.key,dk2); }); }); _apply(writes);
+                        }));
+                        var r=$dt[0].getBoundingClientRect();
+                        $secMn.css({top:(r.bottom+2)+'px',left:Math.min(r.left,window.innerWidth-200)+'px'}).show();
+                        setTimeout(function(){ $(document).on('click.'+_secUid,function(){ _secMnClose(); }); },0);
+                      });
+                      $td.append($dt);
+                    })();
                     $td.on('click.shvsec',function(e){
                       e.stopPropagation();
                       if($td.find('.sf-shv-tp').length) return;
@@ -13100,6 +13172,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                         commit1({roleKey:rk,dayK:dk,field:f,val:(v24||''),base:base});
                       });
                       $tp.addClass('sf-shv-tp');
+                      try{ $tp.find('input').css('width','60px'); }catch(_e){}   // full '11:00 PM' fits, no clipping (spec)
                       $td.find('.sf-sh-ro').hide(); $td.find('.shv-orig').hide(); $td.append($tp);
                       $tp.on('click',function(e2){ e2.stopPropagation(); });
                       try{ $tp.find('input').trigger('focus'); }catch(_e){}
@@ -13139,6 +13212,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 function setV(v){
                   v=v||0; if(v===secVw) return;
                   secVw=v;
+                  _pgShvSecView[_vKey]=v;
                   if($prev){ $prev.remove(); $prev=null; }
                   if(!v){ resR.$scroll.show(); paint(); return; }
                   var $t=resR.shvWeekTable?resR.shvWeekTable(cSi,v,true):null;   // FULL-SIZE (spec): identical to the school's own table, only the context switches
@@ -13146,12 +13220,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if($t){
                     var _partOn=_wkRotChecked(g.id,cCalId,cSi,v);
                     if(!_partOn){
-                      try{ $t.find('thead th').css({textDecoration:'line-through',opacity:'0.55'}); $t.find('tbody td, tfoot td').css({opacity:'0.4'}); }catch(_e){}
-                      $prev.append($('<div class="sf-shv-sec-disabled">').css({marginBottom:'4px',fontSize:'10px',color:'#8a6d3b',background:'#fdf6e3',border:'1px solid #f0e2b6',borderRadius:'5px',padding:'3px 8px'})
-                        .text('Rotation Week '+v+' is not part of the rotation. Its Staffing Hours are inactive and cannot be edited until it is re-enabled.'));
+                      // Disabled Rotation Week: state is communicated through the UI itself (outlined
+                      // circle + this subdued treatment) — no notification banner (spec).
+                      try{ $t.find('thead th').css({textDecoration:'line-through',opacity:'0.55'}); $t.find('tbody td, tfoot td').css({opacity:'0.4'}); $t.attr('title','Rotation Week '+v+' is not part of the rotation'); }catch(_e){}
                     }
-                    $prev.append($('<div>').css({fontSize:'9.5px',color:'#8a94a3',margin:'0 0 4px'})
-                      .text('Rotation Week '+v+' schedule. Values that differ from Base are highlighted with Base in parentheses.'));
                     $prev.append($t);
                     // EDITING (spec: the popup and this table are two entry points into the SAME
                     // Rotation-Week schedule): time cells mount the shared compact dropdown, counts
@@ -13168,12 +13240,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var $old=$hdrR.find('.sf-wkrot-circles-ro').first();
                 if($old.length){ $old.replaceWith($wrap); } else { $hdrR.append($wrap); }
                 paint();
+                // Restore the previously selected view across section rebuilds (incl. Undo restores)
+                // whenever that Rotation Week still exists; otherwise stay on Base (spec).
+                var _stored=_pgShvSecView[_vKey]||0;
+                if(_stored>=1 && _stored<=len){ secVw=-1; setV(_stored); }
+                else if(_stored){ _pgShvSecView[_vKey]=0; }
+                // LIVE representation invariant (spec): Rotation changes in Staffing Allocation repaint
+                // these circles immediately — participation refill in place, full circle rebuild when
+                // the week COUNT changed, and the open Week view re-renders in its new state.
+                _pgShvSecSync[_vKey]=function(){
+                  if(!$wrap[0] || !$wrap[0].isConnected){ try{ $secMn.remove(); }catch(_e){} delete _pgShvSecSync[_vKey]; return; }
+                  var len2=_wkRotLen(g.id,cCalId,cSi);
+                  if(len2<=0){ if($prev){ $prev.remove(); $prev=null; } resR.$scroll.show(); $wrap.remove(); delete _pgShvSecSync[_vKey]; return; }
+                  if(len2!==len){ len=len2; buildCircles(); }
+                  else {
+                    pal=_circPal('rot',g.id,cCalId);
+                    $wrap.find('.sf-shv-sec-wk').each(function(){
+                      var wn=parseInt($(this).attr('data-shv'),10);
+                      var ck=_wkRotChecked(g.id,cCalId,cSi,wn);
+                      $(this).toggleClass('is-checked',ck).attr('aria-label','View Rotation Week '+wn+(ck?' (in rotation)':' (not in rotation)'));
+                      try{ _circPaint($(this),ck,pal); }catch(_e){}
+                    });
+                  }
+                  if(secVw>len){ secVw=-1; setV(0); }
+                  else if(secVw>0){ var keep=secVw; secVw=-1; setV(keep); }
+                  else { paint(); }
+                };
               }catch(e){}
-            })(combo.si,(combo.calRow&&combo.calRow.calId!=null)?combo.calRow.calId:null,res,$hdr||$());
+            })(combo.si,(combo.calRow&&combo.calRow.calId!=null)?combo.calRow.calId:null,res,$hdr||$(),shData);
           }
 
           // ── Copy to dropdown (portalled) — only when the Copy to button was created ──
-          if($copyToBtn) (function(srcCombo, srcShData, $btn, comboIdx){
+          if($copyToBtn) (function(srcCombo, srcShData, $btn, comboIdx, srcRes){
             var $dd=$('<div>').css({
               position:'fixed',zIndex:'99999',background:'#fff',
               border:'1px solid #dee2e6',borderRadius:'8px',
@@ -13351,7 +13449,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   ? state.wks.filter(function(x){ return !x.$cb||x.$cb.prop('checked'); }).map(function(x){return x.wk;})
                   : [''];
 
-                // Copy srcShData → each matching target slot
+                // Copy the SOURCE schedule → each matching target slot. While a Rotation Week is the
+                // selected view of this table, the source is that week's EFFECTIVE schedule (spec).
+                var _effSrc=srcShData;
+                try{ if(srcRes&&srcRes.shvEffSrc){ var _e9=srcRes.shvEffSrc(); if(_e9) _effSrc=_e9; } }catch(_e){}
                 var ALL_DAYS=DAYS.map(function(d){return d.k;});
                 var _fmt=window._PICKER_FMT||function(v){return v;};
                 var _tgtN=0;
@@ -13365,10 +13466,10 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
                   // Copy start/end for every role and every day — no count guard
                   ROLES.forEach(function(role){
-                    if(!srcShData[role.key]) return;
+                    if(!_effSrc[role.key]) return;
                     if(!tgt.shData[role.key]) tgt.shData[role.key]={};
                     ALL_DAYS.forEach(function(dk){
-                      var src=srcShData[role.key][dk];
+                      var src=_effSrc[role.key][dk];
                       if(!src) return;
                       if(!tgt.shData[role.key][dk]) tgt.shData[role.key][dk]={start:'',end:''};
                       // Write to data store
@@ -13414,7 +13515,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             });
             $dd.on('click',function(e){ e.stopPropagation(); });
             $dd.addClass('sf-copyto-dd');
-          })(combo, shData, $copyToBtn, _comboResults.length-1);
+          })(combo, shData, $copyToBtn, _comboResults.length-1, res);
 
           // ── Clear behaviour — confirmation first, then one atomic transaction ──
           if($clearBtn) (function(myIdx, tCombo){
@@ -13967,6 +14068,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $cvWrap.append($cvChk);
       $hd.append($cvWrap);
     }
+    // ─ Show Staff Counts — display-only preference: every applicable date cell shows its FINAL
+    // effective Staff Count (bottom-right, understated) from the same authoritative data as the
+    // Calendar Hourly Breakdown. Toggling never mutates scheduling data or recalculates anything
+    // beyond one repaint pass.
+    (function(){
+      var $scWrap=$('<label>').addClass('pg-view-ok').css({display:'inline-flex',alignItems:'center',gap:'6px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',cursor:'pointer',fontWeight:'600',color:'#212529',alignSelf:'center'});
+      $scWrap.append($('<span>').text('Show Staff Counts'));
+      var $scChk=$('<input type="checkbox" class="sf-show-cnt-chk">').css({cursor:'pointer',margin:'0',verticalAlign:'middle'}).prop('checked',!!det.showStaffCounts);
+      $scChk.on('change',function(){
+        det.showStaffCounts=!!this.checked;
+        updateCalendarHours();
+      });
+      $scWrap.append($scChk);
+      $hd.append($scWrap);
+    })();
     // ─ Master Collapse/Expand — multi-calendar only, display-only. In separate view the pair
     // drives every individual block; in Combined View it drives the one combined area. Icon
     // state mirrors the blocks: all expanded → Collapse only, all collapsed → Expand only,
@@ -14596,6 +14712,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       };
     }
 
+    // Show Staff Counts (display-only): paints the date's FINAL effective Staff Count — computed in
+    // the same pass, from the same gates and overrides, as the cell's hours (= the Calendar Hourly
+    // Breakdown's data) — subtly in the cell's bottom-right corner. n<=0 or the option off: removed.
+    function _paintCellCnt(el, n){
+      var _d2=guideDetails[String(g.id)]||{};
+      var on=!!_d2.showStaffCounts;
+      var sp=null;
+      for(var ch=el.firstElementChild; ch; ch=ch.nextElementSibling){ if(ch.classList&&ch.classList.contains('sf-cell-cnt')){ sp=ch; break; } }
+      if(!on || !(n>0)){ if(sp) sp.parentNode.removeChild(sp); el.removeAttribute('data-eff-cnt'); return; }
+      el.setAttribute('data-eff-cnt', String(n));
+      try{ if(!el.style.position && getComputedStyle(el).position==='static') el.style.position='relative'; }catch(_e){ if(!el.style.position) el.style.position='relative'; }
+      if(!sp){ sp=document.createElement('span'); sp.className='sf-cell-cnt'; sp.style.cssText='position:absolute;right:2px;bottom:1px;font-size:8px;color:#393838;line-height:1;pointer-events:none;'; el.appendChild(sp); }
+      sp.textContent=String(n);
+    }
     function updateCalendarCellHours($td,dateKey,dayKey,ctx){
       var el=$td[0]||$td;
       var hrsEl=el.querySelector('.cal-hours');
@@ -14666,12 +14796,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           if(!cnt) continue;
           if(!d||(!d.start&&!d.end)) continue;
           var h=_calcAdjHrs(d,_ccCalRow);
-          if(h>0) t+=h*cnt;
+          if(h>0){ t+=h*cnt; _cellCnt+=cnt; }
         }
         return t;
       }
 
-      var total=0;
+      var total=0, _cellCnt=0;
       if(schoolIdxs[0]==='_none_'){
         var sd0=_sdMap[getMarkerSdId(_ccCalId, dateKey,'_none_')];
         if(!(sd0&&sd0.noHours)){
@@ -14691,6 +14821,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Extra Shifts (manual one-day additions) count on top of the recurring staffing for this
       // calendar+date. Deliberately added even when a Special Day zeroes the recurring hours.
       total+=xsDayTotal(g.id,_ccCalId,dateKey);
+      _cellCnt+=xsDayCnt(g.id,_ccCalId,dateKey);   // Extra Shifts join the effective Staff Count (spec)
 
       // Allocated Hours for this calendar+date are scheduled hours too, so they join the day total.
       // They belong to the CALENDAR (not a school), so a school-level filter leaves them in place;
@@ -14702,6 +14833,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       total=Math.round(total*100)/100;
       hrsEl.textContent=total>0?(total+' hrs'):'';
+      try{ _paintCellCnt(el, _cellCnt); }catch(_e){}
     }
 
     // Combined View: total each day cell's hidden per-calendar carriers into its single visible .cal-combined-sum.
@@ -14716,6 +14848,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         sum=Math.round(sum*100)/100;
         var disp=cell.querySelector('.cal-combined-sum');
         if(disp) disp.textContent=sum>0?(sum+' hrs'):'';
+        // Combined Staff Count = the same rollup the hours use: sum the per-calendar carriers'
+        // effective counts (each computed once, calId-scoped) — never re-added from rendered text.
+        var _cs=0, _cn=cell.querySelectorAll('[data-eff-cnt]');
+        for(var _k2=0;_k2<_cn.length;_k2++){ _cs+=parseInt(_cn[_k2].getAttribute('data-eff-cnt'))||0; }
+        try{ _paintCellCnt(cell,_cs); }catch(_e){}
       }
     }
     // Combined View: paint per-calendar Special Day markers into each combined day cell, and apply the
@@ -19464,6 +19601,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // would quietly add machinery to the live section.
   var _pgShPopupBuilding=false;
   var _pgShvFullBuild=false;   // full-size display-only build (separated-section Week views): no strip/alloc, but MAIN-table dimensions (not the popup's compact variant)
+  var _pgShvSecView={};   // separated-section selected view per 'gid|calId|si' — survives section rebuilds (incl. Undo restores) so the user stays on their Rotation Week
+  var _pgShvSecSync={};   // live sync fns per 'gid|calId|si' — repaint/rebuild the section header circles when Rotation state changes without a section rebuild
+  function _pgShvSecSyncAll(){ Object.keys(_pgShvSecSync).forEach(function(k){ try{ _pgShvSecSync[k](); }catch(e){} }); }
   // Live-repaint hook for an OPEN Edit Coach/Staff Count popup: the popup sets this to its
   // Hours-repaint function while open and clears it on close, so an underlying change (Start/End
   // time, meal break, allocation) made in the staffing table behind it updates the popup's Hours
