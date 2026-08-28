@@ -439,16 +439,22 @@ tr.sf-rc-norow>td{transition:background-color .12s ease;}
 tr.sf-rc-norow>td:hover{background-color:#eef2f7!important;}
 /* The expand chevron shown next to a collapsed Role name — reuses the app chevron via _pgChvSvg. */
 .sf-rc-chev{display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;color:#6c757d;}
-/* Visual-only Exclude Week treatment for the Program Calendar left Week/Dates cells. Purely a
-   display state (module map _pgWeekVisExcl) — NEVER affects scheduling, Week Rotation, calc,
-   export or any other application state. The gradient is background-IMAGE so !important beats
-   the cells' inline background shorthand (which sets background-image:none inline); removing the
-   class restores the cell's original background-color. Applied ONLY to these two left-column
-   cells, never to the day cells. */
-td.pg-wk-vis-excl{
+/* Visual-only Exclude Week treatment. Purely a display state (module map _pgWeekVisExcl) — NEVER
+   affects scheduling, Week Rotation, calc, export or any other application state. The gradient is
+   background-IMAGE so !important beats a cell's inline background shorthand (which sets
+   background-image:none inline); removing the class restores the underlying background-color.
+   An excluded week stripes its WHOLE Program Calendar row and the matching Staffing Allocation
+   Weeks column, from one shared per-week state. */
+td.pg-wk-vis-excl, th.pg-wk-vis-excl{
   background-image:linear-gradient(45deg,#c9c9c9 8.33%,#f5f5f5 8.33%,#f5f5f5 50%,#c9c9c9 50%,#c9c9c9 58.33%,#f5f5f5 58.33%,#f5f5f5 100%)!important;
   background-size:8.49px 8.49px!important;
 }
+/* Right-click affordance on the Week/Dates cells and the Weeks-section week subheaders: a plain
+   pointer cursor and a background tint only — no icon, image or ring. The tint rides a JS-toggled
+   .pg-wk-vis-hover class so hovering EITHER cell of a pair lights up BOTH together; on an excluded
+   cell the opaque stripe sits on top, so the tint is simply not seen there. */
+td.pg-wk-vis-cell, th.pg-wk-vis-cell{cursor:pointer;transition:background-color .12s ease;}
+td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-color:#eef2f7;}
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -10645,6 +10651,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             try{ res=buildOneTable(shCopy,cFn,perSfx,calRow,combo2); }catch(e){ res=null; }
             _pgShPopupBuilding=false; _pgShvFullBuild=false;
             if(!res||!res.$scroll) return null;
+            // Part 4a — buildOneTable leaves the Total cells empty until the first updU; the popup never
+            // fired one, so the Role Total Hours (light-green) and Total Hrs/Day (green) backgrounds were
+            // missing until an edit. Run the recalc once now so the totals are computed and painted from
+            // the first render (this also lets the Total Hrs/Day population below read real values, and
+            // re-wires the Part 4b default Role collapse against the painted totals).
+            try{ res.recalc(); }catch(e){}
             var $t=res.$scroll;
             // READ-ONLY, but the SAME cells: each field becomes text in a span carrying the
             // input's own width/height/alignment, so column widths and row heights are unchanged
@@ -11597,6 +11609,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               return out;
             })();
             var _wovN=_wovMons.length;
+            // Part 3 — Week Rotation is bounded by the Program Calendar length. _wovN is the number of
+            // real chronological weeks in this calendar, so it is BOTH the availability test (>1 week)
+            // and the hard maximum number of Rotation Weeks. Recomputed on every render, so a First/Last
+            // Day change (which rebuilds the staffing section) re-evaluates it immediately.
+            var _calWeeksTot=_wovN;
+            var _wkRotAvail=(_calWeeksTot>1);
+            if(_wkRotAvail && _wkWeeks>_calWeeksTot) _wkWeeks=_calWeeksTot;   // never show more rotation weeks than the calendar has
             var _WOV_MAB=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             var _wovLbl=function(iso){ var d=new Date(iso+'T00:00:00'); return _WOV_MAB[d.getMonth()]+' '+d.getDate(); };
             // ONE atomic transaction per explicit Weeks change (models _wkStructOp): Undo snapshot ->
@@ -11814,6 +11833,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             }
             function _wkAddWeek(){
               if(_wkRO) return false;
+              if(_wkRotCount(g.id,_wkCalId)>=_calWeeksTot) return false;   // Part 3: never exceed the Program Calendar's week count
               var n=_wkRotCount(g.id,_wkCalId)+1;   // new week's boxes default CHECKED (absent = checked)
               _wkStructOp(n, null, 'Added Week '+n+' to Staffing Allocation rotation.', 'Week '+n+' added to rotation.', 'add');
               return true;
@@ -11860,6 +11880,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             function _wkGrowRotation(si, nm){
               if(_wkRO) return false;
               var N=_wkRotCount(g.id,_wkCalId)+1;                    // the new global week this action creates
+              if(N>_calWeeksTot) return false;                      // Part 3: never exceed the Program Calendar's week count
               try{ _pgUndo.begin(g.id); }catch(e){}                  // full-guide snapshot (count + all cells)
               var cfg=_wkRotCfg(g.id,_wkCalId,true);
               cfg.count=N;                                           // add the global column (blank for others)
@@ -11991,7 +12012,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // narrow control column (empty placeholder for future per-school week-count config).
             // Collapsed: the narrow vertical column's header is a rowspan-2 cell in the title row,
             // so $hr adds nothing here.
-            if(!_wkCollapsed){
+            if(_wkRotAvail && !_wkCollapsed){
               for(var _wi=1;_wi<=_wkWeeks;_wi++){
                 // Compact: only wide enough for the number + checkbox + normal cell spacing.
                 $hr.append($('<th class="sf-wkrot-week-h">').attr('data-wkrot-week',String(_wi))
@@ -12015,6 +12036,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if(_wkCtrlState.ctrl && _wkHover.on){
                     if(cur>_WKROT_MIN_WEEKS){ $wkHdrBtn.text('\u2212').attr({title:'Remove Last Rotation Week','aria-label':'Remove Last Rotation Week'}).css({visibility:'visible',borderColor:'#dc3545',color:'#dc3545',background:'#fdecec'}); }
                     else { $wkHdrBtn.css('visibility','hidden'); }   // at the minimum: no remove available
+                  } else if(_wkRotCount(g.id,_wkCalId) >= _calWeeksTot){
+                    $wkHdrBtn.css('visibility','hidden');   // Part 3: at the calendar-length maximum, no add affordance
                   } else {
                     $wkHdrBtn.text('+').attr({title:'Add Rotation Week','aria-label':'Add Rotation Week'}).css({visibility:'visible',borderColor:'#dee2e6',color:'#6c757d',background:'none'});
                   }
@@ -12032,9 +12055,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // calendar week, all equal compact widths. Collapsed adds nothing here (rowspan-2 title).
             if(_wovN && !_wovCollapsed){
               for(var _wh=0;_wh<_wovN;_wh++){
-                $hr.append($('<th class="sf-wkov-week-h">').attr('data-wkov-idx',String(_wh+1))
-                  .css(Object.assign({},th,{padding:'3px 5px',width:'1px',fontSize:'8.5px',whiteSpace:'nowrap'}, _wh===0?{borderLeft:SEP_BORDER}:{}))
-                  .text(_wovLbl(_wovMons[_wh])));
+                (function(_whh){
+                  var _monIso=_wovMons[_whh];
+                  var $wovTh=$('<th class="sf-wkov-week-h">').attr('data-wkov-idx',String(_whh+1))
+                    .css(Object.assign({},th,{padding:'3px 5px',width:'1px',fontSize:'8.5px',whiteSpace:'nowrap'}, _whh===0?{borderLeft:SEP_BORDER}:{}))
+                    .text(_wovLbl(_monIso));
+                  if(_weekVisExcluded(g.id,_wkCalId,_monIso)) $wovTh.addClass('pg-wk-vis-excl');
+                  _pgWireWeekVisTh($wovTh,g.id,_wkCalId,_monIso);
+                  $hr.append($wovTh);
+                })(_wh);
               }
             }
             // An INTERNAL table title, not another section header: two grouped cells (school-id +
@@ -12102,8 +12131,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // the two read as one vertical column (the # of Students collapse pattern). Expanded:
             // a "Week Rotation" grouped header spanning the week columns + control column, with a
             // collapse chevron. Presentation-only — no History, no recalc — and works locked.
-            var $wkTitleTh;
-            if(_wkCollapsed){
+            var $wkTitleTh=null;
+            if(_wkRotAvail && _wkCollapsed){
               $wkTitleTh=$('<th class="sf-wkrot-title sf-wkrot-title-collapsed pg-view-ok" rowspan="2">')
                 .css(Object.assign({},th,{width:'1px',padding:'4px 2px',verticalAlign:'top',borderLeft:SEP_BORDER,cursor:'pointer'}))
                 .attr('title','Expand Week Rotation');
@@ -12113,7 +12142,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $wkExp.on('click',_wkExpand);
               $wkTitleTh.on('click',function(e){ if($(e.target).closest('button').length) return; _wkExpand(e); });
               $wkTitleTh.append($wkExp);
-            } else {
+            } else if(_wkRotAvail){
               $wkTitleTh=$('<th class="sf-wkrot-title sf-wkrot-title-expanded" colspan="'+(_wkWeeks+1)+'">')
                 .css(Object.assign({},th,_titleCss,{borderLeft:SEP_BORDER}));
               var $wkLbl=$('<span class="sf-wkrot-lbl">').text('Rotation').css({cursor:'pointer'}).attr('title','Collapse Week Rotation');
@@ -12164,7 +12193,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 $wovTitleTh.on('click',function(e){ e.stopPropagation(); });
               }
             }
-            var $titleRow=$('<tr class="sf-alloc-title-row">').append($saTh).append($titleTh).append($wkTitleTh);
+            var $titleRow=$('<tr class="sf-alloc-title-row">').append($saTh).append($titleTh);
+            if($wkTitleTh) $titleRow.append($wkTitleTh);
             if($wovTitleTh) $titleRow.append($wovTitleTh);
             // The header's own BACKGROUND toggles the area shut. Buttons inside it already stop
             // propagation, so Select All / Clear / × keep their own meaning; only the inert space
@@ -12393,7 +12423,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   // (click to expand). Expanded: one checkbox per week (default checked) + a narrow
                   // empty control cell. UI-only — a change writes the module map ONLY: no History,
                   // no Undo, no recalc.
-                  if(_wkCollapsed){
+                  if(_wkRotAvail && _wkCollapsed){
                     if(rowIdx===0){
                       var $wkVert=$('<td class="sf-wkrot-vert pg-view-ok">').attr('rowspan',String(list.length))
                         .css(Object.assign({},td,{padding:'4px 2px',width:'1px',textAlign:'center',verticalAlign:'middle',borderLeft:SEP_BORDER,background:'#f8f9fb',cursor:'pointer'}))
@@ -12402,7 +12432,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       $wkVert.on('click',function(){ _wkRotSetCollapsed(g.id,_wkCalId,false); _wkRerender(); });
                       $tr.append($wkVert);
                     }
-                  } else {
+                  } else if(_wkRotAvail){
                     for(var _wc=1;_wc<=_wkWeeks;_wc++){
                       (function(wnum){
                         var _st=_wkRotCell(g.id,_wkCalId,u.si,wnum);   // undefined = blank; true/false = checkbox
@@ -12462,7 +12492,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     // Per-school control cell = the GROW END CELL. In edit, clicking it adds the next
                     // global Week column AND extends this school through it (one transaction); hover
                     // previews the range incl. the new week. In locked it stays a blank spacer.
-                    if(!_wkRO){
+                    if(!_wkRO && _wkRotCount(g.id,_wkCalId)<_calWeeksTot){
                       var $end=$('<td class="sf-wkrot-ctrl sf-wkrot-grow">').attr('data-wkrot-si',String(u.si))
                         .css(Object.assign({},td,{padding:'2px 4px',width:'1px',cursor:'pointer',textAlign:'center'}));
                       (function(si0,nm0){ $end.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _wkGrowRotation(si0, nm0); }); })(u.si, nm);
@@ -12493,7 +12523,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                           var monIso=_wovMons[_mi];
                           var eff=!_wkDisabledOn(g.id,_wkCalId,u.si,monIso);
                           var ovSt=_wkOvState(g.id,_wkCalId,u.si,monIso);
-                          var $ocell=$('<td class="sf-wkov-cell">').attr({'data-wkov-si':String(u.si),'data-wkov-idx':String(_mi+1)})
+                          var $ocell=$('<td class="sf-wkov-cell">').attr({'data-wkov-si':String(u.si),'data-wkov-idx':String(_mi+1),'data-wk-cal':String(_wkCalId),'data-wk-iso':String(monIso)})
+                            .addClass(_weekVisExcluded(g.id,_wkCalId,monIso)?'pg-wk-vis-excl':'')
                             .css(Object.assign({},td,{padding:'2px 5px',textAlign:'center'}, _mi===0?{borderLeft:SEP_BORDER}:{}));
                           var $circ=$('<span class="sf-wkrot-circle">').text(String(_mi+1));
                           if(eff) $circ.addClass('is-checked');
@@ -12822,6 +12853,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         // Rendered once per calendar, next to the calendar name. Each calendar is independent.
         function buildCalOptsControl(calRow){
           var _calId=calRow.calId;
+          // Single-school, no-pods calendar: the Options dropdown would be empty (both "Separate by
+          // School" and "Separate by Pods" rows are suppressed), so offer no Options button at all.
+          if(((siteRowsFor(g,_calId))||[]).length<=1 && !calHasAssignedPods(g,_calId)) return null;
           var $btn=$('<button type="button">').css({
             background:'none',border:'1px solid #dee2e6',borderRadius:'5px',
             padding:'2px 8px',fontSize:'10px',color:'#6c757d',cursor:'pointer',
@@ -15162,9 +15196,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         var $tr=$('<tr>');
         var _wcA=$('<td>').css({border:BDR,padding:'4px 6px',textAlign:'center',fontSize:'10px',fontWeight:'700',color:'#495057',background:'#f8f9fb',whiteSpace:'nowrap'}).text('Week '+(wi+1));
         var _dcA=$('<td>').css({border:BDR,padding:'4px 8px',fontSize:'10px',color:'#6c757d',background:'#fafafa',whiteSpace:'nowrap'}).text(fmtDate(days[0])+' \u2013 '+fmtDate(days[6]));
-        (function(){ var _wi=isoDate(days[0]), _ci='__combined__';
-          if(_weekVisExcluded(g.id,_ci,_wi)){ _wcA.addClass('pg-wk-vis-excl'); _dcA.addClass('pg-wk-vis-excl'); }
-          _pgWireWeekVisExcl(_wcA,_dcA,g.id,_ci,_wi);
+        var _wkIsoA=isoDate(days[0]), _wkCalA='__combined__', _wkExclA=_weekVisExcluded(g.id,_wkCalA,_wkIsoA);
+        (function(){ if(_wkExclA){ _wcA.addClass('pg-wk-vis-excl'); _dcA.addClass('pg-wk-vis-excl'); }
+          _pgWireWeekVisExcl(_wcA,_dcA,g.id,_wkCalA,_wkIsoA);
         })();
         $tr.append(_wcA); $tr.append(_dcA);
 
@@ -15176,7 +15210,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var activeCals=_calRowsWithIdx.filter(function(it){ var f=parseD(it.row.firstDay), l=parseD(it.row.lastDay); return day>=f && day<=l; });
           var anyActive=activeCals.length>0;
           var baseBg=anyActive?(isWknd?'#edf3fa':'#fff'):(isWknd?WKND_STRIPE:STRIPE);
-          var $td=$('<td class="cal-combined-day">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-base-bg':baseBg}).css({
+          var $td=$('<td class="cal-combined-day">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-base-bg':baseBg,'data-wk-cal':_wkCalA,'data-wk-iso':_wkIsoA}).addClass(_wkExclA?'pg-wk-vis-excl':'').css({
             border:BDR,padding:'3px 4px',textAlign:'left',verticalAlign:'top',
             minHeight:'40px',minWidth:'66px',position:'relative',background:baseBg,color:anyActive?'#212529':'#ccc',fontSize:'9px'
           });
@@ -15323,9 +15357,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           return $wc;
         })();
         var _dcB=$('<td>').css({border:BDR,padding:'4px 8px',fontSize:'10px',color:'#6c757d',background:'#fafafa',whiteSpace:'nowrap'}).text(fmtDate(days[0])+' – '+fmtDate(days[6]));
-        (function(){ var _wi=isoDate(days[0]), _ci=(calRow.calId!=null?calRow.calId:origIdx);
-          if(_weekVisExcluded(g.id,_ci,_wi)){ _wcB.addClass('pg-wk-vis-excl'); _dcB.addClass('pg-wk-vis-excl'); }
-          _pgWireWeekVisExcl(_wcB,_dcB,g.id,_ci,_wi);
+        var _wkIsoB=isoDate(days[0]), _wkCalB=(calRow.calId!=null?calRow.calId:origIdx), _wkExclB=_weekVisExcluded(g.id,_wkCalB,_wkIsoB);
+        (function(){ if(_wkExclB){ _wcB.addClass('pg-wk-vis-excl'); _dcB.addClass('pg-wk-vis-excl'); }
+          _pgWireWeekVisExcl(_wcB,_dcB,g.id,_wkCalB,_wkIsoB);
         })();
         $tr.append(_wcB); $tr.append(_dcB);
 
@@ -15347,7 +15381,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var _dayKeyMap=['mon','tue','wed','thu','fri','sat','sun'];
           var _dayKey=_dayKeyMap[di];
           var _isTodayCell=isTodayDate(day); // subtle today highlight = border ring only (no bg change)
-          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx,'data-cal-id':(calRow&&calRow.calId!=null?calRow.calId:'')}).css({
+          var $td=$('<td class="cal-day-cell">').attr({'data-date-key':dateKey,'data-day-key':_dayKey,'data-ab-week':_abWeek||'','data-cal-orig-idx':origIdx,'data-cal-id':(calRow&&calRow.calId!=null?calRow.calId:''),'data-wk-cal':_wkCalB,'data-wk-iso':_wkIsoB}).addClass(_wkExclB?'pg-wk-vis-excl':'').css({
             border:BDR,padding:'3px 4px',textAlign:'left',verticalAlign:'top',
             height:'40px',minWidth:'66px',position:'relative',
             background:cellBg,
@@ -19797,18 +19831,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $no=$tbody.children('tr.sf-rc-norow[data-role-group="'+key+'"]');
       var active=activeFn?!!activeFn(key):true;
       if(!active){ if($no.length) $no.remove(); _rcRestoreLabel($label,$rows); _rcRemoveChev($label); return; }
-      var collapsed=!!_pgRoleCollapse[storeKey];
+      // Part 4b — hasStaffing (any Total Hours>0 OR any Count>0) drives BOTH the default collapse
+      // decision AND the collapsed shape, so compute it up front.
+      var anyTotal=false;
+      $totalRow.find('.total-hrs-cell-u,.total-hrs-cell').each(function(){ if((parseFloat($(this).text())||0)>0) anyTotal=true; });
+      var anyCount=false;
+      $rows.find('.count-cell-u,.count-cell').each(function(){ if((parseInt($(this).text(),10)||0)>0) anyCount=true; });
+      var hasStaffing=(anyTotal||anyCount);
+      // Explicit user choice (true/false in the store) wins; with no stored choice the DEFAULT is to
+      // collapse a Role that has no Staff/Coach counts and keep a staffed Role expanded. Once the user
+      // clicks, the store holds an explicit value so this default no longer overrides their choice.
+      var _exp=_pgRoleCollapse[storeKey];
+      var collapsed=(_exp===undefined)?(!hasStaffing):(!!_exp);
       if(!collapsed){
         if($no.length) $no.remove();
         _rcRestoreLabel($label,$rows); _rcRemoveChev($label);
         $detail.css('display',''); $totalRow.css('display','');
         return;
       }
-      var anyTotal=false;
-      $totalRow.find('.total-hrs-cell-u,.total-hrs-cell').each(function(){ if((parseFloat($(this).text())||0)>0) anyTotal=true; });
-      var anyCount=false;
-      $rows.find('.count-cell-u,.count-cell').each(function(){ if((parseInt($(this).text(),10)||0)>0) anyCount=true; });
-      if(anyTotal||anyCount){
+      if(hasStaffing){
         // Has staffing: hide the Start/End/Hours/Count rows, KEEP the live Total Hours row, and
         // re-home the Role label onto it so the collapsed line reads Role | Total Hours | totals.
         if($no.length) $no.remove();
@@ -20350,15 +20391,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   var _pgSumCollapse={};      // per-calendar Program Summary collapse — display-only, keyed gid|calId
   var _pgCalGridCollapse={};  // per-calendar Calendar-area collapse — display-only, keyed gid|calKey
-  // ── Visual-only Exclude / Include Week (Program Calendar left column) ─────────────────────
-  // Purely a DISPLAY state: which weeks show the striped "excluded" treatment on their left-column
-  // Week + Dates cells. Kept in this module map (NOT guideDetails), keyed gid|calId|weekStartISO, so
-  // it NEVER rides export, never touches scheduling / Week Rotation / calc / summaries / financials.
-  // A visually-excluded week behaves exactly like a normal active week everywhere else.
+  // ── Visual-only Exclude / Include Week (shared by Program Calendar + Staffing Allocation Weeks) ──
+  // Purely a DISPLAY state: which weeks show the striped "excluded" treatment. ONE authoritative map
+  // (NOT guideDetails), keyed gid|calId|weekStartISO (weekStartISO = the week's Monday, the same key
+  // the Weeks segment uses), so BOTH surfaces read/write the same state and stay in sync. It NEVER
+  // rides export, never touches scheduling / Week Rotation / calc / summaries / financials. Every
+  // stripe-able cell (calendar Week+Dates+day cells, Weeks subheader + column cells) carries
+  // data-wk-cal + data-wk-iso, so one selector repaints every visible representation at once.
   var _pgWeekVisExcl={};
   function _weekVisKey(gid,calId,wkIso){ return String(gid)+'|'+String(calId)+'|'+String(wkIso); }
   function _weekVisExcluded(gid,calId,wkIso){ return !!_pgWeekVisExcl[_weekVisKey(gid,calId,wkIso)]; }
   function _weekVisSet(gid,calId,wkIso,on){ var k=_weekVisKey(gid,calId,wkIso); if(on){ _pgWeekVisExcl[k]=true; } else { delete _pgWeekVisExcl[k]; } }
+  // Repaint every currently-rendered cell for one (calId, week): calendar row cells + Weeks column
+  // cells all carry matching data-wk-cal/data-wk-iso, so this single toggle updates both surfaces
+  // immediately, with no rebuild / reopen / collapse. (calId + wkIso hold no CSS-special chars.)
+  function _weekVisRepaint(calId,wkIso,on){
+    try{ $('[data-wk-cal="'+String(calId)+'"][data-wk-iso="'+String(wkIso)+'"]').toggleClass('pg-wk-vis-excl',!!on); }catch(e){}
+  }
+  // The one authoritative toggle both entry points call: flip the shared state, then repaint both.
+  function _weekVisToggle(gid,calId,wkIso){
+    var now=!_weekVisExcluded(gid,calId,wkIso);
+    _weekVisSet(gid,calId,wkIso,now);
+    _weekVisRepaint(calId,wkIso,now);
+    return now;
+  }
   // One-item right-click menu: Exclude Week on a normal week, Include Week on an excluded one.
   function _pgWeekVisMenu(ev, isExcluded, onPick){
     $('.pg-wkvis-ctx').remove();
@@ -20386,22 +20442,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       try{ document.addEventListener('scroll',close,true); }catch(e){}
     },0);
   }
-  // Wire right-click on BOTH the Week label cell and the Dates cell of one week row. Toggling flips
-  // ONLY the module state + the .pg-wk-vis-excl class on those two cells; nothing else is touched.
-  function _pgWireWeekVisExcl($wc,$dc,gid,calId,wkIso){
-    $wc.addClass('pg-wk-vis-cell').attr({'data-wk-iso':String(wkIso),'data-wk-cal':String(calId)});
-    $dc.addClass('pg-wk-vis-cell').attr({'data-wk-iso':String(wkIso),'data-wk-cal':String(calId)});
-    var handler=function(ev){
+  // Wire a GROUP of cells that (a) hover together and (b) share one right-click menu for a week.
+  // Hovering any cell in the group tints the whole group (background only, no icon/ring). Right-
+  // clicking opens the Exclude/Include menu; picking runs the one authoritative toggle, which
+  // repaints every representation of that week (this group, the rest of the row/column, and the
+  // OTHER surface) live. Every cell gets data-wk-cal/data-wk-iso so the repaint finds it.
+  function _pgWireWeekVisGroup($cells,gid,calId,wkIso){
+    $cells.addClass('pg-wk-vis-cell').attr({'data-wk-iso':String(wkIso),'data-wk-cal':String(calId)});
+    $cells.off('mouseenter.wkvis mouseleave.wkvis contextmenu.wkvis');
+    $cells.on('mouseenter.wkvis',function(){ $cells.addClass('pg-wk-vis-hover'); });
+    $cells.on('mouseleave.wkvis',function(){ $cells.removeClass('pg-wk-vis-hover'); });
+    $cells.on('contextmenu.wkvis',function(ev){
       ev.preventDefault(); ev.stopPropagation();
-      var excl=_weekVisExcluded(gid,calId,wkIso);
-      _pgWeekVisMenu(ev, excl, function(){
-        var now=!excl; _weekVisSet(gid,calId,wkIso,now);
-        $wc.toggleClass('pg-wk-vis-excl',now); $dc.toggleClass('pg-wk-vis-excl',now);
-      });
-    };
-    $wc.off('contextmenu.wkvis').on('contextmenu.wkvis',handler);
-    $dc.off('contextmenu.wkvis').on('contextmenu.wkvis',handler);
+      _pgWeekVisMenu(ev, _weekVisExcluded(gid,calId,wkIso), function(){ _weekVisToggle(gid,calId,wkIso); });
+    });
   }
+  // Program Calendar: the Week label cell + the Dates cell of one week row hover + right-click as a pair.
+  function _pgWireWeekVisExcl($wc,$dc,gid,calId,wkIso){ _pgWireWeekVisGroup($wc.add($dc),gid,calId,wkIso); }
+  // Staffing Allocation Weeks: one week subheader cell hovers + right-clicks on its own.
+  function _pgWireWeekVisTh($th,gid,calId,wkIso){ _pgWireWeekVisGroup($th,gid,calId,wkIso); }
+  try{ if(typeof window!=='undefined'){ window._pgWeekVis={ excluded:_weekVisExcluded, toggle:_weekVisToggle, set:_weekVisSet, repaint:_weekVisRepaint, map:function(){ return _pgWeekVisExcl; } }; } }catch(e){}
   // Students-section collapse per Site Breakdown table (guideId|calId). Display-only:
   // never written to guideDetails, so no data change, no History, no JSON/Excel export.
   var _sbStuCollapse={};
