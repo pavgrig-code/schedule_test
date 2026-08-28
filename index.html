@@ -8524,6 +8524,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // indices the child tables use, regardless of how the Staffing Hours are grouped (school,
   // pod, week) — so there is exactly one Staffing Allocation state per school/day per calendar.
   function staffAllocMasterKey(ci){ return 'c'+ci; }
+  // EFFECTIVE allocation-on for DISPLAY (checkbox + table visibility) ONLY — never read by calc.
+  // Default: Staffing Allocation is ENABLED and its table OPEN for a Program Calendar that has NO
+  // saved allocation record yet (new/added calendars, or an import that never persisted one). A
+  // record that DOES exist is respected verbatim (rec.on), so an explicitly saved closed/open state
+  // from an imported guide is preserved and the new default never overwrites it. Calc stays byte-
+  // identical: staffAllocAllows still keys off the real record (no record -> allow all -> the same
+  // result as an enabled-but-empty allocation), so defaulting ON changes nothing a calculation sees.
+  function _allocEffOn(gid,sfx){ var st=staffAllocStore(gid); var r=st&&st[sfx]; return (r&&typeof r==='object')?!!r.on:true; }
+  function _allocEffMasterOn(gid,ci){ return _allocEffOn(gid,staffAllocMasterKey(ci)); }
   function staffAllocMasterRec(gid,ci){ return staffAllocRec(gid,staffAllocMasterKey(ci)); }
   // ── Week Rotation (UI-only for now) ── A per-calendar section in the master Staffing
   // Allocation matrix. State is kept in module maps, NOT guideDetails, so toggling a box or
@@ -11558,7 +11567,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var list=_allocSchools();
             if(list.length<1){ $allocWrap.hide(); return; }
             var rec=staffAllocRecPeek(g.id,sfxClass);
-            if(!rec.on || _pgAllocIsHidden(g.id,sfxClass)){ $allocWrap.hide(); return; }
+            if(!_allocEffOn(g.id,sfxClass) || _pgAllocIsHidden(g.id,sfxClass)){ $allocWrap.hide(); return; }
             $allocWrap.show();
             var days=buildDaysArray(g.id);
             var ABBR={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
@@ -12333,7 +12342,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                     try{
                       var $p=$tr.find('input.sf-alloc-school-cb'); if(!$p.length) return;
                       var app=days.filter(function(dy){ return !_allocDayDisabled(u.si,dy); });
-                      var on=app.filter(function(dy){ return !!staffAllocGet(staffAllocRec(g.id,sfxClass),u.si,dy.k); }).length;
+                      var on=app.filter(function(dy){ return !!staffAllocGet(staffAllocRecPeek(g.id,sfxClass),u.si,dy.k); }).length;
                       $p[0].checked = app.length>0 && on===app.length;
                       $p[0].indeterminate = on>0 && on<app.length;
                     }catch(e){}
@@ -12639,11 +12648,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _mci=(editCombo&&editCombo.ci!=null)?editCombo.ci:null;
               if(_mci==null) return false;
               var mk=staffAllocMasterKey(_mci);
-              return _allocEligible() && !!staffAllocMasterPeek(g.id,_mci).on && !_pgAllocIsHidden(g.id,mk);
+              return _allocEligible() && _allocEffMasterOn(g.id,_mci) && !_pgAllocIsHidden(g.id,mk);
             }catch(e){ return false; }
           }
           function _applyAllocMode(){
-            var on=_allocEligible() && staffAllocRecPeek(g.id,sfxClass).on && !_pgAllocIsHidden(g.id,sfxClass);
+            var on=_allocEligible() && _allocEffOn(g.id,sfxClass) && !_pgAllocIsHidden(g.id,sfxClass);
             var _isMaster=!!(editCombo&&editCombo.master), _allocOnly=!!(editCombo&&editCombo.allocOnly);
             // The master matrix is additive, but it must not sit beside a DUPLICATE of its own school
             // list. When the matrix is open AND this strip lists the SAME set of schools as the master
@@ -12655,7 +12664,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _strip=_stripSchools();
               var _sameAsMaster=(_strip.length===(((editCombo&&editCombo.calSiteRows)||[]).length));
               var _hideDup=_masterAllocOpen() && _sameAsMaster;
-              $schoolStrip.toggle(_strip.length>1 && !_allocOnly && !_hideDup);
+              $schoolStrip.toggle(_strip.length>=1 && !_allocOnly && !_hideDup);
             }
             if(on){
               if(!$allocWrap) return;
@@ -13066,7 +13075,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 whiteSpace:'nowrap',flexShrink:'0',userSelect:'none'
               });
               var $cb=$('<input type="checkbox" class="sf-alloc-toggle-cb">').css({cursor:'pointer',margin:'0',width:'12px',height:'12px'})
-                .prop('checked',!!staffAllocRecPeek(g.id,sfxKey2).on && !_pgAllocIsHidden(g.id,sfxKey2)).attr('data-alloc-sfx',sfxKey2);
+                .prop('checked',_allocEffOn(g.id,sfxKey2) && !_pgAllocIsHidden(g.id,sfxKey2)).attr('data-alloc-sfx',sfxKey2);
               $wrap.append($cb).append($('<span>').text('Staffing Allocation'));
               $wrap.on('mouseenter',function(){ $(this).css('color','#495057'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
               $cb.on('change',function(){
