@@ -439,12 +439,12 @@ tr.sf-rc-norow>td{transition:background-color .12s ease;}
 tr.sf-rc-norow>td:hover{background-color:#eef2f7!important;}
 /* The expand chevron shown next to a collapsed Role name — reuses the app chevron via _pgChvSvg. */
 .sf-rc-chev{display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;color:#6c757d;}
-/* Visual-only Exclude Week treatment. Purely a display state (module map _pgWeekVisExcl) — NEVER
-   affects scheduling, Week Rotation, calc, export or any other application state. The gradient is
-   background-IMAGE so !important beats a cell's inline background shorthand (which sets
-   background-image:none inline); removing the class restores the underlying background-color.
-   An excluded week stripes its WHOLE Program Calendar row and the matching Staffing Allocation
-   Weeks column, from one shared per-week state. */
+/* Exclude-from-Rotation stripe. The excluded-week state lives in guideDetails (det.wkExcl) and, as of
+   the thirteenth spec, DRIVES the Rotation Week mapping (an excluded program week is skipped in the
+   rotation sequence); this class is its visual treatment. The gradient is background-IMAGE so !important
+   beats a cell's inline background shorthand (which sets background-image:none inline); removing the
+   class restores the underlying background-color. An excluded week stripes its WHOLE Program Calendar
+   row and the matching Staffing Allocation Weeks column, from one shared per-week state. */
 td.pg-wk-vis-excl, th.pg-wk-vis-excl{
   background-image:linear-gradient(45deg,#c9c9c9 8.33%,#f5f5f5 8.33%,#f5f5f5 50%,#c9c9c9 50%,#c9c9c9 58.33%,#f5f5f5 58.33%,#f5f5f5 100%)!important;
   background-size:8.49px 8.49px!important;
@@ -8595,10 +8595,37 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // A school's OWN rotation week (1..len) for a date. Each school cycles over ITS configured length, not
   // the global column count (Paul's decision): a 2-week rotation repeats 1,2,1,2… across the calendar.
   // Returns 0 when the school has NO rotation config (len 0) → never gated (backward compat).
+  // ── Thirteenth spec: weeks EXCLUDED from rotation are SKIPPED in the sequence ── _wkExclFirstMonday
+  // is the Monday (Date) of the calendar's firstDay week; _wkRotEffIndex maps a raw chronological week
+  // index to its ROTATION position by counting only INCLUDED weeks up to it (an excluded week consumes
+  // no position and itself returns -1 -> no rotation week -> the week falls back to its Base schedule).
+  // Only calendars that actually have exclusions pay the O(weeks) walk; all others take the fast path.
+  function _wkExclFirstMonday(gid,calId){
+    var det=guideDetails[String(gid)]; if(!det) return null;
+    var rows=det.calendarRows||[], cr=null;
+    for(var i=0;i<rows.length;i++){ if(rows[i]&&String(rows[i].calId)===String(calId)){ cr=rows[i]; break; } }
+    if(!cr||!cr.firstDay) return null;
+    var d=new Date(cr.firstDay+'T00:00:00'); if(isNaN(d.getTime())) return null;
+    var wd=d.getDay(); d.setDate(d.getDate()+(wd===0?-6:1-wd)); return d;
+  }
+  function _wkExclMonIso(base,wi){
+    var d=new Date(base.getTime()); d.setDate(d.getDate()+wi*7);
+    var y=d.getFullYear(), m=String(d.getMonth()+1), da=String(d.getDate());
+    return y+'-'+(m.length<2?'0'+m:m)+'-'+(da.length<2?'0'+da:da);
+  }
+  function _wkRotEffIndex(gid,calId,wi){
+    if(wi<0) return -1;
+    var c=_weekVisCfg(gid,calId,false); if(!c) return wi;
+    var base=_wkExclFirstMonday(gid,calId); if(!base) return wi;
+    var eff=0;
+    for(var j=0;j<=wi;j++){ var ex=(c[_wkExclMonIso(base,j)]===true); if(j===wi) return ex?-1:eff; if(!ex) eff++; }
+    return eff;
+  }
   function _wkRotSchoolWeek(gid,calId,si,dateStr){
     var len=_wkRotLen(gid,calId,si); if(len<=0) return 0;
     var wi=_wkRotWeekIndex(gid,calId,dateStr); if(wi<0) return 0;
-    return ((wi%len)+len)%len + 1;
+    var eff=_wkRotEffIndex(gid,calId,wi); if(eff<0) return 0;   // week excluded from rotation -> Base
+    return (eff%len) + 1;
   }
   // EXCLUSION predicate: a school's REGULAR staffing hours are removed on a date iff its cell for that
   // date's OWN rotation week is EXPLICITLY unchecked (false / outlined). Checked participates; a school
@@ -11952,6 +11979,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 setHover:function(v){ _wkSetHover(!!v); return _wkHover.on; },
                 weekHasChecked:function(w){ return _wkRotWeekHasChecked(g.id,_wkCalId,list,w); },
                 rerender:function(){ _wkRerender(); },
+                recalc:function(){ _wkRerender(); try{ _wkRecalc(); }catch(e){} },
                 removeFromRotation:function(si,W,nm){ if(nm==null){ nm='School '+(Number(si)+1); for(var i=0;i<list.length;i++){ if(String(list[i].si)===String(si)){ nm=(list[i].sRow&&(list[i].sRow.school||list[i].sRow.schoolAbbr))||nm; break; } } } return _wkRotRemoveWeek(si,nm,W); }
               };
             }catch(e){}
@@ -20391,28 +20419,59 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   var _pgSumCollapse={};      // per-calendar Program Summary collapse — display-only, keyed gid|calId
   var _pgCalGridCollapse={};  // per-calendar Calendar-area collapse — display-only, keyed gid|calKey
-  // ── Visual-only Exclude / Include Week (shared by Program Calendar + Staffing Allocation Weeks) ──
-  // Purely a DISPLAY state: which weeks show the striped "excluded" treatment. ONE authoritative map
-  // (NOT guideDetails), keyed gid|calId|weekStartISO (weekStartISO = the week's Monday, the same key
-  // the Weeks segment uses), so BOTH surfaces read/write the same state and stay in sync. It NEVER
-  // rides export, never touches scheduling / Week Rotation / calc / summaries / financials. Every
-  // stripe-able cell (calendar Week+Dates+day cells, Weeks subheader + column cells) carries
-  // data-wk-cal + data-wk-iso, so one selector repaints every visible representation at once.
-  var _pgWeekVisExcl={};
-  function _weekVisKey(gid,calId,wkIso){ return String(gid)+'|'+String(calId)+'|'+String(wkIso); }
-  function _weekVisExcluded(gid,calId,wkIso){ return !!_pgWeekVisExcl[_weekVisKey(gid,calId,wkIso)]; }
-  function _weekVisSet(gid,calId,wkIso,on){ var k=_weekVisKey(gid,calId,wkIso); if(on){ _pgWeekVisExcl[k]=true; } else { delete _pgWeekVisExcl[k]; } }
+  // ── Exclude / Include Week from Rotation (shared by Program Calendar + Staffing Allocation Weeks) ──
+  // The one authoritative excluded-week state. As of the thirteenth spec it lives in guideDetails
+  // (det.wkExcl[calId] = { 'YYYY-MM-DD(Monday)': true }) so it PERSISTS through export/import + snapshots,
+  // rides Undo, AND feeds the Rotation Week mapping: an excluded program week is SKIPPED in the rotation
+  // sequence (see _wkRotSchoolWeek / _wkRotEffIndex) and itself falls back to Base. Keyed by the week's
+  // Monday — the same key the Weeks segment and the calendar row use — so both surfaces stay in sync.
+  // Every stripe-able cell carries data-wk-cal + data-wk-iso, so one selector repaints every view at once.
+  function _weekVisCfg(gid,calId,create){
+    var det=guideDetails[String(gid)]; if(!det){ if(!create) return null; det=guideDetails[String(gid)]={}; }
+    var m=det.wkExcl; if(!m){ if(!create) return null; m=det.wkExcl={}; }
+    var ck=String(calId), c=m[ck];
+    if(!c){ if(!create) return null; c=m[ck]={}; }
+    return c;
+  }
+  function _weekVisExcluded(gid,calId,wkIso){ var c=_weekVisCfg(gid,calId,false); return !!(c && c[String(wkIso)]===true); }
+  function _weekVisSet(gid,calId,wkIso,on){
+    var c=_weekVisCfg(gid,calId,true); if(!c) return;
+    if(on){ c[String(wkIso)]=true; } else { delete c[String(wkIso)]; }
+    var det=guideDetails[String(gid)];
+    if(det){
+      if(det.wkExcl){
+        if(det.wkExcl[String(calId)] && !Object.keys(det.wkExcl[String(calId)]).length) delete det.wkExcl[String(calId)];
+        if(!Object.keys(det.wkExcl).length) det.wkExcl=null;
+      }
+      try{ setGuideDetail(gid,'wkExcl',det.wkExcl||null); }catch(e){}
+    }
+  }
   // Repaint every currently-rendered cell for one (calId, week): calendar row cells + Weeks column
   // cells all carry matching data-wk-cal/data-wk-iso, so this single toggle updates both surfaces
   // immediately, with no rebuild / reopen / collapse. (calId + wkIso hold no CSS-special chars.)
   function _weekVisRepaint(calId,wkIso,on){
     try{ $('[data-wk-cal="'+String(calId)+'"][data-wk-iso="'+String(wkIso)+'"]').toggleClass('pg-wk-vis-excl',!!on); }catch(e){}
   }
-  // The one authoritative toggle both entry points call: flip the shared state, then repaint both.
+  // The one authoritative toggle both entry points call. Flips the shared state (in guideDetails) as ONE
+  // Undo transaction, repaints the stripe on both surfaces immediately, then recomputes every dependent
+  // (rotation mapping, hours, staff counts, breakdowns, summary, combined calendar, financials) for this
+  // calendar via the SAME recalc path a rotation change uses — so exclusion/inclusion propagates at once.
   function _weekVisToggle(gid,calId,wkIso){
     var now=!_weekVisExcluded(gid,calId,wkIso);
+    var verb=now?'excluded':'included', prep=now?'from':'in';
+    try{ _pgUndo.begin(gid); }catch(e){}
     _weekVisSet(gid,calId,wkIso,now);
     _weekVisRepaint(calId,wkIso,now);
+    try{
+      var ctl=window._pgWkRotCtl&&window._pgWkRotCtl[String(gid)+'|'+String(calId)];
+      if(ctl&&ctl.recalc){ ctl.recalc(); }
+    }catch(e){}
+    var sentence='Week of '+String(wkIso)+' '+verb+' '+prep+' rotation.';
+    try{ _pgHist.begin(gid); }catch(e){}
+    try{ _pgHist.evt(gid,{kind:'edit', action:sentence, desc:sentence}); }catch(e){}
+    setTimeout(function(){ try{ _pgHist.begin(gid); }catch(e){} },0);
+    setTimeout(function(){ try{ _pgHist.begin(gid); }catch(e){} },400);
+    try{ _pgUndo.offer(gid,{text:sentence}); }catch(e){}
     return now;
   }
   // One-item right-click menu: Exclude Week on a normal week, Include Week on an excluded one.
@@ -20426,7 +20485,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $it.on('mouseenter',function(){ $(this).css('background','#eef3f9'); }).on('mouseleave',function(){ $(this).css('background','transparent'); });
     var _ic=isExcluded?(_pgIcon('includeweek')||''):(_pgIcon('excludeweek')||'');
     $it.append($('<span class="pg-wkvis-ctx-icon">').css({display:'inline-flex',width:'16px',justifyContent:'center',color:isExcluded?'#2e7d32':'#6c757d'}).html(_ic));
-    $it.append(document.createTextNode(isExcluded?'Include Week':'Exclude Week'));
+    $it.append(document.createTextNode(isExcluded?'Include in Rotation':'Exclude from Rotation'));
     $it.on('click',function(e){ e.stopPropagation(); close(); try{ onPick(); }catch(_e){} });
     $m.append($it);
     $('body').append($m);
@@ -20461,7 +20520,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   function _pgWireWeekVisExcl($wc,$dc,gid,calId,wkIso){ _pgWireWeekVisGroup($wc.add($dc),gid,calId,wkIso); }
   // Staffing Allocation Weeks: one week subheader cell hovers + right-clicks on its own.
   function _pgWireWeekVisTh($th,gid,calId,wkIso){ _pgWireWeekVisGroup($th,gid,calId,wkIso); }
-  try{ if(typeof window!=='undefined'){ window._pgWeekVis={ excluded:_weekVisExcluded, toggle:_weekVisToggle, set:_weekVisSet, repaint:_weekVisRepaint, map:function(){ return _pgWeekVisExcl; } }; } }catch(e){}
+  try{ if(typeof window!=='undefined'){ window._pgWeekVis={ excluded:_weekVisExcluded, toggle:_weekVisToggle, set:_weekVisSet, repaint:_weekVisRepaint, map:function(gid){ var d=guideDetails[String(gid)]; return (d&&d.wkExcl)||{}; } }; } }catch(e){}
   // Students-section collapse per Site Breakdown table (guideId|calId). Display-only:
   // never written to guideDetails, so no data change, no History, no JSON/Excel export.
   var _sbStuCollapse={};
