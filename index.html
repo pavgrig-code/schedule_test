@@ -490,7 +490,7 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
       <button class="mode-btn" id="btn-workspace"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></svg>Workspace</button>
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-planning">Planning Guides</button>
-      <button class="mode-btn" id="btn-schedule">Shift Schedule</button>
+      <button class="mode-btn" id="btn-schedule">Shifts</button>
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-people">Staff</button>
       <button class="mode-btn" id="btn-availability">Availability</button>
@@ -5050,6 +5050,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       });
     }
     return det.podsByCal[k];
+  }
+  // ── Site Breakdown school LABELS (fourteenth spec) ── Definitions are per-calendar like pods:
+  // det.sbLabelsByCal[calId] = [{id,name,color}], seeded ES/MS/HS/TBD on FIRST EXPLICIT USE (the
+  // label menu opening) — NEVER on render (create=false peeks), so a guide that never touches
+  // labels exports byte-identically (the staffAlloc phantom-record lesson). ASSIGNMENTS live on
+  // the school ROW as r.sbLabels=[labelId,...]: rows persist in det and the Site Breakdown
+  // reorder is a presentation overlay that never moves rows, so labels follow the school through
+  // drag/drop, POD moves, rerender, Undo, snapshots and JSON export/import by construction.
+  function sbLabelsFor(g,calId,create){
+    var det=guideDetails[String(g.id)]; if(!det){ if(!create) return null; det=guideDetails[String(g.id)]={}; }
+    if(!det.sbLabelsByCal){ if(!create) return null; det.sbLabelsByCal={}; }
+    var k=String(calId);
+    if(!det.sbLabelsByCal[k]){
+      if(!create) return null;
+      det.sbLabelsByCal[k]=['ES','MS','HS','TBD'].map(function(n,i){
+        return { id:_genEntityId('lbl_'), name:n, color:POD_DEFAULT_COLORS[i%POD_DEFAULT_COLORS.length] };
+      });
+    }
+    return det.sbLabelsByCal[k];
+  }
+  function sbLblById(defs,id){ if(!defs) return null; for(var i=0;i<defs.length;i++){ if(String(defs[i].id)===String(id)) return defs[i]; } return null; }
+  // Readable text color for a label chip on its background (light bg -> dark text).
+  function sbLblFg(color){
+    try{
+      var c=String(color||'').replace('#',''); if(c.length===3) c=c.replace(/./g,function(ch){return ch+ch;});
+      var r=parseInt(c.substr(0,2),16),gg=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+      return (0.299*r+0.587*gg+0.114*b)>170 ? '#212529' : '#ffffff';
+    }catch(e){ return '#ffffff'; }
   }
   function podOfSchool(pods, schoolId){
     var sid=String(schoolId);
@@ -20461,6 +20489,29 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var verb=now?'excluded':'included', prep=now?'from':'in';
     try{ _pgUndo.begin(gid); }catch(e){}
     _weekVisSet(gid,calId,wkIso,now);
+    // Fifteenth spec: exclusion AUTO-MANAGES this week column's Weeks overrides. Exclude -> an
+    // explicit OFF override for EVERY school row (regardless of its inherited rotation state),
+    // painted with the standard override ring; the user may remove individual ones to hand a
+    // school back to its inherited behavior. Include -> remove ALL overrides in the column (never
+    // converted to ON, never preserved) so every school returns to pure rotation inheritance.
+    // Peeks at siteRowsByCal (never materializes); combined-view '__combined__' matches no calendar.
+    try{
+      var _detX=guideDetails[String(gid)];
+      if(_detX && String(calId)!=='__combined__'){
+        if(now){
+          var _rowsX=(_detX.siteRowsByCal&&_detX.siteRowsByCal[String(calId)])||null;
+          if(_rowsX){ for(var _siX=0;_siX<_rowsX.length;_siX++){ _wkOvSet(gid,calId,_siX,wkIso,false); } }
+        } else {
+          var _ovX=_detX.wkOv&&_detX.wkOv[String(calId)];
+          if(_ovX){ Object.keys(_ovX).forEach(function(_k){ var _p=_k.split('|'); if(_p.length===2&&_p[1]===String(wkIso)) delete _ovX[_k]; }); }
+        }
+        if(_detX.wkOv){
+          Object.keys(_detX.wkOv).forEach(function(_ck){ if(_detX.wkOv[_ck]&&!Object.keys(_detX.wkOv[_ck]).length) delete _detX.wkOv[_ck]; });
+          if(!Object.keys(_detX.wkOv).length) _detX.wkOv=null;
+        }
+        try{ setGuideDetail(gid,'wkOv',_detX.wkOv||null); }catch(_e2){}
+      }
+    }catch(_eX){}
     _weekVisRepaint(calId,wkIso,now);
     try{
       var ctl=window._pgWkRotCtl&&window._pgWkRotCtl[String(gid)+'|'+String(calId)];
@@ -20692,7 +20743,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   var _PGV_KILL=/^\+?\s*(Add Calendar|Add Role|Add Special Day|Add School|Allocated Hours|Add Allocated Hours|Add Discount|Copy To|Options|Clear|\.\.\.|\u2026|\u00d7|\u2715|\u2716|Del)$/;
   function _pgvStripEditAffordances(root){
-    try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots').remove(); }catch(e){}
+    try{ $(root).find('.sb-cell-dots, .sb-cell-menu, .pg-disc-copy-dots, .sb-lbl-dots').remove(); }catch(e){}
     // School reordering is edit-only. The build-time guard covers a fresh locked render; locking an
     // ALREADY-RENDERED guide is an in-place transform, so the drag grab cursor on the name cell must
     // be cleared here too (the drag handlers are already inert via their own view-mode guards).
@@ -23062,7 +23113,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       window._pgSbCards[String(g.id)+'|'+String(calId)]={
         reorder:_sbReorder,
         order:function(){ return _sbDisplay().map(function(d){ return d.ai; }); },
-        names:function(){ return _sbDisplay().map(function(d){ return String((d.r&&d.r.school)||''); }); }
+        names:function(){ return _sbDisplay().map(function(d){ return String((d.r&&d.r.school)||''); }); },
+        labels:{
+          defs:function(){ return sbLabelsFor(g,calId,false); },
+          assigned:function(ai){ var rr=siteRows[ai]; return ((rr&&rr.sbLabels)||[]).map(String); },
+          open:function(ai,x2,y2){ var rr=siteRows[ai]; if(rr) _lblOpenMenu(rr,(x2==null?80:x2),(y2==null?80:y2)); }
+        }
       };
     }catch(e){}
 
@@ -23468,6 +23524,170 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $m.css({left:Math.max(4,Math.min(x, vw-mw-8))+'px', top:Math.max(4,Math.min(y, vh-mh-8))+'px'});
       setTimeout(function(){ try{$search[0].focus();}catch(e){} },0);
       $(document).on('mousedown.sbpodmenu', function(ev){ if(!$(ev.target).closest('.sb-pod-menu,.sb-pod-colors,.pg-confirm-ov,.sb-pod-editov').length) _sbPodMenuClose(); });
+    }
+    // ── Add / Manage Labels menu (fourteenth spec) ── Mirrors the Add to Pod menu visually and
+    // structurally (search/create, color circles + the same picker, hover Edit, inline editing with
+    // duplicate-name validation, button styling, positioning, outside-close). The DIFFERENCE by spec:
+    // label SELECTION is STAGED — bold = selected, toggled by clicking, committed only by Save; Clear
+    // empties the staged set; Cancel discards; Close guards unsaved changes through _xsDialog. Label
+    // DEFINITION changes (create / rename / recolor / delete) apply immediately, like pods.
+    function saveLbls(){ setGuideDetail(g.id,'sbLabelsByCal',(guideDetails[String(g.id)]||{}).sbLabelsByCal); }
+    function _lblMenuClose(){ $('body > .sb-lbl-menu').remove(); $(document).off('mousedown.sblblmenu'); }
+    function _lblColorPopup($anchor, lbl){
+      // Identical shell + palette to _podColorPopup; picking recolors the label immediately app-wide.
+      $('body > .sb-pod-colors').remove();
+      var PICK_COLORS=['#ffffff','#ef5350','#e91e63','#9c27b0','#3f51b5','#2196f3','#00bcd4','#009688','#4caf50','#ffeb3b','#ffc107','#ff9800','#ff5722','#795548','#9e9e9e','#607d8b'];
+      var $pop=$('<div class="sb-pod-colors sb-lbl-colors">').css({position:'fixed',zIndex:'100001',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 4px 14px rgba(0,0,0,.15)',padding:'8px'});
+      var $grid=$('<div>').css({display:'grid',gridTemplateColumns:'repeat(8,22px)',gap:'5px'});
+      PICK_COLORS.forEach(function(c2){
+        var isSel=(lbl.color===c2);
+        var $opt=$('<div class="sb-pod-color-opt">').css({width:'22px',height:'22px',background:c2,border:isSel?'1.5px solid #bbb':'1px solid rgb(210,210,210)',borderRadius:'50%',cursor:'pointer'});
+        if(isSel) $opt.css('box-shadow','inset 0 0 0 2px rgba(0,0,0,0.18)');
+        $opt.on('mouseenter',function(){ if(!isSel) $(this).css('border','1.5px solid #999'); }).on('mouseleave',function(){ if(!isSel) $(this).css('border','1px solid rgb(210,210,210)'); });
+        $opt.on('click',function(e){
+          e.stopPropagation();
+          var _was=lbl.color;
+          try{ _pgUndo.begin(g.id); }catch(_u){}
+          lbl.color=c2; saveLbls(); $anchor.css('background',c2); $pop.remove(); refreshTable();
+          try{ _pgUndo.offer(g.id,{lead:(String(lbl.name||'').trim()||'Label')+' label color',colors:{prev:_was,next:c2}}); }catch(_u){}
+        });
+        $grid.append($opt);
+      });
+      $pop.append($grid); $('body').append($pop);
+      var r2=$anchor[0].getBoundingClientRect();
+      $pop.css({top:((r2.bottom||0)+6)+'px', left:(r2.left||0)+'px'});
+      $pop.on('mousedown click',function(e){ e.stopPropagation(); });
+    }
+    function _lblOpenMenu(r,x,y){
+      if(_pgvCur.mode==='view') return;   // locked-mode guard, same as _podEditPopup
+      _lblMenuClose(); _sbPodMenuClose();
+      var defs=sbLabelsFor(g,calId,true);   // FIRST EXPLICIT USE materializes the ES/MS/HS/TBD defaults
+      function sIx(arr,id){ for(var i=0;i<arr.length;i++){ if(String(arr[i])===String(id)) return i; } return -1; }
+      var orig=(r.sbLabels||[]).map(String);
+      var staged=orig.slice();
+      function dirty(){ return staged.slice().sort().join('|')!==orig.slice().sort().join('|'); }
+      var $m=$('<div class="sb-lbl-menu">').attr('data-guide',String(g.id)).css({position:'fixed',zIndex:'100000',background:'#fff',border:'1px solid #dee2e6',borderRadius:'8px',boxShadow:'0 6px 18px rgba(0,0,0,.14)',padding:'8px',minWidth:'210px',fontSize:'12px'});
+      $m.on('mousedown click contextmenu', function(e){ e.stopPropagation(); });
+      $m.append($('<div class="sb-lbl-title">').css({fontWeight:'700',fontSize:'12px',color:'#212529',padding:'0 2px 6px'}).text(orig.length?'Manage Labels':'Add Label'));
+      var $search=$('<input type="text" class="sb-lbl-search" placeholder="Search or create\u2026">').css({width:'100%',boxSizing:'border-box',border:'1px solid #dde3ea',borderRadius:'5px',padding:'4px 6px',fontSize:'12px',outline:'none',marginBottom:'6px',background:'#f7f9fc'});
+      $m.append($search);
+      var $list=$('<div class="sb-lbl-list">').css({maxHeight:'220px',overflowY:'auto'});
+      $m.append($list);
+      function circle(color){ return $('<span class="sb-pod-circle">').css({display:'inline-block',width:'12px',height:'12px',borderRadius:'50%',background:color,border:'1px solid rgb(180,180,180)',flexShrink:'0'}); }
+      function item(){ return $('<div>').css({display:'flex',alignItems:'center',gap:'7px',padding:'5px 6px',borderRadius:'5px',cursor:'pointer',color:'#212529'}).on('mouseenter',function(){$(this).css('background','#eef2f7');}).on('mouseleave',function(){$(this).css('background','transparent');}); }
+      function cap(s){ s=String(s||''); return s? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+      function commitSave(){
+        try{ _pgUndo.begin(g.id); }catch(_u){}
+        if(staged.length) r.sbLabels=staged.slice(); else delete r.sbLabels;
+        saveSiteRows(); _lblMenuClose(); refreshTable();
+        try{ _pgUndo.offer(g.id,{head:'Labels updated for ',lead:String(r.school||'school'),tail:'.'}); }catch(_u){}
+      }
+      function tryClose(){
+        if(!dirty()){ _lblMenuClose(); return; }
+        if($('body > .xs-ui').length) return;   // a confirmation is already up
+        _xsDialog('You have unsaved label changes.',[
+          {label:'Continue Editing'},
+          {label:'Save Changes',primary:true,fn:commitSave}
+        ]);
+      }
+      var editingId=null;
+      function _lblNameDup(l,nm){ var lo=nm.toLowerCase(); return defs.some(function(q){ return q!==l && String(q.name||'').trim().toLowerCase()===lo; }); }
+      function rebuild(){
+        $list.empty();
+        var q=String($search.val()||'').trim(), qlo=q.toLowerCase();
+        defs.forEach(function(l){
+          if(qlo && l.name.toLowerCase().indexOf(qlo)!==0) return;   // starts-with, case-insensitive (pod rule)
+          var sel=sIx(staged,l.id)>=0;
+          var $it=item().addClass('sb-lbl-item').attr('data-lbl-name',l.name);
+          var $cir=circle(l.color).css('cursor','pointer').on('click',function(e){ e.stopPropagation(); _lblColorPopup($(this), l); });
+          if(l.id===editingId){
+            // ── Edit mode row: text field + delete "\u00d7" + Cancel/Update + duplicate validation ──
+            $it.css('cursor','default').off('mouseenter mouseleave').on('click',function(e){ e.stopPropagation(); });
+            var $inp=$('<input type="text" class="sb-lbl-edit-input">').val(l.name)
+              .css({flex:'1',minWidth:'0',border:'1px solid #dde3ea',borderRadius:'5px',padding:'3px 6px',fontSize:'12px',outline:'none',background:'#fff'});
+            var $del=$('<span class="sb-lbl-del" title="Delete label">').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 3px',color:'#dc3545',flexShrink:'0'}).text('\u00d7')
+              .on('mouseenter',function(){$(this).css('opacity','1');}).on('mouseleave',function(){$(this).css('opacity','.7');});
+            $it.append($cir).append($inp).append($del);
+            $list.append($it);
+            var $bar=$('<div class="sb-lbl-edit-bar">').css({display:'flex',gap:'6px',alignItems:'center',padding:'2px 6px 6px 25px'});
+            var $msg=$('<div class="sb-lbl-edit-msg">').css({fontSize:'10.5px',color:'#c0392b',padding:'0 6px 4px 25px',display:'none'}).text('A label with this name already exists.');
+            function smallBtn(label,primary){ return $('<button type="button">').text(label).css({border:primary?'none':'1px solid #dee2e6',background:primary?'#1a73e8':'none',color:primary?'#fff':'#6c757d',borderRadius:'5px',padding:'3px 10px',fontSize:'11px',cursor:'pointer',fontWeight:'600'}); }
+            var $cancelB=smallBtn('Cancel',false).addClass('sb-lbl-edit-cancel').on('click',function(e){ e.stopPropagation(); editingId=null; rebuild(); });
+            var $updateB=smallBtn('Update',true).addClass('sb-lbl-edit-update').hide();
+            $bar.append($cancelB).append($updateB);
+            $list.append($msg).append($bar);
+            function validate(){
+              var nm=String($inp.val()||'').trim();
+              var dup=nm && nm.toLowerCase()!==String(l.name||'').trim().toLowerCase() && _lblNameDup(l,nm);
+              $msg.toggle(!!dup);
+              var ok=!!nm && nm!==l.name && !dup;
+              $updateB.toggle(ok);
+              return ok?nm:null;
+            }
+            function applyUpdate(){ var nm=validate(); if(nm==null) return; l.name=nm; editingId=null; saveLbls(); refreshTable(); rebuild(); }
+            $updateB.on('click',function(e){ e.stopPropagation(); applyUpdate(); });
+            $inp.on('input',validate).on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); applyUpdate(); } else if(e.key==='Escape'){ e.preventDefault(); editingId=null; rebuild(); } });
+            $del.on('click',function(e){
+              e.stopPropagation();
+              showConfirmPopup('Delete \u201c'+l.name+'\u201d?','Delete',true,function(){
+                try{ _pgUndo.begin(g.id); }catch(_u){}
+                var _ln=l.name, _lid=String(l.id);
+                var ix=defs.indexOf(l); if(ix>=0) defs.splice(ix,1);
+                siteRows.forEach(function(rr){ if(rr&&rr.sbLabels){ rr.sbLabels=rr.sbLabels.filter(function(id){ return String(id)!==_lid; }); if(!rr.sbLabels.length) delete rr.sbLabels; } });
+                var six=sIx(staged,_lid); if(six>=0) staged.splice(six,1);
+                var oix=sIx(orig,_lid); if(oix>=0) orig.splice(oix,1);
+                editingId=null; saveLbls(); saveSiteRows(); refreshTable(); rebuild();
+                try{ _pgUndo.offer(g.id,{lead:_ln,tail:' label deleted.'}); }catch(_u){}
+              }, $('<div>').css({fontSize:'12px',color:'#495057'}).text('Schools with this label will lose it.'));
+            });
+            setTimeout(function(){ try{ $inp[0].focus(); $inp[0].select(); }catch(_e){} },0);
+            validate();
+            return;
+          }
+          // ── Regular row: BOLD when staged-selected; click toggles the staged selection ──
+          var $nm=$('<span class="sb-lbl-name">').text(l.name).css({fontWeight:sel?'700':'400',flex:'1',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'});
+          var $ed=$('<span class="sb-lbl-edit">').text('Edit').css({fontSize:'10.5px',color:'#8a94a0',visibility:'hidden',flexShrink:'0',cursor:'pointer',padding:'0 2px'})
+            .on('click',function(e){ e.stopPropagation(); editingId=l.id; rebuild(); });
+          $it.on('mouseenter',function(){ $ed.css('visibility','visible'); }).on('mouseleave',function(){ $ed.css('visibility','hidden'); });
+          $it.append($cir).append($nm).append($ed);
+          $it.on('click',function(){ var ix=sIx(staged,l.id); if(ix>=0) staged.splice(ix,1); else staged.push(String(l.id)); rebuild(); });
+          $list.append($it);
+        });
+        if(q && !defs.some(function(l){ return l.name.toLowerCase()===cap(q).toLowerCase(); })){
+          var newColor=POD_DEFAULT_COLORS[defs.length%POD_DEFAULT_COLORS.length];
+          var $cr=item().addClass('sb-lbl-create');
+          $cr.append(circle(newColor)).append($('<span>').text('Create new ('+cap(q)+')'));
+          $cr.on('click',function(){
+            var nm=cap(q);
+            var ex=null; defs.forEach(function(l){ if(l.name.toLowerCase()===nm.toLowerCase()) ex=l; });
+            var lbl=ex;
+            if(!ex){
+              try{ _pgUndo.begin(g.id); }catch(_u){}
+              lbl={ id:_genEntityId('lbl_'), name:nm, color:newColor };
+              defs.push(lbl); saveLbls();
+              try{ _pgUndo.offer(g.id,{lead:nm,tail:' label created.'}); }catch(_u){}
+            }
+            if(sIx(staged,lbl.id)<0) staged.push(String(lbl.id));
+            $search.val(''); rebuild();
+          });
+          $list.append($cr);
+        }
+        // ── Footer: Clear | Cancel | Save | Close ──
+        var $foot=$m.children('.sb-lbl-foot'); if(!$foot.length){ $foot=$('<div class="sb-lbl-foot">').css({borderTop:'1px solid #f1f3f5',marginTop:'6px',paddingTop:'6px'}); $m.append($foot); }
+        $foot.empty();
+        if(staged.length) $foot.append(item().addClass('sb-lbl-clear').css('color','#b26a00').text('Clear').on('click',function(){ staged=[]; rebuild(); }));
+        $foot.append(item().addClass('sb-lbl-cancel').css('color','#6c757d').text('Cancel').on('click',function(){ _lblMenuClose(); }));
+        $foot.append(item().addClass('sb-lbl-save').css({color:'#1a73e8',fontWeight:'600'}).text('Save').on('click',function(){ commitSave(); }));
+        $foot.append(item().addClass('sb-lbl-close').css('color','#6c757d').text('Close').on('click',function(){ tryClose(); }));
+      }
+      $search.on('input', rebuild);
+      rebuild();
+      $('body').append($m);
+      var vw=window.innerWidth||1200, vh=window.innerHeight||800;
+      var mr=$m[0].getBoundingClientRect(), mw=mr.width||220, mh=mr.height||220;
+      $m.css({left:Math.max(4,Math.min(x, vw-mw-8))+'px', top:Math.max(4,Math.min(y, vh-mh-8))+'px'});
+      setTimeout(function(){ try{$search[0].focus();}catch(e){} },0);
+      $(document).on('mousedown.sblblmenu', function(ev){ if(!$(ev.target).closest('.sb-lbl-menu,.sb-pod-colors,.pg-confirm-ov,.xs-ui').length) tryClose(); });
     }
     // Darken very light pod colors so the bracket line/label stay visible on white (mirrors the combined
     // calendar's bracket color treatment).
@@ -24038,7 +24258,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $nameTd.on('mousedown', function(e){
             if(e.button!==0) return;
             if(e.metaKey||e.ctrlKey||e.shiftKey) return;                              // modifiers → pod multi-select
-            if($(e.target).closest('input,select,textarea,button,.sb-cell-dots,.pg-school-dd').length) return;
+            if($(e.target).closest('input,select,textarea,button,.sb-cell-dots,.sb-lbl-dots,.sb-lbl-chip,.sb-lbl-menu,.pg-school-dd').length) return;
             _sbBeginDrag(e, dpos, $tr);
           });
         }
@@ -24047,9 +24267,27 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         function buildSchoolCell(){
           $nameTd.empty();
           if(r.school && r.schoolCds){
-            // Show selected chip
-            var $chip=$('<div>').css({display:'flex',alignItems:'center',gap:'4px',padding:'2px 4px',background:'#e8f4fd',borderRadius:'4px',fontSize:'11px',color:'#0a6ebd',fontWeight:'500',whiteSpace:'nowrap'});
-            $chip.append($('<span>').text(r.school));
+            // Show selected chip. The name stays LEFT; the Charter/GS badges and the school's saved
+            // LABELS sit RIGHT-ALIGNED inside the chip (the name ellipsizes first). The "\u2026"
+            // label trigger lives OUTSIDE the chip (fifteenth spec) — appended at the cell tail
+            // below, positioned + styled like the other Site Breakdown "\u2026" action buttons.
+            var $chip=$('<div class="sb-name-chip">').css({display:'flex',alignItems:'center',gap:'4px',padding:'2px 4px',background:'#e8f4fd',borderRadius:'4px',fontSize:'11px',color:'#0a6ebd',fontWeight:'500',whiteSpace:'nowrap'});
+            $chip.append($('<span class="sb-name-txt">').css({flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',textAlign:'left'}).text(r.school));
+            // Charter + GSOffered — the SAME builder/styling/rules the School Search dropdown uses.
+            try{
+              var _bsc=pgSchoolByCds(r.schoolCds);
+              if(_bsc) pgSchoolBadges(_bsc).forEach(function($b){ $chip.append($b); });
+            }catch(_be){}
+            // Saved label chips (peek only — never materializes defs on render). Click = Manage Labels.
+            try{
+              var _ldefs=sbLabelsFor(g,calId,false);
+              (r.sbLabels||[]).forEach(function(lid){
+                var _ld=sbLblById(_ldefs,lid); if(!_ld) return;
+                var $lc=$('<span class="sb-lbl-chip">').attr('data-lbl-id',String(_ld.id)).css({flex:'0 0 auto',fontSize:'9.5px',fontWeight:'600',lineHeight:'14px',padding:'0 5px',borderRadius:'4px',whiteSpace:'nowrap',background:_ld.color,color:sbLblFg(_ld.color),border:'1px solid rgba(0,0,0,.12)'}).text(_ld.name);
+                if(_pgvCur.mode!=='view'){ $lc.css('cursor','pointer').attr('title','Manage labels').on('mousedown click',function(e){ e.stopPropagation(); if(e.type==='click'){ var _rc=this.getBoundingClientRect(); _lblOpenMenu(r,_rc.left,_rc.bottom+4); } }); }
+                $chip.append($lc);
+              });
+            }catch(_le){}
             var $clr=$('<span>').css({cursor:'pointer',opacity:'.7',fontWeight:'700',fontSize:'13px',lineHeight:'1',padding:'0 2px'}).text('×').on('click',function(){r.school='';r.schoolCds='';r.schoolAbbr='';saveSiteRows();buildSchoolCell();updateTotalRow($tbody);refreshSbDupes(); var _ssfOpts=(guideDetails[String(g.id)]&&guideDetails[String(g.id)].staffingOpts)||{}; if((guideDetails[String(g.id)].calendarRows||[]).some(function(_cr){return _cr.calId!=null&&calStaffOpts(g,_cr.calId).bySchool;})){ var $_sf=buildStaffingSection(g); $('#staffing-section-'+g.id).replaceWith($_sf); var $_cal=buildCalendarSection(g); $('#cal-section-'+g.id).replaceWith($_cal); $_sf[0]._recalcAll&&$_sf[0]._recalcAll(); }});
             $chip.append($clr);
             $nameTd.append($chip);
@@ -24450,6 +24688,42 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // one selection — which is exactly the bug being fixed.
             $inp.on('remove',function(){ if(!_ddPin) $dd.remove(); });
           }
+          // ── Fifteenth spec: the "\u2026" label trigger sits to the RIGHT of the School Name,
+          // OUTSIDE the chip/input, positioned + styled + revealed exactly like the other Site
+          // Breakdown "\u2026" action buttons (12px reserved flex slot, opacity 0, revealed on cell
+          // hover, self-hover pill) — and it exists on EVERY row, assigned or not, so labels can be
+          // managed before a school is chosen. Unassigned rows also DISPLAY their saved label chips;
+          // assigning / changing / clearing a school never touches r.sbLabels (labels ride the row).
+          var $lflex=$('<div class="sb-cell-flex">').css({display:'flex',alignItems:'center',gap:'2px',width:'100%'});
+          $nameTd.children().appendTo($lflex);
+          $lflex.children().first().css({flex:'1 1 auto',minWidth:'0'});
+          if(!(r.school && r.schoolCds)){
+            try{
+              var _ldefs2=sbLabelsFor(g,calId,false);
+              (r.sbLabels||[]).forEach(function(lid){
+                var _ld2=sbLblById(_ldefs2,lid); if(!_ld2) return;
+                var $lc2=$('<span class="sb-lbl-chip">').attr('data-lbl-id',String(_ld2.id)).css({flex:'0 0 auto',fontSize:'9.5px',fontWeight:'600',lineHeight:'14px',padding:'0 5px',borderRadius:'4px',whiteSpace:'nowrap',background:_ld2.color,color:sbLblFg(_ld2.color),border:'1px solid rgba(0,0,0,.12)'}).text(_ld2.name);
+                if(_pgvCur.mode!=='view'){ $lc2.css('cursor','pointer').attr('title','Manage labels').on('mousedown click',function(e){ e.stopPropagation(); if(e.type==='click'){ var _rc2=this.getBoundingClientRect(); _lblOpenMenu(r,_rc2.left,_rc2.bottom+4); } }); }
+                $lflex.append($lc2);
+              });
+            }catch(_le2){}
+          }
+          if(_pgvCur.mode!=='view'){
+            var $ldots=$('<button type="button" class="sb-lbl-dots" title="Add / manage labels">').css({
+              flex:'0 0 auto', width:'12px', opacity:'0',
+              background:'none', border:'none', padding:'0', lineHeight:'1',
+              cursor:'pointer', color:'#495057', fontSize:'11px', transition:'opacity .12s',
+              borderRadius:'3px', fontWeight:'700'
+            }).html('&#8943;');
+            $ldots.on('mouseenter',function(){ $(this).css('background','#e9ecef'); })
+                  .on('mouseleave',function(){ $(this).css('background','none'); });
+            $ldots.on('mousedown click',function(e){ e.stopPropagation(); if(e.type==='click'){ var _rc3=this.getBoundingClientRect(); _lblOpenMenu(r,_rc3.left,_rc3.bottom+4); } });
+            $lflex.append($ldots);
+            $nameTd.off('mouseenter.lbl mouseleave.lbl')
+              .on('mouseenter.lbl',function(){ $ldots.css('opacity','1'); })
+              .on('mouseleave.lbl',function(){ $ldots.css('opacity','0'); });
+          }
+          $nameTd.append($lflex);
         }
         buildSchoolCell();
         $tr.append($nameTd);
