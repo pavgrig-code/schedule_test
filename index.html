@@ -450,11 +450,14 @@ td.pg-wk-vis-excl, th.pg-wk-vis-excl{
   background-size:8.49px 8.49px!important;
 }
 /* Right-click affordance on the Week/Dates cells and the Weeks-section week subheaders: a plain
-   pointer cursor and a background tint only — no icon, image or ring. The tint rides a JS-toggled
-   .pg-wk-vis-hover class so hovering EITHER cell of a pair lights up BOTH together; on an excluded
-   cell the opaque stripe sits on top, so the tint is simply not seen there. */
-td.pg-wk-vis-cell, th.pg-wk-vis-cell{cursor:pointer;transition:background-color .12s ease;}
-td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-color:#eef2f7;}
+   pointer cursor plus a hover cue with NO icon or image. The cue rides a JS-toggled .pg-wk-vis-hover
+   class so hovering EITHER cell of a pair lights up BOTH together. It has two layers so it reads on
+   normal AND excluded weeks (sixteenth spec): a background tint (seen on normal cells) AND an inset
+   box-shadow ring. Because the excluded-week striping is a background-IMAGE, the tint is hidden under
+   it — but the inset ring paints on TOP of the background, so an excluded week still shows a clear
+   interactive cue on hover while its stripe is fully preserved. */
+td.pg-wk-vis-cell, th.pg-wk-vis-cell{cursor:pointer;transition:background-color .12s ease, box-shadow .12s ease;}
+td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-color:#dbe4f0;box-shadow:inset 0 0 0 2px #7a93b8;}
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -5078,6 +5081,26 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var r=parseInt(c.substr(0,2),16),gg=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
       return (0.299*r+0.587*gg+0.114*b)>170 ? '#212529' : '#ffffff';
     }catch(e){ return '#ffffff'; }
+  }
+  // Build the label chips for a school ROW, styled EXACTLY like the Site Breakdown chips (sixteenth
+  // spec: labels appear alongside the same school in Staffing Hours + Staffing Allocation). Returns an
+  // array of jQuery spans (empty when the row has none). PEEK only — never materializes defs. Reads
+  // assignments off the row (r.sbLabels), so it stays correct through reorder/POD moves/Undo/import.
+  function sbLabelChipsFor(g, calId, r){
+    var out=[];
+    try{
+      if(!r || !r.sbLabels || !r.sbLabels.length) return out;
+      var defs=sbLabelsFor(g, calId, false); if(!defs) return out;
+      r.sbLabels.forEach(function(lid){
+        var ld=sbLblById(defs, lid); if(!ld) return;
+        out.push($('<span class="sb-lbl-chip pg-view-ok">').attr('data-lbl-id',String(ld.id)).css({
+          flex:'0 0 auto', display:'inline-block', fontSize:'9.5px', fontWeight:'600', lineHeight:'14px',
+          padding:'0 5px', borderRadius:'4px', whiteSpace:'nowrap', marginLeft:'4px',
+          background:ld.color, color:sbLblFg(ld.color), border:'1px solid rgba(0,0,0,.12)'
+        }).text(ld.name));
+      });
+    }catch(e){}
+    return out;
   }
   function podOfSchool(pods, schoolId){
     var sid=String(schoolId);
@@ -11254,6 +11277,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var _cn=(calRow&&(calRow.name||'').trim())||'';
             $h.append($('<span class="sf-sh-popup-ttl">').css({overflow:'hidden',textOverflow:'ellipsis'})
                       .text((_cn?_cn+' \u00b7 ':'')+nm+' \u00b7 Staffing Hours'));
+            // Sixteenth spec: the school's Site Breakdown labels ride the popup header too.
+            try{
+              var _pCalId=(calRow&&calRow.calId!=null)?calRow.calId:null;
+              var _pRows=siteRowsFor(g,_pCalId)||[];
+              sbLabelChipsFor(g,_pCalId,_pRows[si]).forEach(function($c){ $h.append($c); });
+            }catch(e){}
             // Read-only Week Rotation circles for this school (full configured set), after the title.
             // Base / Rotation Week view selector (replaces the inert read-only circles here): the
             // circles now double as view selectors. Null for a school with no rotation, so the
@@ -11570,6 +11599,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   $nm2.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _openSchoolShPopup(_si,_nm,this); });
                 })(list[k2].si,nm2);
                 $line.append($nm2);
+                // Sixteenth spec: the school row's Site Breakdown labels appear here too, same styling.
+                try{
+                  var _lblCalId=(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null;
+                  var _lblRows=siteRowsFor(g,_lblCalId)||[];
+                  sbLabelChipsFor(g,_lblCalId,_lblRows[list[k2].si]).forEach(function($c){ $line.append($c); });
+                }catch(e){}
                 _stripRemovedLabels(list[k2].si).forEach(function($x){ $line.append($x); });
                 $names.append($line);
                 if(k2===list.length-1) _refreshSchoolShPopup();
@@ -12358,6 +12393,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                       if(_sc) pgSchoolBadges(_sc).forEach(function($b){ $schIn.append($b); });
                     }catch(e){}
                   })();
+                  // Sixteenth spec: the school row's Site Breakdown labels ride the Staffing
+                  // Allocation strip too, same styling, read live off the row.
+                  (function(){
+                    try{
+                      var _lc=(editCombo&&editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null;
+                      sbLabelChipsFor(g,_lc,u.sRow).forEach(function($c){ $schIn.append($c); });
+                    }catch(e){}
+                  })();
                   $schTd.append($schIn);
                   $tr.append($schTd);
                   days.forEach(function(dy,dyi){
@@ -13124,6 +13167,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               var _sN='School '+(combo.si+1);
               var _sL=(combo.sRow&&(combo.sRow.school||combo.sRow.schoolAbbr))||'';
               $hdr.append($('<span class="sf-school-label">').text(_sL?(_sN+'. '+_sL):_sN));
+              // Sixteenth spec: the school row's Site Breakdown labels ride the section header too.
+              try{ sbLabelChipsFor(g,(combo.calRow&&combo.calRow.calId!=null)?combo.calRow.calId:null,combo.sRow).forEach(function($c){ $hdr.append($c); }); }catch(e){}
               // Surface 2 (separated-by-school Staffing Hours section header): the school's FULL rotation set.
               try{ var _wkSepC=_wkRotCirclesFor(g.id, combo.calRow&&combo.calRow.calId, combo.si, {}); if(_wkSepC) $hdr.append(_wkSepC.css({marginLeft:'6px',flex:'0 0 auto'})); }catch(e){}
               _firstSeg=false;
@@ -23223,6 +23268,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // When this calendar's Staffing Hours are grouped by pods, pod changes (assign/rename/recolor/
     // membership/delete) regroup the tables - rebuild the Staffing and Calendar sections like the
     // Options control does, so tables, calculations, and Copy To all reflect the new membership.
+    // Sixteenth spec: after a label add/edit/remove, the school's chips must appear across Staffing
+    // Hours + Staffing Allocation immediately, with no guide reopen. The strip name build reads the
+    // labels off the row, so a full section rebuild is enough; unlike _podRefreshStaffing this does
+    // NOT depend on byPods (label chips show in every staffing view). Deferred recalc restores counts.
+    function _lblSyncStaffing(){
+      try{
+        var $newSf=buildStaffingSection(g);
+        $('#staffing-section-'+g.id).replaceWith($newSf);
+        var $newCal=buildCalendarSection(g);
+        $('#cal-section-'+g.id).replaceWith($newCal);
+        setTimeout(function(){
+          if($newSf[0]&&$newSf[0]._recalcAll) $newSf[0]._recalcAll();
+          if($newCal[0]&&$newCal[0]._updateHours) $newCal[0]._updateHours();
+        },0);
+      }catch(e){}
+    }
     function _podRefreshStaffing(){
       if(!calStaffOpts(g,calId).byPods){
         // Composite school strips show pod groupings even without pod separation: repaint them so pod
@@ -23548,7 +23609,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           e.stopPropagation();
           var _was=lbl.color;
           try{ _pgUndo.begin(g.id); }catch(_u){}
-          lbl.color=c2; saveLbls(); $anchor.css('background',c2); $pop.remove(); refreshTable();
+          lbl.color=c2; saveLbls(); $anchor.css('background',c2); $pop.remove(); refreshTable(); _lblSyncStaffing();
           try{ _pgUndo.offer(g.id,{lead:(String(lbl.name||'').trim()||'Label')+' label color',colors:{prev:_was,next:c2}}); }catch(_u){}
         });
         $grid.append($opt);
@@ -23579,7 +23640,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       function commitSave(){
         try{ _pgUndo.begin(g.id); }catch(_u){}
         if(staged.length) r.sbLabels=staged.slice(); else delete r.sbLabels;
-        saveSiteRows(); _lblMenuClose(); refreshTable();
+        saveSiteRows(); _lblMenuClose(); refreshTable(); _lblSyncStaffing();
         try{ _pgUndo.offer(g.id,{head:'Labels updated for ',lead:String(r.school||'school'),tail:'.'}); }catch(_u){}
       }
       function tryClose(){
@@ -23624,7 +23685,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               $updateB.toggle(ok);
               return ok?nm:null;
             }
-            function applyUpdate(){ var nm=validate(); if(nm==null) return; l.name=nm; editingId=null; saveLbls(); refreshTable(); rebuild(); }
+            function applyUpdate(){ var nm=validate(); if(nm==null) return; l.name=nm; editingId=null; saveLbls(); refreshTable(); _lblSyncStaffing(); rebuild(); }
             $updateB.on('click',function(e){ e.stopPropagation(); applyUpdate(); });
             $inp.on('input',validate).on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); applyUpdate(); } else if(e.key==='Escape'){ e.preventDefault(); editingId=null; rebuild(); } });
             $del.on('click',function(e){
@@ -23636,7 +23697,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 siteRows.forEach(function(rr){ if(rr&&rr.sbLabels){ rr.sbLabels=rr.sbLabels.filter(function(id){ return String(id)!==_lid; }); if(!rr.sbLabels.length) delete rr.sbLabels; } });
                 var six=sIx(staged,_lid); if(six>=0) staged.splice(six,1);
                 var oix=sIx(orig,_lid); if(oix>=0) orig.splice(oix,1);
-                editingId=null; saveLbls(); saveSiteRows(); refreshTable(); rebuild();
+                editingId=null; saveLbls(); saveSiteRows(); refreshTable(); _lblSyncStaffing(); rebuild();
                 try{ _pgUndo.offer(g.id,{lead:_ln,tail:' label deleted.'}); }catch(_u){}
               }, $('<div>').css({fontSize:'12px',color:'#495057'}).text('Schools with this label will lose it.'));
             });
