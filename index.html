@@ -5061,6 +5061,30 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // the school ROW as r.sbLabels=[labelId,...]: rows persist in det and the Site Breakdown
   // reorder is a presentation overlay that never moves rows, so labels follow the school through
   // drag/drop, POD moves, rerender, Undo, snapshots and JSON export/import by construction.
+  // Seventeenth spec: shared PEEK-only reader of the Site Breakdown drag-drop display order
+  // (det.siteOrderByCal, stable per-row _sbId ids). Mirrors buildSiteCard's _sbDisplay EXACTLY:
+  // rows carrying an id in the overlay sort by its position, rows without one keep array order
+  // at the end, ties break on the true index. Returns the TRUE array indices in DISPLAY order,
+  // or null when the calendar has no overlay (callers then keep natural array order). The rows
+  // are passed in (the SAME objects the ids live on); nothing is created or written.
+  function sbDisplayIdx(g, calId, rows){
+    try{
+      var det=guideDetails[String(g.id)]; if(!det||!det.siteOrderByCal) return null;
+      var ord=det.siteOrderByCal[String(calId)]; if(!ord||!ord.length) return null;
+      var pri={}; ord.forEach(function(id,i){ if(pri[id]==null) pri[id]=i; });
+      var arr=(rows||[]).map(function(r,ai){
+        var key=(r&&r._sbId!=null)?r._sbId:null;
+        return {ai:ai, _p:(key!=null&&pri[key]!=null)?pri[key]:(1e9+ai)};
+      });
+      arr.sort(function(a,b){ return (a._p-b._p)||(a.ai-b.ai); });
+      return arr.map(function(d){ return d.ai; });
+    }catch(e){ return null; }
+  }
+  function sbDisplayPos(g, calId, rows){
+    var idx=sbDisplayIdx(g, calId, rows); if(!idx) return null;
+    var pos={}; idx.forEach(function(ai,i){ pos[ai]=i; });
+    return pos;
+  }
   function sbLabelsFor(g,calId,create){
     var det=guideDetails[String(g.id)]; if(!det){ if(!create) return null; det=guideDetails[String(g.id)]={}; }
     if(!det.sbLabelsByCal){ if(!create) return null; det.sbLabelsByCal={}; }
@@ -5263,9 +5287,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     }
     return out;
   }
-  function _tipPodListify($host, sites, pods, mkLine){
+  function _tipPodListify($host, sites, pods, mkLine, ordG, ordCalId){
+    // Seventeenth spec: when the caller supplies its guide + calendar, the schools list in the
+    // Calendar Hourly Breakdown follows the Site Breakdown DISPLAY order, and the pod rails
+    // regroup to the new adjacency exactly like the Site Breakdown card does. si keeps carrying
+    // the TRUE array index (sites is positional), so every lookup is untouched.
+    var _ordIdx=null;
+    try{ if(ordG&&ordCalId!=null) _ordIdx=sbDisplayIdx(ordG, ordCalId, sites); }catch(e){}
     var runs=[], cur=null;
-    (sites||[]).forEach(function(sr,si){
+    (_ordIdx||(sites||[]).map(function(_x,_i){ return _i; })).forEach(function(si){
+      var sr=(sites||[])[si];
       var p=(sr&&sr.schoolId!=null&&pods)?podOfSchool(pods,sr.schoolId):null;
       if(cur&&cur.pod===p){ cur.items.push(si); } else { cur={pod:p,items:[si]}; runs.push(cur); }
     });
@@ -9979,7 +10010,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // every use (not snapshotted at build) so schools added to or removed from the Site Breakdown
           // are summed immediately - no guide switch or rebuild required.
           var _compSchools=(editCombo&&editCombo.si===null)?function(){
-            return editCombo.pod?(editCombo.podSchools||[]):(editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};});
+            var us=editCombo.pod?(editCombo.podSchools||[]):(editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};});
+            // Seventeenth spec: the count popup's school rows follow the Site Breakdown display
+            // order too (si untouched — see _stripSchools).
+            try{
+              var _oc=(editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null;
+              var _pos=sbDisplayPos(g,_oc,editCombo.calSiteRows||[]);
+              if(_pos) us=us.slice().sort(function(a,b){ return (_pos[a.si]-_pos[b.si])||(a.si-b.si); });
+            }catch(e){}
+            return us;
           }:null;
           var _cCi=(editCombo&&editCombo.ci!=null)?editCombo.ci:null;
           var _cWk=(editCombo&&editCombo.wk)||'';
@@ -10513,7 +10552,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $schoolStrip=null;
           function _stripSchools(){
             if(!editCombo||editCombo.si!==null) return [];
-            return editCombo.pod?(editCombo.podSchools||[]):((editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};}));
+            var us=editCombo.pod?(editCombo.podSchools||[]):((editCombo.calSiteRows||[]).map(function(_r,_i){return {sRow:_r,si:_i};}));
+            // Seventeenth spec: the Site Breakdown drag-drop order is authoritative, so the
+            // Staffing Allocation School column and the Staffing Hours School List render in
+            // DISPLAY order. Every u.si keeps pointing at the TRUE array index — slots, alloc
+            // cells, count overrides and totals are untouched; only the drawing order changes.
+            try{
+              var _oc=(editCombo.calRow&&editCombo.calRow.calId!=null)?editCombo.calRow.calId:null;
+              var _pos=sbDisplayPos(g,_oc,editCombo.calSiteRows||[]);
+              if(_pos) us=us.slice().sort(function(a,b){ return (_pos[a.si]-_pos[b.si])||(a.si-b.si); });
+            }catch(e){}
+            return us;
           }
           // Removed-day labels, DERIVED from the live Staffing Allocation every time the strip
           // is built — never cached — so they follow a day toggle, the school parent, an Undo, an
@@ -16666,7 +16715,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       if(bySchool){
         // Per-school: each school uses its OWN counts and its OWN resolved column.
-        _siteRows.forEach(function(sRow,si){
+        // Seventeenth spec: iterate in Site Breakdown DISPLAY order (drag-drop overlay). si still
+        // carries the TRUE array index, so every lookup, count and total is byte-identical — only
+        // the row order of the breakdown changes; the school-group "first appearance" follows.
+        var _sbOrd=sbDisplayIdx(gObj,_tipCalId,_siteRows);
+        (_sbOrd?_sbOrd.map(function(_ai){ return {r:_siteRows[_ai], i:_ai}; }):_siteRows.map(function(_r2,_i2){ return {r:_r2, i:_i2}; })).forEach(function(_ent){ var sRow=_ent.r, si=_ent.i;
           if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
           // Staffing Allocation + Week Rotation: an excluded school is ABSENT from this day, not
           // shown at zero. A school whose rotation week is off for THIS DATE is skipped the same
@@ -17187,7 +17240,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var sr=(calId!=null)?(siteRowsFor(p.gObj,calId)||[]):(((guideDetails[String(p.gid)]||{}).siteRows)||[]);
       var calRows=((guideDetails[String(p.gid)]||{}).calendarRows)||[];
       var calName=''; for(var _cx=0;_cx<calRows.length;_cx++){ if(String(calRows[_cx].calId)===String(calId)){ calName=(calRows[_cx].name||'').trim(); break; } }
-      var siL=(r.siList||[]).slice().sort(function(x,y){return x-y;});   // Site Breakdown order
+      var siL=(r.siList||[]).slice().sort(function(x,y){return x-y;});   // ascending si; display order applied below
       // Re-derive against the CURRENT Staffing Allocation instead of trusting the list captured
       // on the row. The row's own gate passes ci=null on this path, and staffAllocAllows treats a
       // null calendar index as "no allocation context" and allows everything — so a school
@@ -17217,6 +17270,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           }
         }catch(e){}
       })();
+      // Seventeenth spec: list the schools in Site Breakdown DISPLAY order (drag-drop overlay),
+      // not ascending array index. si values are untouched.
+      try{ var _dsp=sbDisplayPos(p.gObj,calId,sr); if(_dsp) siL.sort(function(x,y){ return (_dsp[x]-_dsp[y])||(x-y); }); }catch(e){}
       var base={}, open={}, vals={}, ovAny=false;
       siL.forEach(function(si){
         var b=(r.base&&r.base[si]&&parseInt(r.base[si].cnt,10))||0;
@@ -17655,7 +17711,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'5px',fontSize:'9px',color:'#6c757d',lineHeight:'1.4'})
                 .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
                 .append(_schoolNameEl(_nm, _slCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#6c757d'}));
-            });
+            }, gObj, (cr&&cr.calId!=null)?cr.calId:null);
             $sltd.append($slw); $slr.append($sltd); $tb.append($slr);
           }
         }
@@ -17915,7 +17971,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       if(bySchool){
         // Per-school: each school uses its OWN counts and its OWN resolved column.
-        _siteRows.forEach(function(sRow,si){
+        // Seventeenth spec: iterate in Site Breakdown DISPLAY order (drag-drop overlay). si still
+        // carries the TRUE array index, so every lookup, count and total is byte-identical — only
+        // the row order of the breakdown changes; the school-group "first appearance" follows.
+        var _sbOrd=sbDisplayIdx(gObj,_tipCalId,_siteRows);
+        (_sbOrd?_sbOrd.map(function(_ai){ return {r:_siteRows[_ai], i:_ai}; }):_siteRows.map(function(_r2,_i2){ return {r:_r2, i:_i2}; })).forEach(function(_ent){ var sRow=_ent.r, si=_ent.i;
           if(_tipVF && !_tipVF[String(si)]) return;   // school filtered out of this calendar view
           // Staffing Allocation + Week Rotation: an excluded school is ABSENT from this day, not
           // shown at zero. A school whose rotation week is off for THIS DATE is skipped the same
@@ -18080,7 +18140,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           return $('<div>').css({display:'flex',alignItems:'flex-start',gap:'6px',fontSize:'10px',color:'#5f6368',lineHeight:'1.45'})
             .append($('<span>').css({color:'#adb5bd',flexShrink:'0'}).text('•'))
             .append(_schoolNameEl(_nm, _ivSlCtx, si, {minWidth:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:'#5f6368'}));
-        });
+        }, gObj, (_tipCalRow&&_tipCalRow.calId!=null)?_tipCalRow.calId:null);
         $hdrPad.append($schoolList);
       }
 
@@ -23139,6 +23199,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       saveSiteRows();                                       // rows (with _sbId) persist in det
       try{ setGuideDetail(g.id,'siteOrderByCal',_sbOrderMap()); }catch(e){}
       _sbRerender();                                        // redraw THIS card in the new order
+      // Seventeenth spec: the new order propagates IMMEDIATELY to the dependent views — the
+      // Staffing Allocation School column, the Staffing Hours School List and the Calendar
+      // Hourly Breakdown school rows all read the display order, so one Staffing + Calendar
+      // section rebuild (the sixteenth-spec helper) rerenders them live in the same action.
+      try{ _lblSyncStaffing(); }catch(e){}
       try{ refreshSummary(g); }catch(e){}                   // numerically identical; keeps UI coherent
       // ONE History record: rebaseline swallows the automatic save-diff, deferred rebaselines catch
       // any late writes (same pattern as add-school / the copy menu).
