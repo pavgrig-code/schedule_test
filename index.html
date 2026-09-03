@@ -8933,6 +8933,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   var _pgWkOvCollapse={};
   function _wkOvSectionCollapsed(gid,calId){ return _pgWkOvCollapse[String(gid)+'|'+calId]!==false; }
   function _wkOvSetCollapsed(gid,calId,v){ _pgWkOvCollapse[String(gid)+'|'+calId]=!!v; }
+  // Twenty-fourth spec, part 1: the Days section collapses to a narrow vertical column, mirroring
+  // the Weeks section exactly. Presentation-only module map, keyed gid|calId, DEFAULT EXPANDED
+  // (unlike Weeks/Rotation which default collapsed) since Days is the table's primary content.
+  var _pgAllocDaysCollapse={};
+  function _allocDaysCollapsed(gid,calId){ return !!_pgAllocDaysCollapse[String(gid)+'|'+calId]; }
+  function _allocDaysSetCollapsed(gid,calId,v){ _pgAllocDaysCollapse[String(gid)+'|'+calId]=!!v; }
   // ONE global Command (Meta) listener flips the header control between [+] (add) and [-] (remove) the
   // instant Command is pressed or released — no mouse movement required. (Names keep the 'Ctrl' stems.)
   if(typeof window!=='undefined' && !window.__pgWkCtrlWired){
@@ -10154,7 +10160,22 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // happen at fire time inside _allocDayCtxOpen.
             if(editableCnt && !_perSchoolU && !_pgShvFullBuild){
               (function(dK,dLbl){
-                $thU.on('contextmenu.dayvis',function(ev){ _allocDayCtxOpen(ev,editCombo.si,dK,dLbl); });
+                // Same right-click affordance the Staffing Allocation Weeks headers carry: a plain
+                // pointer cursor plus the two-layer hover cue (tint + inset ring), NO icon. Inline
+                // (not the .pg-wk-vis-* classes) because these th cells carry inline backgrounds
+                // that beat a stylesheet tint, and reusing the wk classes would pollute their
+                // week-cell selectors; the COLORS are the wk cue's exactly, so the two read as one
+                // treatment. Leave restores the header's own painted background verbatim
+                // (weekend/special tints, struck-day opacity untouched).
+                $thU.addClass('pg-day-vis-cell').css('cursor','pointer')
+                  .on('mouseenter.dayvis',function(){
+                    this._dvBg=this.style.background||this.style.backgroundColor||'';
+                    $(this).addClass('pg-day-vis-hover').css({background:'#dbe4f0',boxShadow:'inset 0 0 0 2px #7a93b8'});
+                  })
+                  .on('mouseleave.dayvis',function(){
+                    $(this).removeClass('pg-day-vis-hover').css({background:(this._dvBg||''),boxShadow:''});
+                  })
+                  .on('contextmenu.dayvis',function(ev){ _allocDayCtxOpen(ev,editCombo.si,dK,dLbl); });
               })(d.k,d.l);
             }
             $hrU.append($thU);
@@ -10901,7 +10922,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   for(var _q3=0;_q3<_daysCtx.length;_q3++){ if(_daysCtx[_q3].k===_dk){ _dd=_daysCtx[_q3]; break; } }
                   if(!_dd) return;
                   (function(dK,dLbl){
-                    $(this).on('contextmenu.dayvis',function(ev){ _allocDayCtxOpen(ev,si,dK,dLbl); });
+                    // Same cue as the regular table's day headers (and the Weeks headers): pointer
+                    // + hover tint/ring, inline. The read-only transform forced cursor:default on
+                    // every element, so pointer is re-asserted here on the interactive header.
+                    $(this).addClass('pg-day-vis-cell').css('cursor','pointer')
+                      .on('mouseenter.dayvis',function(){
+                        this._dvBg=this.style.background||this.style.backgroundColor||'';
+                        $(this).addClass('pg-day-vis-hover').css({background:'#dbe4f0',boxShadow:'inset 0 0 0 2px #7a93b8'});
+                      })
+                      .on('mouseleave.dayvis',function(){
+                        $(this).removeClass('pg-day-vis-hover').css({background:(this._dvBg||''),boxShadow:''});
+                      })
+                      .on('contextmenu.dayvis',function(ev){ _allocDayCtxOpen(ev,si,dK,dLbl); });
                   }).call(this,_dd.k,_dd.l);
                 });
               }catch(e){}
@@ -11873,6 +11905,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // default to a narrow vertical column; expanded shows one checkbox per week per school.
             var _wkCalId=_wkRotCalId(editCombo);
             var _wkCollapsed=_wkRotCollapsed(g.id,_wkCalId);
+            var _daysColl=_allocDaysCollapsed(g.id,_wkCalId);   // twenty-fourth spec part 1
             var _wkWeeks=_wkRotCount(g.id,_wkCalId);
             var _wkRO=(_pgvCur.mode==='view');
             // ── Weeks (actual chronological calendar weeks) segment state ── One column per real
@@ -12277,7 +12310,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // width), so no fixed minimum; a long name truncates rather than widening the table.
             if(anyPod) $hr.append($('<th class="sf-alloc-pod-h">').css(Object.assign({},th,{padding:'3px 4px',width:'1px',maxWidth:'92px',overflow:'hidden',textOverflow:'ellipsis'})).text('Pod'));
             $hr.append($('<th class="sf-alloc-school-h">').css(Object.assign({},th,{textAlign:'left',minWidth:'150px'})).text('School Name'));
-            days.forEach(function(dy,dyi){
+            if(!_daysColl) days.forEach(function(dy,dyi){
               var $th=$('<th>').addClass(dy.isSd?'sf-alloc-sd-h':'sf-alloc-day-h').attr('data-day',dy.k)
                 .css(Object.assign({},th,{minWidth:'34px'},
                   _isWknd(dy.k)?{background:WKND_TH,color:'#3d5a80'}:{},
@@ -12358,9 +12391,33 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // Select All / Clear actions right after its label, so those actions read as operating on
             // the calendar's day allocations. Colspans still sum to the full width.
             var $saTh=$('<th class="sf-alloc-title sf-alloc-title-sa" colspan="'+((anyPod?1:0)+1)+'">').css(Object.assign({},th,_titleCss)).text('Staffing Allocation');
-            var $titleTh=$('<th class="sf-alloc-title sf-alloc-title-days" colspan="'+days.length+'">').css(Object.assign({},th,_titleCss));
+            var $titleTh;
+            if(_daysColl){
+              // Twenty-fourth spec part 1: the whole Days section collapsed to a narrow column.
+              // The title row's cell is a 1-wide th holding the expand chevron (the rotated "Days"
+              // label rides the body's rowspan strip, exactly like the Weeks section).
+              $titleTh=$('<th class="sf-alloc-title sf-alloc-title-days sf-alloc-title-days-collapsed pg-view-ok" rowspan="2">')
+                .css(Object.assign({},th,{width:'1px',padding:'4px 2px',verticalAlign:'top',cursor:'pointer'}))
+                .attr('title','Expand Days');
+              var $dExp=$('<button type="button" class="sf-alloc-days-toggle pg-view-ok" title="Expand Days" aria-label="Expand Days" aria-expanded="false" style="color:#5f6368;background:none;border:none;padding:0;cursor:pointer;">').append(_pgChvSvg('right'));
+              $dExp.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+              var _dExpand=function(e){ if(e){ e.preventDefault(); e.stopPropagation(); } _allocDaysSetCollapsed(g.id,_wkCalId,false); _wkRerender(); };
+              $dExp.on('click',_dExpand);
+              $titleTh.on('click',function(e){ if($(e.target).closest('button').length) return; _dExpand(e); });
+              $titleTh.append($dExp);
+            } else {
+            var $titleTh_expanded=$('<th class="sf-alloc-title sf-alloc-title-days" colspan="'+days.length+'">').css(Object.assign({},th,_titleCss));
+            $titleTh=$titleTh_expanded;
             var $titleIn=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'8px'});
-            $titleIn.append($('<span>').text('Days'));
+            var $daysLbl=$('<span>').text('Days');
+            $titleIn.append($daysLbl);
+            // Collapse control on the Days label — same left-chevron idiom as the Weeks section.
+            if(_pgvCur.mode!=='view'){
+              var $daysColl=$('<button type="button" class="sf-alloc-days-toggle pg-view-ok" title="Collapse Days" aria-label="Collapse Days" aria-expanded="true" style="color:#5f6368;background:none;border:none;padding:0 0 0 4px;cursor:pointer;">').append(_pgChvSvg('left'));
+              $daysColl.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+              $daysColl.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _allocDaysSetCollapsed(g.id,_wkCalId,true); _wkRerender(); });
+              $titleIn.append($daysColl);
+            }
             if(_pgvCur.mode!=='view'){
               // Secondary to the title: same compact idiom as the other small action controls,
               // sized so the header does not grow taller than its one text line.
@@ -12410,6 +12467,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $ax.css({position:'absolute',top:'2px',right:'4px',marginLeft:'0'});
             $titleTh.append($titleIn);
             $titleTh.append($ax);   // appended LAST so the cell's text still reads title-first
+            }   // end Days-expanded branch (collapsed Days carries only its expand chevron)
             // ── Week Rotation group cell (title row) ── Collapsed: a narrow rowspan-2 cell with
             // the expand chevron; the rotated "Week Rotation" label sits in the first body row so
             // the two read as one vertical column (the # of Students collapse pattern). Expanded:
@@ -12596,6 +12654,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   })();
                   $schTd.append($schIn);
                   $tr.append($schTd);
+                  if(_daysColl){
+                    // Twenty-fourth spec part 1: Days collapsed — one rotated "Days" strip on the
+                    // first school row, rowspan the whole list, click to expand. Mirrors the Weeks
+                    // section's collapsed body column exactly. No day checkboxes are emitted; the
+                    // allocation data is untouched, so expanding restores every value.
+                    if(rowIdx===0){
+                      var $daysVert=$('<td class="sf-alloc-days-vert pg-view-ok">').attr('rowspan',String(list.length))
+                        .css(Object.assign({},td,{padding:'4px 2px',width:'1px',textAlign:'center',verticalAlign:'middle',background:'#f8f9fb',cursor:'pointer'}))
+                        .attr('title','Expand Days');
+                      $daysVert.append($('<span style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px;font-weight:700;color:#6c757d;letter-spacing:.04em;">').text('Days'));
+                      $daysVert.on('click',function(){ _allocDaysSetCollapsed(g.id,_wkCalId,false); _wkRerender(); });
+                      $tr.append($daysVert);
+                    }
+                  } else
                   days.forEach(function(dy,dyi){
                     var $c=$('<td class="sf-alloc-cell">').attr({'data-alloc-si':String(u.si),'data-alloc-day':dy.k})
                       .css(Object.assign({},td,{padding:'2px'},
@@ -21008,6 +21080,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       }
     }catch(_eX){}
     _weekVisRepaint(calId,wkIso,now);
+    try{ _pgCalLengthPaint(gid); }catch(e){}   // Length column tracks Exclude/Include Week instantly
     try{
       var ctl=window._pgWkRotCtl&&window._pgWkRotCtl[String(gid)+'|'+String(calId)];
       if(ctl&&ctl.recalc){ ctl.recalc(); }
@@ -21031,7 +21104,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $it.on('mouseenter',function(){ $(this).css('background','#eef3f9'); }).on('mouseleave',function(){ $(this).css('background','transparent'); });
     var _ic=isExcluded?(_pgIcon('includeweek')||''):(_pgIcon('excludeweek')||'');
     $it.append($('<span class="pg-wkvis-ctx-icon">').css({display:'inline-flex',width:'16px',justifyContent:'center',color:isExcluded?'#2e7d32':'#6c757d'}).html(_ic));
-    $it.append(document.createTextNode(isExcluded?'Include in Rotation':'Exclude from Rotation'));
+    $it.append(document.createTextNode(isExcluded?'Include Week':'Exclude Week'));
     $it.on('click',function(e){ e.stopPropagation(); close(); try{ onPick(); }catch(_e){} });
     $m.append($it);
     $('body').append($m);
@@ -21049,7 +21122,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   }
   // One-item right-click menu for the Per-School Staffing Hours day headers: "Exclude {Day}" on an
   // active day, "Include {Day}" on a day already excluded through Staffing Allocation → Days.
-  // Reuses the SAME icons as the week rotation menu (Exclude from Rotation / Include in Rotation).
+  // Reuses the SAME icons as the week rotation menu (Exclude Week / Include Week).
   function _pgDayVisMenu(ev, isExcluded, dayLbl, onPick){
     $('.pg-dayvis-ctx').remove();
     var $m=$('<div class="pg-dayvis-ctx">').css({position:'fixed',zIndex:1000008,background:'#fff',
@@ -21099,6 +21172,113 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Students-section collapse per Site Breakdown table (guideId|calId). Display-only:
   // never written to guideDetails, so no data change, no History, no JSON/Excel export.
   var _sbStuCollapse={};
+  // ── Twenty-fourth spec: a SHARED column-collapse toolkit ─────────────────────────────────────
+  // Parts 2, 3, 4(totals) and 5 all collapse a single table COLUMN into a narrow vertical strip,
+  // following the Students/Weeks reference exactly: an expanded header th carries a LEFT chevron
+  // (collapse); the collapsed column is a narrow th holding a single RIGHT chevron (expand) at the
+  // top, and body cells become a thin strip that also expands on click, with the rotated label
+  // centered. To keep every table visually identical, all of them build these pieces through the
+  // three helpers below rather than re-implementing the idiom. State is one presentation-only map,
+  // keyed "gid|table|colId" — never persisted, so values/totals are never lost or recalculated by
+  // collapsing (spec part 6). The chevrons are the app's _pgChvSvg (same as Students/Weeks).
+  var _pgColCollapse={};
+  function _colCollKey(gid,table,colId){ return String(gid)+'|'+String(table)+'|'+String(colId); }
+  function _colCollapsed(gid,table,colId){ return !!_pgColCollapse[_colCollKey(gid,table,colId)]; }
+  function _colSetCollapsed(gid,table,colId,v){ if(v) _pgColCollapse[_colCollKey(gid,table,colId)]=true; else delete _pgColCollapse[_colCollKey(gid,table,colId)]; }
+  // A collapse chevron (LEFT) to sit next to an expanded column's label. onToggle() collapses.
+  function _pgCollapseChev(label,onToggle){
+    var $cv=$('<button type="button" class="pg-col-toggle sb-stu-toggle" aria-expanded="true" style="color:#5f6368;background:none;border:none;padding:0 0 0 4px;cursor:pointer;vertical-align:middle;">')
+      .attr('title','Collapse '+label).attr('aria-label','Collapse '+label).append(_pgChvSvg('left'));
+    $cv.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+    $cv.on('click',function(e){ e.preventDefault(); e.stopPropagation(); onToggle(); });
+    return $cv;
+  }
+  // A wrapped header content: the label plus its collapse chevron, in the inline-flex the reference
+  // uses so the cell box and text metrics stay unchanged.
+  function _pgCollapsibleHeader(label,onToggle){
+    return $('<span style="display:inline-flex;align-items:center;justify-content:center;">')
+      .append($('<span>').text(label)).append(_pgCollapseChev(label,onToggle));
+  }
+  // The narrow collapsed-column HEADER cell: holds the single RIGHT (expand) chevron at the top.
+  // extraCss lets a caller add table-specific borders (e.g. a section separator). onToggle expands.
+  function _pgCollapsedTh(label,onToggle,extraCss){
+    var $th=$('<th class="pg-col-collapsed-th">')
+      .css(Object.assign({ border:'1px solid #dee2e6', background:'#f8f9fb', fontWeight:'600',
+        textAlign:'center', padding:'4px 2px', fontSize:'10px', color:'#6c757d', width:'1px',
+        verticalAlign:'top', cursor:'pointer' }, extraCss||{}))
+      .attr('title','Expand '+label);
+    var $cv=$('<button type="button" class="pg-col-toggle sb-stu-toggle" aria-expanded="false" style="color:#5f6368;background:none;border:none;padding:0;cursor:pointer;">')
+      .attr('title','Expand '+label).attr('aria-label','Expand '+label).append(_pgChvSvg('right'));
+    $cv.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+    $th.append($cv);
+    $th.on('click',function(e){ if($(e.target).closest('button').length) return; e.preventDefault(); e.stopPropagation(); onToggle(); });
+    $cv.on('click',function(e){ e.preventDefault(); e.stopPropagation(); onToggle(); });
+    return $th;
+  }
+  // A body strip cell for a collapsed column. rows>1 makes ONE rowspan-ed cell (pass on the first
+  // body row only) that carries the centered rotated label; rows<=1 makes a plain thin cell. The
+  // whole cell expands on click. extraCss for table-specific borders/background.
+  function _pgCollapsedStripCell(label,onToggle,rows,extraCss){
+    var $td=$('<td class="pg-col-strip">')
+      .css(Object.assign({ border:'1px solid #dee2e6', background:'#f8f9fb', padding:'4px 2px',
+        width:'1px', textAlign:'center', verticalAlign:'middle', cursor:'pointer' }, extraCss||{}))
+      .attr('title','Expand '+label);
+    if(rows>1) $td.attr('rowspan', String(rows));
+    if(label!=null && label!=='') $td.append($('<span style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px;font-weight:700;color:#6c757d;letter-spacing:.04em;">').text(label));
+    $td.on('click',function(){ onToggle(); });
+    return $td;
+  }
+  // Post-build column collapse for FLAT tables (Program Calendars, Discounts): each entry maps a
+  // column to its single header th and its one body cell per row. Collapsed columns are transformed
+  // in place — the header becomes _pgCollapsedTh, the column's data cells are removed and replaced
+  // by ONE rowspan strip on the first body row carrying the rotated label (spanning every data row
+  // plus, when keepTotalWhenValued is false OR the column has no value, the total/footer rows too).
+  // Because this runs on the already-built DOM, no per-cell wiring changes are needed, and the
+  // underlying values stay intact for the moment the column is expanded again (spec part 6).
+  // opts: { gid, table, rerender, headerRowSel, bodyRowSel, totalRowSel } and cols: [{colId,label,
+  //   thSel, cellSel, hasValue(optional -> bool)}]. thSel/cellSel are scoped to $table.
+  function _pgApplyFlatColCollapse($table, opts, cols){
+    var gid=opts.gid, table=opts.table;
+    var $bodyRows=$table.find(opts.bodyRowSel||'tbody > tr').filter(function(){ return !$(this).is(opts.totalRowSel||'.__none__'); });
+    var $totRows=opts.totalRowSel?$table.find(opts.totalRowSel):$();
+    cols.forEach(function(col){
+      if(!_colCollapsed(gid,table,col.colId)) return;
+      var onToggle=function(){ _colSetCollapsed(gid,table,col.colId,false); opts.rerender(); };
+      // Header: swap the th for a collapsed one, preserving any left border it carried.
+      var $th=$table.find(col.thSel).first();
+      var extraTh={}; if($th.length){ var bl=$th.css('border-left'); if(bl && /2px/.test(bl)) extraTh.borderLeft=bl; }
+      var $cth=_pgCollapsedTh(col.label,onToggle,extraTh);
+      if($th.length) $th.replaceWith($cth);
+      // Does the column have a dedicated total cell? (Some PC columns sit under a wide colspan and
+      // have none — those keep the total row untouched and the strip spans only the data rows.)
+      var $totCell = ($totRows.length && col.totalSel) ? $totRows.find(col.totalSel).first() : $();
+      var hasTotalCell = $totCell.length>0;
+      // Whether the column has any value (drives the total-merge rule, only where allowed).
+      var hasVal = (typeof col.hasValue==='function') ? !!col.hasValue()
+        : $bodyRows.toArray().some(function(tr){ var c=$(tr).find(col.cellSel); var t=c.text&&c.text(); return t && t.trim() && t.trim()!=='\u2014'; });
+      var nData=$bodyRows.length;
+      // Fold the strip through the total row ONLY when the caller allows it, the column owns a total
+      // cell, and the column is empty (spec part 4, Site Breakdown). PC columns never fold.
+      var spanTotal = !!col.mergeEmptyTotal && hasTotalCell && !hasVal;
+      var rows = nData + (spanTotal?$totRows.length:0);
+      $bodyRows.each(function(i){
+        var $c=$(this).find(col.cellSel).first();
+        if(i===0){ $c.replaceWith(_pgCollapsedStripCell(col.label,onToggle,rows)); }
+        else { $c.remove(); }
+      });
+      if(hasTotalCell){
+        if(spanTotal){ $totCell.remove(); }
+        else { $totCell.css({width:'1px',padding:'4px 2px',textAlign:'center'}); }
+      }
+    });
+  }
+  // Twenty-second spec, parts 3-5: per-role column collapse in the Site Breakdown table. Keyed
+  // gid|calId|roleKey (roleKey is the coach/staff role's own key). Session-scoped view state like
+  // _sbStuCollapse above — never persisted, so exports/Undo/imports are untouched. A collapsed
+  // role renders as a narrow vertical strip (rotated name, expand icon on top) spanning the
+  // subheader through the body; its Total cell is preserved when the role has any value, or the
+  // strip runs unbroken THROUGH the Total row when the role is empty across all schools.
+  var _sbRoleCollapse={};
   // Authoritative per-calendar figures, published BY the Program Summary as it renders.
   // Keyed guideId|calId → {site, unalloc, total}. The Program Calendars table only reads
   // these, so the calculated columns can never drift from the Summary.
@@ -21147,6 +21327,41 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $('td.pg-cal-total-maxcnt').text((m&&m.combined>0)?String(m.combined):'\u2014');
     }catch(e){}
   }
+  // ── Length for the Program Calendars table ── Active program weeks: the calendar's week span
+  // (the SAME Monday enumeration the Weeks segment builds — _wkOvMondayIso(firstDay) through
+  // _wkRotWeekIndex(lastDay)) minus every week marked Exclude Week. Both the Calendar Week/Dates
+  // context menu and the Staffing Allocation Week subheaders write the ONE _pgWeekVis store this
+  // reads, so an exclusion from either surface shortens the Length and an Include Week restores it.
+  function _pgCalWeeksLen(gid, cr){
+    try{
+      if(!(cr&&cr.firstDay&&cr.lastDay)) return null;
+      var n=_wkRotWeekIndex(gid, cr.calId, cr.lastDay);
+      var m0=_wkOvMondayIso(cr.firstDay);
+      if(!(n>=0&&m0)) return null;
+      var d0=new Date(m0+'T00:00:00'); if(isNaN(d0)) return null;
+      var act=0;
+      for(var j=0;j<=n;j++){
+        var d2=new Date(d0); d2.setDate(d0.getDate()+j*7);
+        var iso=d2.toISOString().slice(0,10);
+        if(!_weekVisExcluded(gid, cr.calId, iso)) act++;
+      }
+      return act;
+    }catch(e){ return null; }
+  }
+  // Repaint every Length cell from data. Called from pgCalcCellsRefresh (so date edits and every
+  // dependency chain that lands there track it) AND directly from _weekVisToggle, so Exclude
+  // Week / Include Week update the column immediately even when the toggled week carries no hours.
+  function _pgCalLengthPaint(gid){
+    try{
+      var det=guideDetails[String(gid)]||{};
+      var byId={}; (det.calendarRows||[]).forEach(function(cr){ if(cr&&cr.calId!=null) byId[String(cr.calId)]=cr; });
+      $('td.pg-cal-length').each(function(){
+        var cid=String($(this).attr('data-calc-cal')||'');
+        var v=_pgCalWeeksLen(gid, byId[cid]);
+        $(this).text((v==null)?'\u2014':(v+' week'+(v===1?'':'s')));
+      });
+    }catch(e){}
+  }
   function pgCalcCellsRefresh(g){
     try{
       var snap=pgCalcSnapshot(g);
@@ -21171,6 +21386,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $td.text((v==null||!isFinite(v))?'\u2014':(kind==='amount'?pgFmtAmt(v):pgFmtHours(v)));
       });
       _pgMaxCntPaint(g&&g.id);   // Staff/Day (Max): latest figures the Calendar pass published
+      _pgCalLengthPaint(g&&g.id);   // Length: active weeks from the shared week-exclusion store
     }catch(e){}
   }
   // Hover "..." copy menu for Site Breakdown role cells. One transaction, one History entry.
@@ -21242,6 +21458,20 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // same display-only treatment for the other collapsible guide sections, keyed
   // guideId|section (and guideId|site|calId per Site Breakdown)
   var _pgSecCollapse={};
+  // Site Breakdown "Unallocated Hours" checkbox state (gid|calId -> false when unchecked; absent =
+  // checked). A VIEW preference like _pgSecCollapse above — session-scoped on purpose, never
+  // persisted into guide data, so exports, Undo snapshots and imports are untouched by it.
+  var _pgSbUnallocVis={};
+  // gid|calId -> the Site Breakdown header's repaint fn for the compact Unallocated summary; the
+  // Unallocated card's allocRecalc calls it so the summary tracks every value change live.
+  var _pgSbUnallocSumPaint={};
+  // Twenty-sixth spec: Site Breakdown program filter. gid|calId -> false when that program is
+  // hidden via the Filter dropdown (absent = visible). Presentation-only, session-scoped like the
+  // other SB view maps; never persisted. A hidden program's WHOLE group (its Site Breakdown table
+  // AND its Unallocated Hours area) is removed from the layout so no gap remains.
+  var _pgSbProgVis={};
+  function _sbProgVisible(gid,calId){ return _pgSbProgVis[String(gid)+'|'+String(calId)]!==false; }
+  function _sbProgSetVisible(gid,calId,v){ if(v) delete _pgSbProgVis[String(gid)+'|'+String(calId)]; else _pgSbProgVis[String(gid)+'|'+String(calId)]=false; }
   // Reusable collapse control: same icon, spacing and width behaviour as Program
   // Calendars. The body stays LAID OUT (height 0, hidden) so the header keeps its width.
   // Make the empty part of a section header toggle that section, so the small chevron is not the
@@ -22366,7 +22596,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // A bolder left border plus a cooler tint separates the discounted block from the base
       // pricing columns, so the two pricing stories are not read as one run of numbers.
       var DISC_EDGE={borderLeft:'2px solid #b9c6d6'}, DISC_TINT={background:'#eef3f9'};
-      var _cols=[['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Meal Breaks',{}],['PPH',{minWidth:'74px'}],['Scheduled Hrs',{minWidth:'92px',textAlign:'right'}],['Remaining Hrs',{minWidth:'104px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['Amount',{minWidth:'92px',textAlign:'right'}]];
+      // Column order (spec): Length sits immediately after Last Day (active program weeks — the
+      // calendar's week span minus any week marked Exclude Week in the Calendar or Staffing
+      // Allocation surfaces, which share ONE _pgWeekVis store); PPH sits between Total and Amount
+      // (Total → PPH → Amount).
+      var _cols=[['',{width:'28px'}],['Name',{minWidth:'140px',textAlign:'left'}],['First Day',{minWidth:'104px'}],['Last Day',{minWidth:'104px'}],['Length',{minWidth:'70px',textAlign:'right'}],['Meal Breaks',{}],['Scheduled Hrs',{minWidth:'92px',textAlign:'right'}],['Remaining Hrs',{minWidth:'104px',textAlign:'right'}],['Total',{minWidth:'76px',textAlign:'right'}],['PPH',{minWidth:'74px'}],['Amount',{minWidth:'92px',textAlign:'right'}]];
       // PPH (Net) and Net Amount are ALWAYS shown; with no discount they equal PPH and Amount.
       // Savings is no longer displayed here (it still lives in the Discounts area).
       // Staff/Day (Max) sits immediately BEFORE PPH (Net) (spec): the highest effective daily
@@ -22375,8 +22609,27 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _cols.push(['PPH (Net)',Object.assign({minWidth:'80px',textAlign:'right'},DISC_EDGE,DISC_TINT)]);
       _cols.push(['Amount (Net)',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
       _cols.push(['Del',{width:'36px'}]);
+      // Twenty-fourth spec, part 2: these Program Calendars columns collapse to narrow vertical
+      // strips. Map label -> a stable header/cell selector so the shared collapse toolkit can find
+      // them. The header th gets a LEFT collapse chevron; the body cells already carry these classes.
+      var _PC_COLLAPSIBLE={
+        'Length':        { colId:'length',  thCls:'pg-cal-h-length',  cellSel:'td.pg-cal-length' },
+        'Scheduled Hrs': { colId:'sched',   thCls:'pg-cal-h-sched',   cellSel:'td.pg-cal-calc[data-calc-kind="site"]' },
+        'Remaining Hrs': { colId:'remain',  thCls:'pg-cal-h-remain',  cellSel:'td.pg-cal-calc[data-calc-kind="unalloc"]' },
+        'PPH':           { colId:'pph',     thCls:'pg-cal-h-pph',     cellSel:'td.pg-cal-pph' },
+        'Staff/Day (Max)':{ colId:'maxcnt', thCls:'pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt' }
+      };
       _cols.forEach(function(pair){
-        $htr.append($('<th>').css(Object.assign({},csThStyle,pair[1])).text(pair[0]));
+        var $th=$('<th>').css(Object.assign({},csThStyle,pair[1]));
+        var meta=_PC_COLLAPSIBLE[pair[0]];
+        if(meta){
+          $th.addClass(meta.thCls);
+          var _lbl=pair[0], _cid=meta.colId;
+          $th.empty().append(_pgCollapsibleHeader(_lbl,function(){ _colSetCollapsed(g.id,'pcal',_cid,true); refreshCalSetupTable(); }));
+        } else {
+          $th.text(pair[0]);
+        }
+        $htr.append($th);
       });
       $thead.append($htr);
       $tbl.append($thead);
@@ -22584,7 +22837,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($ldTd);
 
         // Price per Hour cell — per-calendar editable currency (tied to this row / Calendar ID), defaults to $86
-        var $ppTd=$('<td>').css(Object.assign({},csTdStyle,{minWidth:'96px',padding:'2px 4px'}));
+        var $ppTd=$('<td class="pg-cal-pph">').css(Object.assign({},csTdStyle,{minWidth:'96px',padding:'2px 4px'}));
         var $ppWrap=$('<div>').css({display:'flex',alignItems:'center',gap:'1px',borderRadius:'4px',border:'1px solid #dde3ea',background:'#f7f9fc',boxShadow:'inset 0 1px 2px rgba(0,0,0,.06)',padding:'0 5px'});
         $ppWrap.append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'var(--tx2)',flexShrink:'0'}).text('$'));
         var $ppInp=$('<input type="text" inputmode="decimal" autocomplete="off">').css({width:'46px',border:'none',background:'transparent',fontSize:'11px',outline:'none',padding:'3px 1px',color:'#212529'}).val(row.pricePerHour||'86.00');
@@ -22715,8 +22968,13 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             if(val.nb) row.nbBreaks=JSON.parse(JSON.stringify(val.nb)); else delete row.nbBreaks;
             return true;
           });
+        // Length (spec): active program weeks — filled by _pgCalLengthPaint from the SAME
+        // _pgWeekVis exclusion store both the Calendar and Staffing Allocation toggles write,
+        // so an Exclude Week from either surface updates it, and Include Week restores it.
+        var $lenTd=$('<td class="pg-cal-length">').attr('data-calc-cal',String(row.calId==null?'':row.calId))
+          .css(Object.assign({},csTdStyle,{textAlign:'right',whiteSpace:'nowrap',padding:'4px 10px',color:'#212529'})).text('\u2014');
+        $tr.append($lenTd);
         $tr.append($bilTd);
-        $tr.append($ppTd);
 
         // Read-only calculated columns, straight from the Program Summary's own figures
         // (pgCalCalcGet) — no second calculation path, so they cannot drift.
@@ -22732,7 +22990,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             $td.text((v==null||!isFinite(v))?'\u2014':(kind==='amount'?pgFmtAmt(v):pgFmtHours(v)));   // module-level formatters
             return $td;
           }
-          $tr.append(calcTd('site'), calcTd('unalloc'), calcTd('total'), calcTd('amount'));
+          $tr.append(calcTd('site'), calcTd('unalloc'), calcTd('total'), $ppTd, calcTd('amount'));
           // Staff/Day (Max): the highest effective daily Staff/Coach Count in this calendar,
           // read from _pgCalMaxCnt (published by the Calendar's hours pass from the same per-date
           // counts that drive the peak-count highlight). Filled here from the latest published
@@ -22799,6 +23057,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $tr.append($('<td>').attr('colspan',iTot).css(Object.assign({},base,{textAlign:'left'}))
           .text('Planning Guide ('+nCal+' program'+(nCal===1?'':'s')+')'));
         $tr.append($('<td class="pg-cal-total-hours">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
+        $tr.append($('<td class="pg-cal-total-row-pph">').css(base));   // under PPH (moved between Total and Amount) — no total rate here
         $tr.append($('<td class="pg-cal-total-amount">').css(Object.assign({},base,{textAlign:'right',whiteSpace:'nowrap'})).text('\u2014'));
         // Staff/Day (Max) total (spec): the highest effective daily Staff/Coach Count across the
         // COMBINED Calendar — per-calendar counts summed by date, then the max of those daily
@@ -22814,6 +23073,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       })();
 
       $tbl.append($tbody);
+      // Twenty-fourth spec part 2: collapse any of the 5 collapsible Program Calendars columns.
+      // Length/Scheduled/Remaining sit under the total row's wide colspan (no own total cell), so
+      // their strips span the data rows only; PPH and Staff/Day (Max) own a total cell that narrows.
+      _pgApplyFlatColCollapse($tbl, { gid:g.id, table:'pcal', bodyRowSel:'tbody > tr', totalRowSel:'tfoot > tr.pg-cal-total-row', rerender:refreshCalSetupTable }, [
+        { colId:'length', label:'Length',          thSel:'th.pg-cal-h-length',  cellSel:'td.pg-cal-length' },
+        { colId:'sched',  label:'Scheduled Hrs',   thSel:'th.pg-cal-h-sched',   cellSel:'td.pg-cal-calc[data-calc-kind="site"]' },
+        { colId:'remain', label:'Remaining Hrs',   thSel:'th.pg-cal-h-remain',  cellSel:'td.pg-cal-calc[data-calc-kind="unalloc"]' },
+        { colId:'pph',    label:'PPH',             thSel:'th.pg-cal-h-pph',     cellSel:'td.pg-cal-pph',    totalSel:'td.pg-cal-total-row-pph' },
+        { colId:'maxcnt', label:'Staff/Day (Max)', thSel:'th.pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt', totalSel:'td.pg-cal-total-maxcnt' }
+      ]);
       $scroll.append($tbl);
       return $scroll;
     }
@@ -23264,6 +23533,17 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // ── header: grouped stage headers over five subcolumns each ──
       var $h1=$('<tr>'), $h2=$('<tr>');
       [['Program Calendar','left','200px'],['PPH','right',''],['Total Hours','right',''],['Amount','right','']].forEach(function(c){
+        if(c[0]==='PPH'){
+          // Twenty-fourth spec part 3: the base/initial PPH column collapses like the others.
+          if(_colCollapsed(g.id,'disc','basepph')){
+            var $cth=_pgCollapsedTh('PPH',function(){ _colSetCollapsed(g.id,'disc','basepph',false); refreshDiscTable(); });
+            $cth.attr('rowspan','2').addClass('pg-disc-h-basepph').css({background:'#f0f4f8'});
+            $h1.append($cth); return;
+          }
+          var $pth=$('<th rowspan="2" class="pg-disc-h-basepph">').css(Object.assign({},thBase,{textAlign:c[1],minWidth:c[2]||''}));
+          $pth.append(_pgCollapsibleHeader('PPH',function(){ _colSetCollapsed(g.id,'disc','basepph',true); refreshDiscTable(); }));
+          $h1.append($pth); return;
+        }
         $h1.append($('<th rowspan="2">').css(Object.assign({},thBase,{textAlign:c[1],minWidth:c[2]||''})).text(c[0]));
       });
       stages.forEach(function(st,si){
@@ -23286,7 +23566,23 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $gh.append($ghIn);
         $h1.append($gh);
         ['Discount','%','PPH','Savings','Amount'].forEach(function(sub,k){
-          $h2.append($('<th>').css(Object.assign({},thBase,{textAlign:(k===0?'left':'right'),background:'#f4f7fb',minWidth:(k===0?'150px':'')})).text(sub));
+          var _isPct=(sub==='%'), _isPph=(sub==='PPH');
+          var _cid=_isPct?('pct-'+si):(_isPph?('pph-'+si):null);
+          if(_cid && _colCollapsed(g.id,'disc',_cid)){
+            var $cth=_pgCollapsedTh(sub==='%'?('Discount '+(si+1)+' %'):('Discount '+(si+1)+' PPH'),(function(cc){ return function(){ _colSetCollapsed(g.id,'disc',cc,false); refreshDiscTable(); }; })(_cid));
+            $cth.addClass('pg-disc-h-'+_cid).css({background:'#f4f7fb'});
+            $h2.append($cth); return;
+          }
+          var $sth=$('<th>').css(Object.assign({},thBase,{textAlign:(k===0?'left':'right'),background:'#f4f7fb',minWidth:(k===0?'150px':'')}));
+          if(_cid){
+            $sth.addClass('pg-disc-h-'+_cid);
+            var _lbl=(sub==='%'?('Discount '+(si+1)+' %'):('Discount '+(si+1)+' PPH'));
+            $sth.append(_pgCollapsibleHeader(sub,(function(cc){ return function(){ _colSetCollapsed(g.id,'disc',cc,true); refreshDiscTable(); }; })(_cid)));
+            $sth.attr('title',_lbl);
+          } else {
+            $sth.text(sub);
+          }
+          $h2.append($sth);
         });
       });
       // + Add Discount lives BELOW the table now (see $discAddWrap), so the table no longer
@@ -23306,7 +23602,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $nmTd.append($('<span>').css({display:'inline-block',width:'10px',height:'10px',borderRadius:'50%',background:(cr&&cr.color)||'#ffffff',border:'1px solid rgb(180,180,180)',marginRight:'6px',verticalAlign:'middle',pointerEvents:'none'}));
         $nmTd.append($('<span>').css({fontWeight:'600'}).text(nm));
         $tr.append($nmTd);
-        $tr.append($('<td class="pg-disc-base-price">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtAmt(base.price)));
+        $tr.append($('<td class="pg-disc-base-price pg-disc-col-basepph">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtAmt(base.price)));
         $tr.append($('<td class="pg-disc-base-hours">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtHours(base.hours)));
         $tr.append($('<td class="pg-disc-base-amt">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtAmt(base.amount)));
 
@@ -23348,7 +23644,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           // there is no manual override for now, so it renders as plain text in the same style as
           // the other calculated cells rather than as an input. Cumulative maths is unaffected:
           // it has always read sl.pct, which the selection sets.
-          var $pTd=$('<td class="pg-disc-pct-cell">').css(Object.assign({},tdBase,{textAlign:'right'}));
+          var $pTd=$('<td class="pg-disc-pct-cell pg-disc-col-pct-'+si+'">').css(Object.assign({},tdBase,{textAlign:'right'}));
           if(has){
             // The EFFECTIVE percentage, not the intended one: showing 5% while only 2.5% was
             // applied would leave the Price/Hr, Savings and Amount beside it looking wrong.
@@ -23364,7 +23660,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $tr.append($pTd);
 
           var showCalc=(calc.cum>0)||has;
-          $tr.append($('<td class="pg-disc-price">').css(Object.assign({},tdBase,{textAlign:'right'})).text(showCalc?pgFmtAmt(calc.price):'\u2014'));
+          $tr.append($('<td class="pg-disc-price pg-disc-col-pph-'+si+'">').css(Object.assign({},tdBase,{textAlign:'right'})).text(showCalc?pgFmtAmt(calc.price):'\u2014'));
           $tr.append($('<td class="pg-disc-savings">').css(Object.assign({},tdBase,{textAlign:'right',color:'#1a7f37'})).text(showCalc?pgFmtAmt(calc.savings):'\u2014'));
           $tr.append($('<td class="pg-disc-amount">').css(Object.assign({},tdBase,{textAlign:'right',fontWeight:'600'})).text(showCalc?pgFmtAmt(calc.amount):'\u2014'));
         });
@@ -23385,6 +23681,18 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $ft.append($('<td class="pg-disc-tot-stage-amt">').attr('data-disc-stage',String(si)).css(Object.assign({},ftBase,{textAlign:'right'})).text(pgFmtAmt(Math.round(stageTot[si].amt*100)/100)));
       });
       $tbl.append($('<tfoot>').append($ft));
+      // Twenty-fourth spec part 3: collapse the base PPH column and each discount's % and PPH
+      // columns, independently. These columns sit under the total row's colspan cells (no dedicated
+      // total cell), so the strips span the data rows only and the total row is left untouched — the
+      // colspan already covers the now-narrow column position.
+      (function(){
+        var _cols=[{ colId:'basepph', label:'PPH', thSel:'th.pg-disc-h-basepph', cellSel:'td.pg-disc-col-basepph' }];
+        stages.forEach(function(st,si){
+          _cols.push({ colId:'pct-'+si, label:'Discount '+(si+1)+' %',   thSel:'th.pg-disc-h-pct-'+si, cellSel:'td.pg-disc-col-pct-'+si });
+          _cols.push({ colId:'pph-'+si, label:'Discount '+(si+1)+' PPH', thSel:'th.pg-disc-h-pph-'+si, cellSel:'td.pg-disc-col-pph-'+si });
+        });
+        _pgApplyFlatColCollapse($tbl, { gid:g.id, table:'disc', bodyRowSel:'tbody > tr.pg-disc-row', totalRowSel:'tfoot > tr.pg-disc-total-row', rerender:refreshDiscTable }, _cols);
+      })();
       return $tbl;
     }
 
@@ -23587,12 +23895,51 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function buildSiteCard(calId, calLabel, calColor, isPrimary){
     var $section=$('<div class="card shadow-sm rounded-2 mt-2 site-cal-card" style="overflow:visible;width:fit-content;max-width:100%;border:1px solid #e9ecef;border-left:3px solid '+(calColor||'#ffffff')+';">').attr('data-site-cal',String(calId));
 
-    // Section header — "Site Breakdown" + this calendar's color circle and name
+    // Section header — this calendar's color circle and name. (Twenty-sixth spec: the "Site
+    // Breakdown" label and the divider that followed it are REMOVED here — the heading appears once
+    // at the top of the shared Site Breakdown area built by renderCalGroupsSection. The program
+    // name is this card's identifier within that area, mirroring the Staffing Hours layout.)
     var $secHd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;display:flex;align-items:center;flex-wrap:wrap;">');
-    $secHd.append($('<span class="fw-bold text-dark" style="font-size:12px;">').text('Site Breakdown'));
-    $secHd.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea'})
+    $secHd.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px'})
       .append($('<span class="site-cal-circle">').attr('data-site-cal',String(calId)).css({width:'10px',height:'10px',borderRadius:'50%',background:calColor||'#ffffff',border:'1px solid rgb(180,180,180)',flexShrink:'0',display:'inline-block'}))
-      .append($('<span class="site-cal-name">').attr('data-site-cal',String(calId)).css({fontSize:'12px',fontWeight:'600',color:'#495057'}).text(calLabel)) );
+      .append($('<span class="site-cal-name">').attr('data-site-cal',String(calId)).css({fontSize:'12px',fontWeight:'700',color:'#212529'}).text(calLabel)) );
+    // "Unallocated Hours" toggle — immediately after the Program Name and its divider (spec).
+    // Checked (default) shows this calendar's Unallocated Hours card; unchecked hides it but the
+    // compact summary below keeps the figures visible. pg-view-ok: a presentation toggle, so it
+    // stays live in locked View exactly like the collapse control.
+    var $unallocCb=$('<input type="checkbox" class="sb-unalloc-cb pg-view-ok">').css({cursor:'pointer',margin:'0',flexShrink:'0'})
+      .prop('checked', _pgSbUnallocVis[g.id+'|'+calId]!==false);
+    $secHd.append($('<span class="sb-unalloc-toggle-seg pg-view-ok">').css({display:'inline-flex',alignItems:'center',gap:'5px',marginLeft:'10px',paddingLeft:'10px',borderLeft:'1px solid #dde3ea',whiteSpace:'nowrap',flexShrink:'0'})
+      .append($unallocCb)
+      .append($('<span>').css({fontSize:'11.5px',fontWeight:'600',color:'#495057',cursor:'pointer'}).text('Unallocated Hours')
+        .on('click',function(e){ e.preventDefault(); e.stopPropagation(); $unallocCb.prop('checked',!$unallocCb.prop('checked')).trigger('change'); })) );
+    // Compact Unallocated summary content — shared by the collapsed-header summary and the
+    // expanded-but-unchecked span. Reads the SAME per-calendar store the Unallocated card edits
+    // (unschedForCal) and paints the numbers in the SAME colors that card uses: the Unallocated
+    // value on its green field, Remaining in blue (red when negative). Returns false (renders
+    // nothing) when the program has no Unallocated Hours to report.
+    function _sbUnallocInfo(){
+      try{
+        var u=unschedForCal(calId);
+        var un=parseFloat(u.unalloc); if(!(isFinite(un)&&un>0)) return null;
+        var sum=0;
+        (u.rows||[]).forEach(function(r){
+          var t=(r.total!==undefined)?r.total:_unFmtTotal(r.hrsPer,r.staff);
+          var tv=parseFloat(t); if(isFinite(tv)&&tv>0) sum+=tv;
+        });
+        return {un:Math.round(un*100)/100, rem:Math.round((un-sum)*100)/100};
+      }catch(e){ return null; }
+    }
+    function _sbUnallocFill($t){
+      var i=_sbUnallocInfo(); if(!i){ $t.empty(); return false; }
+      $t.empty()
+        .append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'#495057'}).text('Unallocated Hours:'))
+        .append($('<span>').css({fontSize:'11px',fontWeight:'700',background:'rgb(216, 255, 213)',borderRadius:'4px',padding:'1px 5px',color:'#212529'}).text(i.un))
+        .append($('<span>').css({fontSize:'11px',color:'#adb5bd'}).text('|'))
+        .append($('<span>').css({fontSize:'11px',fontWeight:'600',color:'#495057'}).text('Remaining Hours:'))
+        .append($('<span class="sb-unalloc-sum-rem">').css({fontSize:'11px',fontWeight:'700',color:(i.rem<0?'#dc3545':'rgb(13, 110, 253)')}).text(i.rem));
+      return true;
+    }
     $section.append($secHd);
 
     // Per-calendar rows (keyed by Calendar ID). For the first calendar these ARE the legacy
@@ -24592,6 +24939,72 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var $hr1=$('<tr>');
       var _stuKey=String(g.id)+'|'+String(calId);
       var _stuCollapsed=!!_sbStuCollapse[_stuKey];
+      // ── Twenty-second spec, parts 3-5: per-role column collapse ──────────────────────────────
+      // A collapsed coach/staff role renders its OWN count column (the Coaches-group column for a
+      // coach role, the Specialized-Staff column for a non-coach role) as a narrow vertical strip:
+      // rotated name + an expand icon on top, spanning the subheader down through the body. The
+      // strip is one rowspan-ed <td> emitted on the first data row, exactly like the Students strip.
+      // Whether it also swallows the Total row depends on whether the role carries any value:
+      //   has values  -> strip spans the data rows; the Total row keeps the role's total cell.
+      //   all-zero     -> strip spans data rows + the Total row, running unbroken to the bottom.
+      function _roleCollKey(role){ return String(g.id)+'|'+String(calId)+'|'+String(role.key); }
+      function _roleCollapsed(role){ return !!_sbRoleCollapse[_roleCollKey(role)]; }
+      function _roleHasValues(role){
+        var k=role.isCoach?('coaches_'+role.key):role.key;
+        return siteRows.some(function(r){ return (parseInt(r[k])||0)>0; });
+      }
+      function _roleTotal(role){
+        var k=role.isCoach?('coaches_'+role.key):role.key;
+        return siteRows.reduce(function(s,r){ return s+(parseInt(r[k])||0); },0);
+      }
+      function _sbRoleRerender(){ $section.replaceWith(buildSiteCard(calId, calLabel, calColor, isPrimary)); }
+      // The rowspan-ed vertical strip standing in for a collapsed role column — a byte-for-byte
+      // twin of the Students strip (sb-stu-vert): same border, background, padding, width,
+      // center alignment, cursor, and the rotated label built the SAME way (writing-mode
+      // vertical-rl + rotate(180deg), verticalAlign:middle so it centers). The WHOLE cell is the
+      // expand target, exactly like Students — the single expand ICON lives in the collapsed
+      // subheader th (below), never duplicated here. spanTotal folds the Total row into the strip
+      // (the all-zero case from the prior spec's part 4); otherwise it spans just the data rows.
+      function _roleVertCell(role, spanTotal){
+        var rows=(siteRows.length||0);
+        var $v=$('<td class="sb-role-vert">').attr('data-role-key', String(role.key))
+          .attr('rowspan', rows + (spanTotal?1:0))
+          .css({ border:'1px solid #dee2e6', background:'#f8f9fb', padding:'4px 2px', width:'1px',
+                 textAlign:'center', verticalAlign:'middle', cursor:'pointer' })
+          .attr('title','Expand '+pgRoleName(role, getRoles(g.id)));
+        $v.append($('<span style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px;font-weight:700;color:#6c757d;letter-spacing:.04em;">').text(pgRoleName(role, getRoles(g.id))));
+        $v.on('click',function(){ delete _sbRoleCollapse[_roleCollKey(role)]; _sbRoleRerender(); });
+        return $v;
+      }
+      // The collapsed role's subheader th — the twin of the Students isStuCollapsed th: narrow,
+      // top-aligned, holding the ONE expand control, a right-facing arrow (_pgChvSvg('right')) in
+      // an sb-stu-toggle button with the same hover colours and behaviour. This is the only expand
+      // icon in the collapsed column.
+      function _roleCollapsedTh(role){
+        var nm=pgRoleName(role, getRoles(g.id));
+        var $th=$('<th class="sb-role-collapsed-th">').attr('data-role-key', String(role.key))
+          .css({ border:'1px solid #dee2e6', background:'#f8f9fb', fontWeight:'600', textAlign:'center',
+                 padding:'4px 2px', fontSize:'10px', color:'#6c757d', width:'1px', verticalAlign:'top' });
+        var $cv=$('<button type="button" class="sb-stu-toggle" title="Expand '+nm+'" aria-label="Expand '+nm+'" aria-expanded="false" style="color:#5f6368;">').append(_pgChvSvg('right'));
+        $cv.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+        $cv.on('click',function(e){ e.preventDefault(); e.stopPropagation(); delete _sbRoleCollapse[_roleCollKey(role)]; _sbRoleRerender(); });
+        $th.empty().append($cv);
+        return $th;
+      }
+      // An expanded role's subheader th — identical footprint to a normal role subheader, plus the
+      // collapse control: a LEFT-facing arrow (_pgChvSvg('left')) in an sb-stu-toggle button, carried
+      // in the same inline-flex wrapper the Students group header uses so the cell box and text
+      // metrics are unchanged. Same icon style, size, positioning, hover, and behaviour as Students.
+      function _roleExpandedTh(role){
+        var nm=pgRoleName(role, getRoles(g.id));
+        var $th=$('<th class="sb-coach-role-th" data-role-key="'+String(role.key)+'">').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'});
+        var $lbl=$('<span>').text(nm);
+        var $cv=$('<button type="button" class="sb-stu-toggle" title="Collapse '+nm+'" aria-label="Collapse '+nm+'" aria-expanded="true" style="color:#5f6368;padding-left:4px;">').append(_pgChvSvg('left'));
+        $cv.on('mouseenter',function(){ $(this).css('color','#212529'); }).on('mouseleave',function(){ $(this).css('color','#6c757d'); });
+        $cv.on('click',function(e){ e.preventDefault(); e.stopPropagation(); _sbRoleCollapse[_roleCollKey(role)]=true; _sbRoleRerender(); });
+        $th.empty().append($('<span style="display:inline-flex;align-items:center;">').append($lbl,$cv));
+        return $th;
+      }
       // display-only re-render of THIS card only: values come straight back from data
       function _stuRerender(){ $section.replaceWith(buildSiteCard(calId, calLabel, calColor, isPrimary)); }
       var headers1=[
@@ -24601,18 +25014,21 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(_stuCollapsed){
         headers1.push({label:'', colspan:1, rowspan:2, isStuCollapsed:true});
       } else {
-        headers1.push({label:'# of Students', colspan:_coachRoles.length, isStuGroup:true});
-        headers1.push({label:'Total', html:'Total<br># of Students Per Site', colspan:1, rowspan:2});
+        // Twenty-fifth spec: the "# of Students" group now spans its role columns AND the
+        // Total # of Students column, so the group header covers colspan = roles + 1 and the Total
+        // moves into row 2 as a normal subheader (no longer a standalone rowspan-2 column).
+        headers1.push({label:'# of Students', colspan:_coachRoles.length+1, isStuGroup:true});
       }
       headers1=headers1.concat([
-        {label:'# of Coaches', colspan:_coachRoles.length},
-        {label:'Total', html:'Total<br># of Coaches Per Site', colspan:1, rowspan:2}
+        // Same extension for the "# of Coaches" group: it now spans the Total # of Coaches column.
+        {label:'# of Coaches', colspan:_coachRoles.length+1}
       ]);
       if(_podOn) headers1.unshift({label:'Pod', colspan:1, rowspan:2, isPod:true});   // dedicated Pod column, left of #
       if(_nonCoachRoles.length){
-        headers1.push({label:'# of Specialized Staff', colspan:_nonCoachRoles.length});
+        headers1.push({label:'# of Specialized', colspan:_nonCoachRoles.length});   // renamed (twenty-fifth spec)
       }
-      headers1.push({label:'Total', html:'Total<br># of Staff Per Site', colspan:1, rowspan:2});
+      // The Staff total stays a standalone rowspan-2 column (its group is not extended), just renamed.
+      headers1.push({label:'Total', html:'Total<br># of Staff', colspan:1, rowspan:2, totCol:'staff', totLabel:'Total # of Staff'});
       headers1.push({label:'', colspan:1, rowspan:2});
       headers1.forEach(function(h){
         var $th=$('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:h.textAlign||'center',padding:'5px 8px',fontSize:'10px',color:'#495057',whiteSpace:h.html?'normal':'nowrap'});
@@ -24642,6 +25058,27 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           $th.empty().append($cv2);
           $hr1.append($th); return;
         }
+        if(h.totCol){
+          // Twenty-fourth spec part 5: the Total # of Coaches/Staff Per Site columns collapse to a
+          // narrow vertical strip like every other collapsible column. When collapsed, render the
+          // shared collapsed th (right expand chevron); when expanded, keep the two-line label and
+          // add the shared LEFT collapse chevron. Tag the th so the post-build transform finds it.
+          var _tcId='tot-'+h.totCol, _tcLabel=h.totLabel;
+          if(_colCollapsed(g.id,'sbtot',_tcId)){
+            var $cth=_pgCollapsedTh(_tcLabel,function(){ _colSetCollapsed(g.id,'sbtot',_tcId,false); _sbRoleRerender(); });
+            $cth.addClass('sb-tot-h-'+h.totCol).css({background:'#f0f4f8'});
+            if(h.rowspan>1) $cth.attr('rowspan',h.rowspan);
+            $hr1.append($cth); return;
+          }
+          $th.addClass('sb-tot-h-'+h.totCol);
+          if(h.colspan>1)$th.attr('colspan',h.colspan);
+          if(h.rowspan>1)$th.attr('rowspan',h.rowspan);
+          var $tl=$('<span style="display:inline-flex;align-items:center;justify-content:center;">');
+          $tl.append($('<span>').html(h.html||h.label));
+          $tl.append(_pgCollapseChev(_tcLabel,function(){ _colSetCollapsed(g.id,'sbtot',_tcId,true); _sbRoleRerender(); }));
+          $th.empty().append($tl);
+          $hr1.append($th); return;
+        }
         if(h.html) $th.html(h.html); else $th.text(h.label);
         if(h.colspan>1)$th.attr('colspan',h.colspan);
         if(h.rowspan>1)$th.attr('rowspan',h.rowspan);
@@ -24651,9 +25088,42 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       // Row 2: sub-headers (coach names × 2 for students+coaches, then non-coach names)
       var $hr2=$('<tr>');
-      if(!_stuCollapsed) _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
-      _coachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
-      _nonCoachRoles.forEach(function(r){ $hr2.append($('<th>').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'}).text(pgRoleName(r, getRoles(g.id)))); });
+      // Twenty-fourth spec part 4: each Student-Section role column is independently collapsible
+      // (distinct from the Coaches-group role collapse). Reuses the shared toolkit under table
+      // "sbstu". When the whole Students group is collapsed (_stuCollapsed) these subheaders are
+      // absent anyway.
+      function _stuRoleCollapsed(role){ return _colCollapsed(g.id,'sbstu',role.key); }
+      function _stuRoleExpandedTh(role){
+        var nm=pgRoleName(role, getRoles(g.id));
+        var $th=$('<th class="sb-stu-role-th" data-role-key="'+String(role.key)+'">').css({border:'1px solid #dee2e6',background:'#f8f9fb',fontWeight:'600',textAlign:'center',padding:'4px 6px',fontSize:'10px',color:'#6c757d',whiteSpace:'nowrap'});
+        $th.append(_pgCollapsibleHeader(nm,function(){ _colSetCollapsed(g.id,'sbstu',role.key,true); _sbRoleRerender(); }));
+        return $th;
+      }
+      function _stuRoleCollapsedTh(role){
+        return _pgCollapsedTh(pgRoleName(role, getRoles(g.id)),function(){ _colSetCollapsed(g.id,'sbstu',role.key,false); _sbRoleRerender(); }).addClass('sb-stu-role-collapsed-th').attr('data-role-key',String(role.key));
+      }
+      // Twenty-fifth spec: the Total # of Students and Total # of Coaches columns now live INSIDE
+      // their section groups, so their labelled cell sits in ROW 2 (the subheader row) rather than
+      // spanning both header rows. Each keeps the shared collapse control (table 'sbtot'), so the
+      // post-build transform still finds it by its sb-tot-h-* class wherever it renders.
+      function _sbTotalSubTh(totCol, label){
+        var _tcId='tot-'+totCol;
+        if(_colCollapsed(g.id,'sbtot',_tcId)){
+          var $cth=_pgCollapsedTh(label,function(){ _colSetCollapsed(g.id,'sbtot',_tcId,false); _sbRoleRerender(); });
+          $cth.addClass('sb-tot-h-'+totCol).css({background:'#f0f4f8'});
+          return $cth;
+        }
+        var $th=$('<th>').addClass('sb-tot-h-'+totCol).css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'center',padding:'5px 6px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'});
+        $th.append($('<span style="display:inline-flex;align-items:center;justify-content:center;">')
+          .append($('<span>').text(label))
+          .append(_pgCollapseChev(label,function(){ _colSetCollapsed(g.id,'sbtot',_tcId,true); _sbRoleRerender(); })));
+        return $th;
+      }
+      if(!_stuCollapsed) _coachRoles.forEach(function(r){ $hr2.append(_stuRoleCollapsed(r) ? _stuRoleCollapsedTh(r) : _stuRoleExpandedTh(r)); });
+      if(!_stuCollapsed) $hr2.append(_sbTotalSubTh('students','Total # of Students'));
+      _coachRoles.forEach(function(r){ $hr2.append(_roleCollapsed(r) ? _roleCollapsedTh(r) : _roleExpandedTh(r)); });
+      $hr2.append(_sbTotalSubTh('coaches','Total # of Coaches'));
+      _nonCoachRoles.forEach(function(r){ $hr2.append(_roleCollapsed(r) ? _roleCollapsedTh(r) : _roleExpandedTh(r)); });
       $thead.append($hr2);
       $tbl.append($thead);
 
@@ -25151,6 +25621,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   if(!_eilBuckets[lb]) _eilBuckets[lb]=[];
                   _eilBuckets[lb].push(s);
                 });
+                // Twenty-second spec, part 1: within each GSOffered (EIL) category the schools
+                // list ALPHABETICALLY by name. The grouping order across buckets is unchanged
+                // (pgEilOrder, data-derived); only the intra-bucket order becomes A→Z. Locale
+                // compare so accented/mixed-case names sort naturally and stably.
+                Object.keys(_eilBuckets).forEach(function(_lb){
+                  _eilBuckets[_lb].sort(function(a,b){
+                    return String(a.name||'').localeCompare(String(b.name||''), undefined, {sensitivity:'base'});
+                  });
+                });
                 Object.keys(_eilBuckets).sort(function(a,b){
                   var d=pgEilOrder(a)-pgEilOrder(b);
                   return d!==0?d:(a<b?-1:a>b?1:0);
@@ -25284,9 +25763,34 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             // released and the list goes back to anchoring on its row.
             $dd.on('mouseenter',function(){ pinDd(); });
             $dd.on('mouseleave',function(){ unpinDd(); });
-            var _ddScroll=function(){ if(_ddPin){ unpinDd(); try{ positionDd(); }catch(e){} } };
+            // Twenty-second spec, part 2: the dropdown is anchored to its field. On scroll it must
+            // travel WITH the input and stay visually attached — a position:fixed list left at its
+            // opening coordinates would otherwise float free of the row. So every scroll re-anchors
+            // from the input's CURRENT viewport rect. During a multi-select run the pointer pins the
+            // list for row-churn stability; a real scroll is a deliberate move, so it releases that
+            // pin and re-anchors too (if the input has since been detached by a rebuild, the live
+            // search box is found and used). Capture-phase so scrolls on ANY ancestor scroller — not
+            // just window — keep the list attached.
+            function _anchorToLiveInput(){
+              var el=$inp[0];
+              if(!el || !el.isConnected){
+                try{ el=$nameTd.find('input').filter(function(){ return /chool/.test(this.getAttribute('placeholder')||''); })[0] || el; }catch(e){}
+              }
+              if(!el) return;
+              var rect=el.getBoundingClientRect();
+              var cellW=0; try{ cellW=$nameTd[0].getBoundingClientRect().width||0; }catch(e){}
+              var floor=Math.max(rect.width, cellW, 260);
+              var room=Math.max(200, window.innerWidth-rect.left-12);
+              $dd.css({ top:(rect.bottom+2)+'px', left:rect.left+'px', width:'max-content', minWidth:floor+'px', maxWidth:room+'px' });
+            }
+            var _ddScroll=function(){
+              if($dd[0].style.display==='none') return;   // nothing to move while hidden
+              unpinDd();                                    // scroll is deliberate: drop any pin
+              try{ _anchorToLiveInput(); }catch(e){}
+            };
             $(window).on('scroll._schoolDd',_ddScroll);
-            $inp.one('remove',function(){ if(!_ddPin) $(window).off('scroll._schoolDd',_ddScroll); });
+            document.addEventListener('scroll',_ddScroll,true);   // capture: catches inner scrollers too
+            $inp.one('remove',function(){ if(!_ddPin){ $(window).off('scroll._schoolDd',_ddScroll); document.removeEventListener('scroll',_ddScroll,true); } });
             $('body').append($dd);
             $nameTd.append($inp);
             // Clean up dropdown when input removed from DOM
@@ -25355,14 +25859,24 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $stuCell=numCell(role.key);
             var $stuInp=$stuCell.find('input');
             $stuInp.val(r[role.key]||'');
-            _stuInputs[role.key]=$stuInp;
+            _stuInputs[role.key]=$stuInp;   // keep the ref live for recalc even when collapsed
+            if(_stuRoleCollapsed(role)){
+              // Collapsed Student-Section role: one rowspan strip on the first row (spans the data
+              // rows; folds the Total row when the role is empty across all schools).
+              if(dpos===0){
+                var _shas=siteRows.some(function(rr){ return (parseInt(rr[role.key])||0)>0; });
+                var _srows=(siteRows.length||0)+((!_shas)?1:0);
+                $tr.append(_pgCollapsedStripCell(pgRoleName(role, getRoles(g.id)),function(){ _colSetCollapsed(g.id,'sbstu',role.key,false); _sbRoleRerender(); }, _srows));
+              }
+              return;
+            }
             $tr.append($stuCell);
           });
         }
 
         // Total students (read-only)
         var $totalStudents=$('<input type="text" class="total-students" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'36px',fontWeight:'600'}).val(calcTotalStudents(r));
-        if(!_stuCollapsed) $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStudents));
+        if(!_stuCollapsed) $tr.append($('<td class="sb-tot-students-cell">').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStudents));
 
         // ── Coach counts — editable, one per coach role ──
         var _coachInputs={};
@@ -25412,6 +25926,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         var _coachCells={};
         _coachRoles.forEach(function(role){
+          if(_roleCollapsed(role)){
+            // Collapsed: one rowspan-ed vertical strip on the first data row; nothing on the rest.
+            // The wiring below still runs so recalcs keep working, but no cell is appended for
+            // this role on any body row (the strip carries the whole column visually).
+            var ckc='coaches_'+role.key;
+            var $hidden=numCell(ckc);   // built but NOT appended — keeps input refs live for recalc
+            _coachInputs[role.key]=$hidden.find('input');
+            if(dpos===0) $tr.append(_roleVertCell(role, !_roleHasValues(role)));
+            return;
+          }
           var ck='coaches_'+role.key;
           var $cell=numCell(ck);
           var _coachTimer=null;
@@ -25427,7 +25951,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         });
 
         // Total # of Coaches Per Site (calculated)
-        var $totalCoachTd=$('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',textAlign:'center',background:'#f0f4f8'});
+        var $totalCoachTd=$('<td class="sb-tot-coaches-cell">').css({border:'1px solid #dee2e6',padding:'2px 3px',textAlign:'center',background:'#f0f4f8'});
         var $totalCoachInp=$('<input type="text" class="total-coaches" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'40px',fontWeight:'600',color:'#495057'}).val(calcTotalCoaches(r)||'');
         $totalCoachTd.append($totalCoachInp); $tr.append($totalCoachTd);
 
@@ -25450,12 +25974,16 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
         // ── Non-coach (specialized staff) — one per non-coach role ──
         _nonCoachRoles.forEach(function(role){
+          if(_roleCollapsed(role)){
+            if(dpos===0) $tr.append(_roleVertCell(role, !_roleHasValues(role)));
+            return;
+          }
           $tr.append(numCell(role.key));
         });
 
         // Total staff (read-only)
         var $totalStaff=$('<input type="text" class="total-staff" readonly>').css({width:'100%',border:'none',background:'#f0f4f8',fontSize:'11px',textAlign:'center',outline:'none',padding:'2px 4px',minWidth:'36px',fontWeight:'600'}).val(calcTotalStaff(r));
-        $tr.append($('<td>').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStaff));
+        $tr.append($('<td class="sb-tot-staff-cell">').css({border:'1px solid #dee2e6',padding:'2px 3px',background:'#f0f4f8'}).append($totalStaff));
 
         // Delete button
         var $del=$('<button type="button" title="Delete row">').text('Del').css({
@@ -25490,17 +26018,28 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       _coachRoles.forEach(function(role){
         var v=siteRows.reduce(function(s,r){ return s+(parseInt(r[role.key])||0); },0);
         _ts+=v;
-        if(!_stuCollapsed) $trow.append(tc(v).addClass('tot-stu-'+role.key));   // tallies still computed
+        if(_stuCollapsed) return;   // whole Students group collapsed: no per-role student totals
+        // A collapsed-EMPTY Student-Section role's strip spans the Total row, so omit its cell; a
+        // collapsed role WITH values keeps its (data-row-spanning) strip above and a total cell here.
+        if(_stuRoleCollapsed(role) && !(v>0)) return;
+        $trow.append(tc(v).addClass('tot-stu-'+role.key));   // tallies still computed
       });
       if(!_stuCollapsed) $trow.append(tc(_ts).addClass('tot-students'));
       _coachRoles.forEach(function(role){
         var v=siteRows.reduce(function(s,r){ return s+(parseInt(r['coaches_'+role.key])||0); },0);
-        _tc+=v; $trow.append(tc(v).addClass('tot-c-'+role.key));
+        _tc+=v;
+        // A collapsed-EMPTY role's vertical strip already spans this Total row (rowspan+1), so its
+        // total cell must be OMITTED here. A collapsed role WITH values keeps its total cell (the
+        // strip stopped above the Total row); an expanded role behaves normally.
+        if(_roleCollapsed(role) && !_roleHasValues(role)) return;
+        $trow.append(tc(v).addClass('tot-c-'+role.key));
       });
       $trow.append(tc(_tc).addClass('tot-coaches'));
       _nonCoachRoles.forEach(function(role){
         var v=siteRows.reduce(function(s,r){ return s+(parseInt(r[role.key])||0); },0);
-        _tst+=v; $trow.append(tc(v).addClass('tot-nc-'+role.key));
+        _tst+=v;
+        if(_roleCollapsed(role) && !_roleHasValues(role)) return;
+        $trow.append(tc(v).addClass('tot-nc-'+role.key));
       });
       _tst+=_tc;
       $trow.append(tc(_tst).addClass('tot-staff'));
@@ -25509,6 +26048,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       refreshSbDupes();   // flag any duplicate schools once the full body is built
 
       $tbl.append($tbody);
+      // Twenty-fourth spec part 5: collapse the Total # of Coaches / Total # of Staff Per Site
+      // columns. Body rows are the school rows (exclude the site-total-row); the total cell lives
+      // IN the same tbody as .tot-coaches/.tot-staff. Same flat-collapse transform as Program
+      // Calendars — strip spans the data rows, the Total row keeps its (narrowed) value cell when
+      // the column has values, or the strip runs through it when empty.
+      // Collapse the Total # of Students / Coaches / Staff columns. Body rows are the school rows
+      // (exclude the site-total-row); the total cell lives in the same tbody as .tot-students /
+      // .tot-coaches / .tot-staff. Same flat-collapse transform as Program Calendars — strip spans
+      // the data rows, the Total row keeps its (narrowed) value cell when the column has values, or
+      // the strip runs through it when empty. (Twenty-seventh spec: Total # of Students was missing
+      // here, so it never collapsed; and the rotated labels dropped the stale "Per Site" suffix.)
+      _pgApplyFlatColCollapse($tbl, { gid:g.id, table:'sbtot', bodyRowSel:'tbody > tr:not(.site-total-row)', totalRowSel:'tbody > tr.site-total-row', rerender:_sbRoleRerender }, [
+        { colId:'tot-students', label:'Total # of Students', thSel:'th.sb-tot-h-students', cellSel:'td.sb-tot-students-cell', totalSel:'td.tot-students', mergeEmptyTotal:true,
+          hasValue:function(){ return siteRows.some(function(r){ return (calcTotalStudents(r)||0)>0; }); } },
+        { colId:'tot-coaches', label:'Total # of Coaches', thSel:'th.sb-tot-h-coaches', cellSel:'td.sb-tot-coaches-cell', totalSel:'td.tot-coaches', mergeEmptyTotal:true,
+          hasValue:function(){ return siteRows.some(function(r){ return (calcTotalCoaches(r)||0)>0; }); } },
+        { colId:'tot-staff',   label:'Total # of Staff',   thSel:'th.sb-tot-h-staff',   cellSel:'td.sb-tot-staff-cell',   totalSel:'td.tot-staff',   mergeEmptyTotal:true,
+          hasValue:function(){ return siteRows.some(function(r){ return (calcTotalStaff(r)||0)>0; }); } }
+      ]);
       $scroll.append($tbl);
       return $scroll;
     }
@@ -25524,7 +26082,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     (function(){
       var $copy=$secHd.find('.sb-copyto-btn');
       var apply=attachSectionCollapse({
-        key:g.id+'|site|'+calId, $hd:$secHd, $body:$tableWrap, label:'Site Breakdown',
+        key:g.id+'|site|'+calId, $hd:$secHd, $body:$tableWrap, label:calLabel,
         summary:function($t){
           var n=(siteRows||[]).filter(function(r){
             if(!r||r.deleted) return false;
@@ -25533,16 +26091,48 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             return String(nm).trim()!=='';
           }).length;
           $t.append($('<span>').text(' ('+n+' school'+(n===1?'':'s')+')'));
+          // Twenty-eighth spec: the Unallocated/Remaining summary is NO LONGER rendered inside this
+          // collapse-summary callback. It lives in ONE element ($unSumX, below) that stays in the
+          // header in BOTH states, so it can never be duplicated by the collapse rebuild.
         }
       });
+      // ── Twenty-eighth spec: ONE Unallocated/Remaining summary, always in the header ──
+      // A single span, placed once after the program-name segment, shown whenever the program has
+      // unallocated hours — expanded OR collapsed, checkbox on OR off. It is NEVER re-created on
+      // collapse/expand/filter, so there is exactly one Unallocated and one Remaining value at all
+      // times (parts 1, 2, 8). The checkbox controls ONLY the detailed area (part 6).
+      var $unSumX=$('<span class="sb-unalloc-sum pg-view-ok">').css({display:'inline-flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',marginLeft:'10px'}).hide();
+      $secHd.find('.sb-unalloc-toggle-seg').after($unSumX);
+      function applyUnallocVis(){
+        var collapsed=!!_pgSecCollapse[g.id+'|site|'+calId];
+        var on=_pgSbUnallocVis[g.id+'|'+calId]!==false;
+        // Detailed Unallocated area: expanded AND checkbox on (checkbox controls only this).
+        try{ $('#calgroups-section-'+g.id+' .unsched-cal-card[data-unsched-cal="'+String(calId)+'"]').toggle(!collapsed&&on); }catch(e){}
+        // The checkbox segment is REMOVED from the header while collapsed (part 3) and restored on
+        // expand to its prior checked state (part 4) — display:none leaves no reserved space.
+        $secHd.find('.sb-unalloc-toggle-seg').toggle(!collapsed);
+        // The summary is the SAME single element in both states; only unalloc>0 gates it (part 5).
+        $unSumX.toggle(_sbUnallocFill($unSumX));
+      }
       var _apply=apply;
-      apply=function(){ _apply(); if($copy.length) $copy.toggle(!_pgSecCollapse[g.id+'|site|'+calId]); };
+      apply=function(){ _apply(); if($copy.length) $copy.toggle(!_pgSecCollapse[g.id+'|site|'+calId]); applyUnallocVis(); };
       $secHd.find('.pg-sec-toggle').off('click').on('click',function(e){
         e.preventDefault(); e.stopPropagation();
         _pgSecCollapse[g.id+'|site|'+calId]=!_pgSecCollapse[g.id+'|site|'+calId];
         apply();
       });
+      $unallocCb.on('change',function(){
+        if(this.checked) delete _pgSbUnallocVis[g.id+'|'+calId];
+        else _pgSbUnallocVis[g.id+'|'+calId]=false;
+        applyUnallocVis();
+      }).on('click',function(e){ e.stopPropagation(); });   // header click toggles collapse; the checkbox must not
+      // The Unallocated card's allocRecalc repaints this header's summary through here, so value
+      // edits (the Unallocated field, Allocated rows) show up live in whichever summary is visible.
+      _pgSbUnallocSumPaint[g.id+'|'+calId]=function(){ try{ apply(); }catch(e){} };
       apply();
+      // The Unallocated card builds right AFTER this card in the same group render — resolve its
+      // visibility once it exists (covers a rebuild landing while unchecked or collapsed).
+      setTimeout(applyUnallocVis,0);
     })();
     setTimeout(_podRefreshBrackets,0);   // brackets measure row geometry, so build after attach/layout
 
@@ -25634,16 +26224,136 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(_cr.length) _det.siteRows=_det.siteRowsByCal[String(_cr[0].calId)]; // first calendar === legacy shared array
       var $wrapG=$('<div>').attr('id','calgroups-section-'+g.id);
       if(!_cr.length){ $wrapG.append(buildSiteCard(null,'Site Breakdown','#ffffff',true)); return $wrapG; }
-      // One group per Program Calendar (tied by Calendar ID): Site Breakdown then Unallocated Hours, kept close together.
-      // Extra top margin between groups (vs the cards' own mt-2 within a group) so calendar groups are easy to tell apart.
+      // ── Twenty-sixth spec: ONE Site Breakdown area per guide ──────────────────────────────────
+      // A single shared header ("Site Breakdown" + a Filter button when >1 program) sits above the
+      // per-program groups, mirroring the Staffing Hours layout. Each program keeps its own table
+      // (and Unallocated Hours area) inside this one area; the Filter shows/hides whole program
+      // groups, and a hidden group is display:none'd so it leaves NO gap.
+      var $sbHead=$('<div class="sb-area-head px-3 py-2" style="background:#eef2f7;border:1px solid #e9ecef;border-radius:6px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:8px;">');
+      $sbHead.append($('<span class="fw-bold text-dark" style="font-size:13px;">').text('Site Breakdown'));
+      var $sbFilterSlot=$('<span class="sb-filter-slot" style="display:inline-flex;align-items:center;margin-left:8px;">');
+      $sbHead.append($sbFilterSlot);
+      $wrapG.append($sbHead);
+      var $groupsWrap=$('<div class="sb-groups-wrap">');
+      var _grpEls={};
       _cr.forEach(function(cr,ci){
         var calLabel=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
         var calColor=cr.color||'#ffffff';
         var $grp=$('<div class="cal-group">').attr('data-cal-group',String(cr.calId)).css({marginTop:ci===0?'0':'20px'});
         $grp.append(buildSiteCard(cr.calId,calLabel,calColor,ci===0));
         $grp.append(buildUnschedCard(cr.calId,calLabel,calColor));
-        $wrapG.append($grp);
+        // Apply the current filter visibility. Hidden groups are display:none so the next visible
+        // program moves up immediately with no reserved space (spec part 8).
+        if(!_sbProgVisible(g.id,cr.calId)) $grp.css('display','none');
+        $groupsWrap.append($grp);
+        _grpEls[String(cr.calId)]=$grp;
       });
+      // Re-margin so the FIRST visible group never carries the 20px top gap (avoids a leading gap
+      // when calendar 1 is filtered out).
+      function _sbRemargin(){
+        var first=true;
+        _cr.forEach(function(cr){
+          var $grp=_grpEls[String(cr.calId)]; if(!$grp) return;
+          if($grp.css('display')==='none') return;
+          $grp.css('marginTop', first?'0':'20px'); first=false;
+        });
+      }
+      _sbRemargin();
+      $wrapG.append($groupsWrap);
+      // ── Filter dropdown (parts 3-7): All Programs parent + one checkbox per program + Reset ──
+      // Follows the Staffing Hours Filter design: a small "Filter ▾" button beside the heading
+      // opening a fixed-position checkbox menu. Only shown when there is more than one program.
+      if(_cr.length>1){
+        var $fBtn=$('<button type="button" class="pg-view-ok sb-filter-btn" style="background:none;border:1px solid #dee2e6;border-radius:5px;padding:2px 8px;font-size:10px;color:#6c757d;cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-weight:500;">').html('Filter <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+        var $fDD=$('<div class="pg-view-ok sb-filter-dd" style="position:fixed;z-index:99999;background:#fff;border:1px solid #dee2e6;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.12);padding:4px 0;min-width:210px;display:none;font-size:12px;">');
+        $('body').append($fDD);
+        $sbFilterSlot.append($fBtn);
+        function _sbUpdateFBtn(){
+          var hidden=_cr.filter(function(cr){ return !_sbProgVisible(g.id,cr.calId); }).length;
+          var shown=_cr.length-hidden;
+          var badge=hidden>0?(shown+' of '+_cr.length):'';
+          $fBtn.html((badge||'Filter')+' <span style="font-size:8px;opacity:.7;">&#9660;</span>');
+          if(badge){ $fBtn.css({borderColor:'#0d6efd',color:'#0d6efd'}); } else { $fBtn.css({borderColor:'#dee2e6',color:'#6c757d'}); }
+        }
+        _sbUpdateFBtn();
+        // Show/hide one program group + re-margin so no gap remains (parts 6-8).
+        function _sbApplyProg(calId){
+          var $grp=_grpEls[String(calId)]; if(!$grp) return;
+          $grp.css('display', _sbProgVisible(g.id,calId)?'':'none');
+          _sbRemargin();
+        }
+        var _pCbs=[];
+        var $allRow, $allCb;
+        function _sbSyncAll(){
+          var on=_pCbs.filter(function(c){ return c.$cb.prop('checked'); }).length;
+          $allCb.prop('checked', on===_pCbs.length).prop('indeterminate', on>0 && on<_pCbs.length);
+        }
+        function _mkRow(label,color,checked){
+          var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'6px',padding:'3px 14px',cursor:'pointer',color:'#212529',userSelect:'none'});
+          var $cb=$('<input type="checkbox">').prop('checked',checked).css({cursor:'pointer',width:'13px',height:'13px',accentColor:'#0d6efd',flexShrink:'0'});
+          $row.append($cb);
+          if(color!==undefined) $row.append($('<span>').css({width:'9px',height:'9px',borderRadius:'50%',background:color||'#fff',border:'1px solid rgba(0,0,0,.25)',flexShrink:'0',display:'inline-block'}));
+          $row.append($('<span>').css({fontSize:'11px',whiteSpace:'nowrap'}).text(label));
+          $row.on('click',function(e){ if(e.target!==$cb[0]){ $cb.prop('checked',!$cb.prop('checked')); $cb.trigger('change'); } });
+          return {$row:$row,$cb:$cb};
+        }
+        function _buildFDD(){
+          $fDD.empty(); _pCbs=[];
+          // Parent: All Programs
+          var all=_mkRow('All Programs',undefined,true); $allRow=all.$row; $allCb=all.$cb;
+          $allRow.css({fontWeight:'600',padding:'4px 14px'});
+          $fDD.append($allRow);
+          $fDD.append($('<div>').css({borderTop:'1px solid #f0f0f0',margin:'3px 0'}));
+          // One checkbox per program
+          _cr.forEach(function(cr,ci){
+            var lbl=(cr.name&&cr.name.trim())||('Calendar '+(ci+1));
+            var row=_mkRow(lbl,cr.color||'#ffffff',_sbProgVisible(g.id,cr.calId));
+            row.calId=cr.calId;
+            row.$cb.on('change',function(){
+              _sbProgSetVisible(g.id,cr.calId,$(this).prop('checked'));
+              _sbApplyProg(cr.calId); _sbSyncAll(); _sbUpdateFBtn();
+            });
+            _pCbs.push(row);
+            $fDD.append(row.$row);
+          });
+          _sbSyncAll();
+          // All Programs toggles every program checkbox (part 4)
+          $allCb.on('change',function(){
+            var v=$(this).prop('checked'); $(this).prop('indeterminate',false);
+            _pCbs.forEach(function(row){
+              row.$cb.prop('checked',v);
+              _sbProgSetVisible(g.id,row.calId,v);
+              _sbApplyProg(row.calId);
+            });
+            _sbUpdateFBtn();
+          });
+          // Reset (part 5): every program checked + visible, All Programs checked.
+          $fDD.append($('<div>').css({borderTop:'1px solid #f0f0f0',margin:'3px 0'}));
+          var $reset=$('<div>').css({padding:'5px 14px'});
+          var $rBtn=$('<button type="button" style="width:100%;font-size:11px;padding:3px 0;border:1px solid #dee2e6;border-radius:5px;background:#f8f9fb;color:#495057;cursor:pointer;">').text('Reset');
+          $rBtn.on('click',function(e){
+            e.preventDefault(); e.stopPropagation();
+            _pCbs.forEach(function(row){ row.$cb.prop('checked',true); _sbProgSetVisible(g.id,row.calId,true); _sbApplyProg(row.calId); });
+            $allCb.prop('checked',true).prop('indeterminate',false);
+            _sbUpdateFBtn();
+          });
+          $reset.append($rBtn); $fDD.append($reset);
+        }
+        function _sbPosFDD(){
+          if(!$fDD.is(':visible')) return;
+          var r=$fBtn[0].getBoundingClientRect();
+          $fDD.css({ top:(r.bottom+4)+'px', left:Math.max(8,Math.min(r.left, window.innerWidth-230))+'px' });
+        }
+        $fBtn.on('click',function(e){
+          e.preventDefault(); e.stopPropagation();
+          if($fDD.is(':visible')){ $fDD.hide(); return; }
+          _buildFDD(); $fDD.show(); _sbPosFDD();
+        });
+        $(document).on('mousedown.sbfilter-'+g.id,function(e){
+          if($fDD.is(':visible') && !$fDD[0].contains(e.target) && e.target!==$fBtn[0] && !$fBtn[0].contains(e.target)) $fDD.hide();
+        });
+        $(window).on('scroll.sbfilter-'+g.id+' resize.sbfilter-'+g.id, _sbPosFDD);
+      }
       return $wrapG;
     }
 
@@ -25751,6 +26461,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         updateRemaining();
         try{ refreshSummary(g); }catch(e){}
         try{ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); }catch(e){}
+        try{ var _fS=_pgSbUnallocSumPaint[g.id+'|'+calId]; if(_fS) _fS(); }catch(e){}   // SB header's compact summary
       }
       function updateRemaining(){
         var un=parseFloat(data.unalloc), unValid=isFinite(un)&&un>0;
