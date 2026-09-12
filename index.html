@@ -21387,7 +21387,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _guideRem=Math.round((_guideUn-_allocT)*100)/100;
       var _guideSched=_schedT;
       var _guideTot=Math.round((_guideSched+_guideRem)*100)/100;
-      guideRollup.push({ name:calName, color:(cr&&cr.color)||'#ffffff', hours:_guideTot, amount:_netPph*_guideTot, netPph:_netPph, calId:(cr&&cr.calId) });
+      guideRollup.push({ name:calName, color:(cr&&cr.color)||'#ffffff', hours:_guideTot, amount:_netPph*_guideTot, netPph:_netPph, calId:(cr&&cr.calId), nSchools:(schoolTotals?schoolTotals.length:0) });
       _guideCalc.push({ calId:(cr&&cr.calId)||null, name:calName, pricePerHour:price, staffingHours:_guideSched, allocatedHours:_allocT, unallocatedHours:_guideRem, totalHours:_guideTot, amount:Math.round(price*_guideTot*100)/100, schools:schoolTotals.filter(function(st){return st.hours>0;}).map(function(st){ return { name:st.name, hours:Math.round(st.hours*100)/100, amount:Math.round(price*st.hours*100)/100 }; }) });
     });
 
@@ -21417,26 +21417,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     if(guideRollup.length){
       // Fifty-second spec part 3: more vertical space before the Planning Guide Summary, matching the
       // Calendar->Summary area gap (larger than the mt-2 between program cards).
-      var $gCard=$('<div class="card border-0 shadow-sm rounded-2">').attr('data-guide-summary',String(g.id)).css({overflow:'visible',width:'fit-content','min-width':'100%',marginTop:'16px'});
-      $gCard.append($('<div class="px-3 py-2">').css({background:'#eef3f9',borderBottom:'1px solid #dbe3ee',borderRadius:'calc(.375rem - 1px) calc(.375rem - 1px) 0 0'})
-        .append($('<span class="pg-area-label">').css({fontWeight:'700',fontSize:'13px',color:'#212529'}).text('Planning Guide Summary')));
+      var $gCard=$('<div class="card border-0 shadow-sm rounded-2" id="pg-guide-summary-card-'+g.id+'">').attr('data-guide-summary',String(g.id)).css({overflow:'visible',width:'fit-content',maxWidth:'100%'});
+      // 'Summary' area (renamed from 'Planning Guide Summary'): moved to the very top of the page and
+      // COLLAPSIBLE (collapsed by default on a freshly-created guide) via attachSectionCollapse.
+      var $gHd=$('<div class="px-3 py-2 d-flex align-items-center" style="background:#eef3f9;border-bottom:1px solid #dbe3ee;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;cursor:pointer;">');
+      $gHd.append($('<span class="pg-area-label">').css({fontWeight:'700',fontSize:'13px',color:'#212529'}).text('Summary'));
+      $gCard.append($gHd);
+      var $gBody=$('<div class="px-0 py-0">');
       var $gScroll=$('<div style="overflow-x:auto;">');
-      var $gTbl=$('<table>').css({borderCollapse:'collapse',width:'100%',fontSize:'11px'});
+      var $gTbl=$('<table>').css({borderCollapse:'collapse',width:'auto',fontSize:'11px'});
       var $gHr=$('<tr>');
-      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'5px 10px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',minWidth:'200px'}).text('Program Calendars'));
-      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Hours'));
-$gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('PPH (Net)'));
-      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'5px 12px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Amount'));
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'left',padding:'4px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap'}).text('Program'));
+      var _gThNum=function(t){ return $('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'4px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text(t); };
+      $gHr.append(_gThNum('# of Schools'));
+      $gHr.append(_gThNum('Total Staff Needed'));
+      $gHr.append(_gThNum('Length'));
+      $gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'4px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Total Hours'));
+$gHr.append($('<th>').css({border:'1px solid #dee2e6',background:'#f0f4f8',fontWeight:'700',textAlign:'right',padding:'4px 8px',fontSize:'10px',color:'#495057',whiteSpace:'nowrap',width:'1%'}).text('Total Amount'));
       $gTbl.append($('<thead>').append($gHr));
       var $gTb=$('<tbody>');
       var _gHours=0,_gAmt=0;
       guideRollup.forEach(function(row,ri){
         _gHours+=row.hours; _gAmt+=row.amount;
         var $r=$('<tr>');
-        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 10px',color:'#212529',whiteSpace:'nowrap'}).append(_calCircle(row.color).css({marginRight:'6px'})).append($('<span>').text(row.name)));
-        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(row.hours)));
-$r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.netPph!=null?row.netPph:0)));
-        var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.amount));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#212529',whiteSpace:'nowrap'}).append(_calCircle(row.color).css({marginRight:'6px'})).append($('<span>').text(row.name)));
+        // Program row: # of Schools (structural count, blank names included), Total Staff Needed
+        // (pg-cal-maxcnt, painted from _pgCalMaxCnt — the SAME source as the Programs table) and
+        // Length (pg-cal-length, painted from _pgCalWeeksLen). data-calc-cal ties each to its calendar
+        // so _pgMaxCntPaint / _pgCalLengthPaint fill them in lock-step with the Programs table.
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(String(row.nSchools||0)));
+        $r.append($('<td class="pg-gs-maxcnt">').attr('data-calc-cal',String(row.calId==null?'':row.calId)).css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text('\u2014'));
+        $r.append($('<td class="pg-gs-length">').attr('data-calc-cal',String(row.calId==null?'':row.calId)).css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text('\u2014'));
+        $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#495057',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(row.hours)));
+var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'#212529',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(row.amount));
         if(row.calId!=null && window._pgAmtBreak && window._pgAmtBreak[String(g.id)+'|'+String(row.calId)]){
           $gRowAmt.addClass('pg-amt-clickable').css({cursor:'pointer',textDecoration:'underline dotted'});
           (function(_gid,_cid,$cell){ $cell.on('click',function(e){ e.preventDefault(); e.stopPropagation(); try{ _pgOpenAmtBreakdown(_gid,_cid,$cell[0]); }catch(_e){} }); })(g.id,row.calId,$gRowAmt);
@@ -21444,20 +21457,98 @@ $r.append($('<td>').css({border:'1px solid #dee2e6',padding:'4px 12px',color:'#4
         $r.append($gRowAmt);
         $gTb.append($r);
       });
-      // Grand Total row: "Total | Planning Guide" — emphasized, consistent with the calendar total rows.
-      var $gTot=$('<tr>').css({background:'#d9e6f6',borderTop:'2px solid #b0c8e6'});
-      var _pgProgLabel='Planning Guide ('+guideRollup.length+' program'+(guideRollup.length===1?'':'s')+')';
-      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 10px',fontWeight:'700',color:'#212529',whiteSpace:'nowrap'}).text(_pgProgLabel));
-      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtH(_gHours)));
-$gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(_gHours>0?(_gAmt/_gHours):0)));
-      $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWeight:'700',color:'#0d6efd',textAlign:'right',whiteSpace:'nowrap'}).text(fmtAmt(_gAmt)));
-      $gTb.append($gTot);
-      $gTbl.append($gTb); $gScroll.append($gTbl); $gCard.append($gScroll);
-      $container.append($gCard);
+      
+      $gTbl.append($gTb); $gScroll.append($gTbl); $gBody.append($gScroll);
+
+      // ── Summary boxes (this spec) ── large-font Total Hours / Total Amount below the table, plus
+      // Not to Exceed + Amount Available when the Not to Exceed area holds a value. Amount Available =
+      // Not to Exceed - Total Amount. The Total-Amount value is stored on the card so the boxes can be
+      // recomputed live from a Not to Exceed edit without a full summary rebuild (_pgSummaryBoxesRefresh).
+      (function(){
+        var $boxes=$('<div class="pg-gs-boxes">').css({marginTop:'10px'});
+        function _cell(labelText, valId, opts){
+          opts=opts||{};
+          var $c=$('<div>').css({flex:'1 1 0',minWidth:'0',border:'1px solid #cfd6df',borderRadius:'4px',overflow:'hidden',background:'#fff'});
+          $c.append($('<div>').css({background:(opts.hdrBg||'#f0f4f8'),color:(opts.hdrColor||'#495057'),fontWeight:'700',fontSize:'12px',textAlign:'center',padding:'5px 8px',borderBottom:'1px solid '+(opts.hdrBg?opts.hdrBg:'#dbe3ee'),whiteSpace:'nowrap'}).text(labelText));
+          $c.append($('<div class="'+valId+'">').css({fontSize:'26px',fontWeight:'700',color:(opts.valColor||'#212529'),textAlign:'center',padding:'8px 10px',whiteSpace:'nowrap'}).text(opts.val||'\u2014'));
+          return $c;
+        }
+        var $row1=$('<div>').css({display:'flex',gap:'10px'});
+        $row1.append(_cell('Total Hours','pg-gs-box-hours',{ val:fmtH(_gHours) }));
+        $row1.append(_cell('Total Amount','pg-gs-box-amount',{ val:fmtAmt(_gAmt) }));
+        $boxes.append($row1);
+        // Not to Exceed + Amount Available row (only when NTE has a value)
+        var $row2=$('<div class="pg-gs-nte-row">').css({display:'flex',gap:'10px',marginTop:'10px'});
+        $row2.append(_cell('Not to Exceed Amount','pg-gs-box-nte',{ hdrBg:'#7ac043', hdrColor:'#1c3d0c', val:'\u2014' }));
+        $row2.append(_cell('Amount Available','pg-gs-box-avail',{ hdrBg:'#7ac043', hdrColor:'#1c3d0c', val:'\u2014' }));
+        $boxes.append($row2);
+        $gBody.append($boxes);
+        // stash the Total Amount so a Not to Exceed edit can recompute Amount Available without a rebuild
+        try{ $gCard[0].__pgTotAmt=_gAmt; }catch(_e){}
+      })();
+
+      $gCard.append($gBody);
+      // Move Summary to the very TOP of the panel (before the Programs area), collapsed by default.
+      attachSectionCollapse({ key:g.id+'|summary', $hd:$gHd, $body:$gBody, label:'Summary', defaultCollapsed:true });
+      $container.prepend($gCard);
     }
 
     $container[0].__pgCalc={ calendars:_guideCalc, totals:{ hours:Math.round(_guideCalc.reduce(function(a,c){return a+c.totalHours;},0)*100)/100, amount:Math.round(_guideCalc.reduce(function(a,c){return a+c.amount;},0)*100)/100 } };
     return $container;
+  }
+  // Summary area lives inside the (last) summary section at build time; this hoists its card to the
+  // very TOP of the panel — right after the header controls, before the Programs area — and is called
+  // on the initial render AND after every summary rebuild so the move survives refreshSummary's
+  // replaceWith. The card keeps its collapse state and its synced cells (they ride with the node).
+  // Fill the Not to Exceed + Amount Available summary boxes from det.notToExceed and the stored Total
+  // Amount. Amount Available = Not to Exceed - Total Amount. When Not to Exceed has NO value the NTE
+  // row is hidden. Called from the summary build AND from every Not to Exceed edit so the boxes track
+  // live. Uses the module formatters (window.pgFmtAmt) so it works outside buildSummarySection's scope.
+  function _pgSummaryBoxesRefresh(gid){
+    try{
+      var card=document.getElementById('pg-guide-summary-card-'+gid);
+      if(!card) return;
+      var det=(window._pgGuideDetails?window._pgGuideDetails():{})[String(gid)]||{};
+      var nte=det.notToExceed;
+      var nteVal=(nte&&nte.nte!=null&&String(nte.nte).trim()!=='')?parseFloat(String(nte.nte).replace(/[^0-9.\-]/g,'')):null;
+      var totAmt=(card.__pgTotAmt!=null)?card.__pgTotAmt:0;
+      var $row=$(card).find('.pg-gs-nte-row');
+      var $nte=$(card).find('.pg-gs-box-nte'), $avail=$(card).find('.pg-gs-box-avail');
+      var fmt=(window.pgFmtAmt)||function(n){ return '$'+(Math.round((n||0)*100)/100).toLocaleString(); };
+      if(nteVal!=null && isFinite(nteVal)){
+        $row.css('display','flex');
+        $nte.text(fmt(nteVal));
+        $avail.text(fmt(nteVal-totAmt));
+      } else {
+        $row.css('display','none');
+      }
+    }catch(_e){}
+  }
+  try{ if(typeof window!=='undefined') window._pgSummaryBoxesRefresh=_pgSummaryBoxesRefresh; }catch(_e){}
+  function _pgRelocateSummary(gid){
+    try{
+      var panel=document.getElementById('planning-panel'); if(!panel) return;
+      var cards=panel.querySelectorAll('[data-guide-summary="'+gid+'"]');
+      if(!cards.length) return;
+      // refreshSummary rebuilds a FRESH summary card inside the (replaced) summary section while an
+      // earlier relocated card may still sit at the panel top. Keep the LAST (freshest) one and drop
+      // any stragglers, then hoist the survivor to just after the header controls.
+      var card=cards[cards.length-1];
+      for(var i=0;i<cards.length-1;i++){ if(cards[i]!==card && cards[i].parentNode) cards[i].parentNode.removeChild(cards[i]); }
+      // Place the Summary immediately BEFORE the Programs area (the calSetup section). The Programs
+      // section lives inside the cal-groups editor ($wrap), so target its section card directly; fall
+      // back to the top of the panel only if the Programs section isn't found yet.
+      var progSec=panel.querySelector('[data-pg-sec-key="calsetup"]');
+      var progCard=progSec?progSec.closest('.card'):null;
+      $(card).css('marginBottom','16px');
+      if(progCard && progCard.parentNode){
+        if(card!==progCard.previousElementSibling) progCard.parentNode.insertBefore(card, progCard);
+      } else {
+        var first=panel.firstElementChild;
+        if(first && card!==first.nextElementSibling){ first.after(card); }
+        else if(!first){ panel.insertBefore(card, panel.firstChild); }
+      }
+    }catch(_e){}
   }
   function refreshSummary(g){
     if(_pgSumSquelch>0) return;   // a coordinated pass is running; it ends with one full refreshSummary
@@ -21467,6 +21558,8 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
     try{
       var $s=$('#summary-section-'+g.id); if($s.length&&$new) $s.replaceWith($new);
       _maybeRefreshCombined(g); pgCalcCellsRefresh(g); pgDiscRefresh(g);
+      try{ _pgRelocateSummary(g.id); }catch(_e){}   // keep Summary hoisted to the top after a rebuild
+      try{ _pgSummaryBoxesRefresh(g.id); }catch(_e){}   // fill NTE / Amount Available boxes
     } finally { _pgSnapBatchC=_prevB; }
     try{ _pgApplyCustomerView(g.id); }catch(_e){}   // re-hide PPH (Net) in the rebuilt summaries if Customer View is on
   }
@@ -22935,12 +23028,12 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
   function _pgMaxCntPaint(gid){
     try{
       var m=_pgCalMaxCnt[String(gid)]||null;
-      $('td.pg-cal-maxcnt').each(function(){
+      $('td.pg-cal-maxcnt, td.pg-gs-maxcnt').each(function(){
         var cid=String($(this).attr('data-calc-cal')||'');
         var v=(m&&m.byCal)?m.byCal[cid]:null;
         $(this).text((v>0)?String(v):'\u2014');
       });
-      $('td.pg-cal-total-maxcnt').text((m&&m.combined>0)?String(m.combined):'\u2014');
+      $('td.pg-cal-total-maxcnt, td.pg-gs-total-maxcnt').text((m&&m.combined>0)?String(m.combined):'\u2014');
     }catch(e){}
   }
   // ── Length for the Program Calendars table ── Active program weeks: the calendar's week span
@@ -22971,7 +23064,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
     try{
       var det=guideDetails[String(gid)]||{};
       var byId={}; (det.calendarRows||[]).forEach(function(cr){ if(cr&&cr.calId!=null) byId[String(cr.calId)]=cr; });
-      $('td.pg-cal-length').each(function(){
+      $('td.pg-cal-length, td.pg-gs-length').each(function(){
         var cid=String($(this).attr('data-calc-cal')||'');
         var v=_pgCalWeeksLen(gid, byId[cid]);
         $(this).text((v==null)?'\u2014':(v+' week'+(v===1?'':'s')));
@@ -23045,6 +23138,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
     pr[0]=pr[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
     return (neg?'-$':'$')+pr[0]+'.'+pr[1];
   }
+  try{ if(typeof window!=='undefined') window.pgFmtAmt=pgFmtAmt; }catch(_e){}
   function pgFmtHours(n){
     var r=Math.round((isFinite(n)?n:0)*100)/100;
     var s=Number.isInteger(r)?String(r):r.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
@@ -23615,7 +23709,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
         collapse:function(){ if(!_pgCalCollapse[gid]){ clickIf($(q('[data-pg-sec-key="calsetup"] .pg-cal-toggle'))); } },
         expand:function(){ if(_pgCalCollapse[gid]){ clickIf($(q('[data-pg-sec-key="calsetup"] .pg-cal-toggle'))); } } });
       // Discounts / Staff Roles / Special Days — attachSectionCollapse, state in _pgSecCollapse[gid|key]
-      [['Discounts','discounts'],['Not to Exceed','nte'],['Staff Roles','roles'],['Special Days','specialdays']].forEach(function(pair){
+      [['Summary','summary'],['Discounts','discounts'],['Not to Exceed','nte'],['Staff Roles','roles'],['Special Days','specialdays']].forEach(function(pair){
         var key=gid+'|'+pair[1];
         out.push({ name:pair[0],
           isCollapsed:function(){ return !!_pgSecCollapse[key]; },
@@ -24670,7 +24764,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
       // Savings is no longer displayed here (it still lives in the Discounts area).
       // Staff/Day (Max) sits immediately BEFORE PPH (Net) (spec): the highest effective daily
       // Staff/Coach Count anywhere in the calendar, published by the Calendar's own hours pass.
-      _cols.push(['Staff/Day (Max)',{minWidth:'92px',textAlign:'right'}]);
+      _cols.push(['Total Staff Needed',{minWidth:'104px',textAlign:'right'}]);
       _cols.push(['PPH (Net)',Object.assign({minWidth:'80px',textAlign:'right'},DISC_EDGE,DISC_TINT)]);
       _cols.push(['Amount (Net)',Object.assign({minWidth:'92px',textAlign:'right'},DISC_TINT)]);
       _cols.push(['Del',{width:'36px'}]);
@@ -24682,7 +24776,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
         'Scheduled Hrs': { colId:'sched',   thCls:'pg-cal-h-sched',   cellSel:'td.pg-cal-calc[data-calc-kind="site"]' },
         'Remaining Hrs': { colId:'remain',  thCls:'pg-cal-h-remain',  cellSel:'td.pg-cal-calc[data-calc-kind="unalloc"]' },
         'PPH':           { colId:'pph',     thCls:'pg-cal-h-pph',     cellSel:'td.pg-cal-pph' },
-        'Staff/Day (Max)':{ colId:'maxcnt', thCls:'pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt' }
+        'Total Staff Needed':{ colId:'maxcnt', thCls:'pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt' }
       };
       _cols.forEach(function(pair){
         var $th=$('<th>').css(Object.assign({},csThStyle,pair[1]));
@@ -25157,7 +25251,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
         { colId:'sched',  label:'Scheduled Hrs',   thSel:'th.pg-cal-h-sched',   cellSel:'td.pg-cal-calc[data-calc-kind="site"]' },
         { colId:'remain', label:'Remaining Hrs',   thSel:'th.pg-cal-h-remain',  cellSel:'td.pg-cal-calc[data-calc-kind="unalloc"]' },
         { colId:'pph',    label:'PPH',             thSel:'th.pg-cal-h-pph',     cellSel:'td.pg-cal-pph',    totalSel:'td.pg-cal-total-row-pph' },
-        { colId:'maxcnt', label:'Staff/Day (Max)', thSel:'th.pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt', totalSel:'td.pg-cal-total-maxcnt' }
+        { colId:'maxcnt', label:'Total Staff Needed', thSel:'th.pg-cal-h-maxcnt',  cellSel:'td.pg-cal-maxcnt', totalSel:'td.pg-cal-total-maxcnt' }
       ]);
       $scroll.append($tbl);
       return $scroll;
@@ -25634,7 +25728,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
 
       // ── header: grouped stage headers over five subcolumns each ──
       var $h1=$('<tr>'), $h2=$('<tr>');
-      [['Program Calendar','left','200px'],['PPH','right',''],['Total Hours','right',''],['Amount','right','']].forEach(function(c){
+      [['Program','left','200px'],['PPH','right',''],['Total Hours','right',''],['Amount','right','']].forEach(function(c){
         if(c[0]==='PPH'){
           // Twenty-fourth spec part 3: the base/initial PPH column collapses like the others.
           if(_colCollapsed(g.id,'disc','basepph')){
@@ -26101,6 +26195,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
               var clean=_sanitizeNum(this.value);
               if(clean!==this.value){ var pos=this.selectionStart, removed=this.value.length-clean.length; this.value=clean; try{ var np=Math.max(0,(pos||0)-removed); this.setSelectionRange(np,np); }catch(_e){} }
               var s=_nteState(); s[keyName]=String(this.value||''); _nteSave(s); _recompute(which); _paint();
+              try{ if(window._pgSummaryBoxesRefresh) window._pgSummaryBoxesRefresh(g.id); }catch(_e){}   // live NTE -> Amount Available
             });
             // Block invalid characters at keypress too (belt and suspenders for paste-free typing).
             $i.on('keypress',function(e){ var ch=e.key; if(ch&&ch.length===1 && !/[0-9.\-]/.test(ch)){ e.preventDefault(); } });
@@ -26109,6 +26204,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
               if(keyName==='pct'){ var p=_pct(s.pct); this.value=_fmtPct(p); s.pct=(p==null?'':String(p)); }
               else { var m=_money(s[keyName]); this.value=_fmtMoney(m); s[keyName]=(m==null?'':String(m)); }
               _nteSave(s); _paint();
+              try{ if(window._pgSummaryBoxesRefresh) window._pgSummaryBoxesRefresh(g.id); }catch(_e){}
               try{ _pgHist.begin(g.id); }catch(e){}
             });
             $i.on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } });
@@ -28894,6 +28990,8 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
     var $calSection=buildCalendarSection(g);
     var $summarySection=buildSummarySection(g);
     $('#planning-panel').empty().append($wrap,$staffSection,$calSection,$summarySection);
+    try{ _pgRelocateSummary(g.id); }catch(_e){}   // Summary area to the very top of the page (before Programs)
+    try{ _pgSummaryBoxesRefresh(g.id); }catch(_e){}   // fill NTE / Amount Available boxes
     _pgvCur={mode:_pgMode,gid:g.id};
     try{ _pgApplyCustomerView(g.id); }catch(_e){}   // restore Customer-View hiding on a fresh render
     _pgvEnsureGate();
@@ -28902,6 +29000,7 @@ $gTot.append($('<td>').css({border:'1px solid #dee2e6',padding:'6px 12px',fontWe
     setTimeout(function(){
       if($staffSection[0]._recalcAll) $staffSection[0]._recalcAll();
       // Calendar hours are updated by updateAllHours → updateDayTotals → updateCalendarHours
+      try{ _pgRelocateSummary(g.id); }catch(_e){}   // final hoist after the mount-time recalc (new guide)
     }, 0);
   }
 
