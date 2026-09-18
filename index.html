@@ -22339,7 +22339,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var txt=(Number.isInteger(t)?String(t):t.toFixed(2).replace(/0+$/,'').replace(/\.$/,''))+' Hrs';
     var $l=$('<div class="cal-tip-ff-line">').attr('data-ff-hrs',String(t)).css({display:'flex',alignItems:'center',gap:'5px',marginTop:'2px',whiteSpace:'nowrap',fontSize:'12px',color:'#5f6368'});
     $l.append($('<span>').css({color:'#8a94a0'}).text('\u2218'));
-    $l.append($('<span class="cal-tip-ff-lbl">').text('Fulfillment: ').append($('<span class="cal-tip-ff-val">').css({fontWeight:'600',color:'#3c4043'}).text(txt)));
+    $l.append($('<span class="cal-tip-ff-lbl">').text('Fulfillment: ').append($('<span class="cal-tip-ff-val">').css({fontWeight:'600',color:'#1f734c'}).text(txt)));
     return $l;
   }
   // Which normalized names already map to a given program+school (one-to-one guard).
@@ -22547,7 +22547,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       pageRows.forEach(function(x){
         var $tr=$('<tr class="ff-row">').attr('data-ff-key',calId+'|'+x.schoolId+'|'+x.date);
         $tr.append($('<td>').css({whiteSpace:'nowrap'}).text(fmtD(x.date)), $('<td>').css({color:'#6c757d'}).text(dow(x.date)), $('<td class="ff-school">').text(schoolName(calId,x.schoolId)));
-        $tr.append($('<td class="ff-produced">').css({textAlign:'right',fontWeight:'600'}).text(fmt2(x.r.produced)));
+        $tr.append($('<td class="ff-produced">').css({textAlign:'right',fontWeight:'600',color:'#1f734c'}).text(fmt2(x.r.produced)));
         $tb.append($tr);
       });
       if(!pageRows.length) $tb.append($('<tr>').append($('<td colspan="4">').css({color:'#8a94a0',fontStyle:'italic'}).text('No fulfillment rows for this selection.')));
