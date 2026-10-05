@@ -10404,6 +10404,314 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     attachSectionCollapse({ key:g.id+'|launch', $hd:$hd, $body:$body, label:'Program Launch Timeline', defaultCollapsed:true });
     return $sec;
   }
+  // HR (Paul, Oct 2026): a major collapsible section after Program Launch Timeline with ONE rich-text note per guide
+  // (det.hrNote, sanitized HTML). Empty: "+ Note". Saved: rendered rich text; click it (or Enter) to edit in place.
+  // Editing uses the app's WYSIWYG (wysiwyg-wrap / -toolbar / -body; the shared .wysiwyg-btn handler runs bold, italic,
+  // underline, lists, clear) plus paragraph style, text / highlight colour and links. Save / Cancel appear only while the
+  // content differs from the saved note. Esc, or a click / focus outside the editor, with unsaved changes asks Save
+  // Changes / Continue Editing / Discard in a dialog titled "HR note" (the outside action is held back); with no changes it just closes. A
+  // draft survives a rerender (_pgHrDrafts). Everything is sanitized (allowlist) on save AND on render.
+  var _pgHrDrafts={};
+  var _HR_OK={P:1,BR:1,DIV:1,SPAN:1,B:1,STRONG:1,I:1,EM:1,U:1,S:1,STRIKE:1,UL:1,OL:1,LI:1,A:1,H3:1,H4:1,FONT:1,BLOCKQUOTE:1};
+  var _HR_DROP={SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,TEMPLATE:1,SVG:1,MATH:1,NOSCRIPT:1,TEXTAREA:1,SELECT:1,BUTTON:1,INPUT:1,FORM:1,LINK:1,META:1,IMG:1,VIDEO:1,AUDIO:1,CANVAS:1,FRAME:1,FRAMESET:1,BASE:1,TITLE:1,HEAD:1};
+  // allowed inline styles, each with its own value check (Gmail-style formatting: colours, font family / size,
+  // alignment, indentation)
+  function _pgHrFam(v){ var parts=String(v||'').split(',').map(function(p){ return p.replace(/["']/g,'').trim(); }).filter(Boolean);
+    if(!parts.length || parts.length>4 || !parts.every(function(p){ return /^[a-z0-9 \-]{1,40}$/i.test(p); })) return '';
+    return parts.map(function(p){ return /\s/.test(p)?"'"+p+"'":p; }).join(', '); }
+  var _HR_LEN=/^(-?\d{1,4}(\.\d+)?(px|em|rem|pt|ex|%)?\s*){1,4}$/i;
+  var _HR_CSS={'color':_pgHrColor,'background-color':_pgHrColor,'font-weight':/^(bold|bolder|normal|[1-9]00)$/i,'font-style':/^(italic|normal)$/i,
+    'text-decoration':/^[a-z -]{1,40}$/i,'text-decoration-line':/^[a-z -]{1,40}$/i,'text-align':/^(left|right|center|justify|start|end)$/i,
+    'font-family':_pgHrFam,'font-size':/^(xx-small|x-small|small|medium|large|x-large|xx-large|xxx-large|\d{1,2}(\.\d+)?(px|pt|em|rem|%))$/i,
+    'margin':_HR_LEN,'margin-left':_HR_LEN,'margin-right':_HR_LEN,'padding':_HR_LEN,'padding-left':_HR_LEN,'border':/^(none|0|0px)$/i};
+  function _pgHrColor(v){ v=String(v||'').trim(); return (/^#[0-9a-f]{3,8}$/i.test(v)||/^rgba?\([\d\s.,%]+\)$/i.test(v)||/^[a-z]{3,20}$/i.test(v))?v:''; }
+  function _pgHrSafeUrl(u){ u=String(u||'').trim(); if(/^(https?:|mailto:)/i.test(u)) return u; if(/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(u)) return 'https://'+u; return ''; }
+  function _pgHrSafeCss(st){
+    var out=[];
+    String(st||'').split(';').forEach(function(decl){
+      var i=decl.indexOf(':'); if(i<0) return;
+      var p=decl.slice(0,i).trim().toLowerCase(), v=decl.slice(i+1).trim();
+      var chk=_HR_CSS[p]; if(!chk || !v || v.length>80 || /url\(|expression|javascript:|[<>\\]/i.test(v)) return;
+      if(typeof chk==='function'){ v=chk(v); if(!v) return; } else if(!chk.test(v)) return;
+      out.push(p+': '+v);
+    });
+    return out.join('; ');
+  }
+  function _pgHrSanitize(html){
+    var t=document.createElement('template'); t.innerHTML=String(html||'');   // inert: nothing loads or runs
+    (function walk(node){
+      [].slice.call(node.childNodes).forEach(function(n){
+        if(n.nodeType===3) return;
+        if(n.nodeType!==1){ n.parentNode.removeChild(n); return; }
+        var tag=String(n.nodeName).toUpperCase();
+        if(_HR_DROP[tag]){ n.parentNode.removeChild(n); return; }
+        walk(n);
+        if(!_HR_OK[tag]){ while(n.firstChild) n.parentNode.insertBefore(n.firstChild,n); n.parentNode.removeChild(n); return; }   // unknown: keep its text
+        var href=(tag==='A')?_pgHrSafeUrl(n.getAttribute('href')):'', col=(tag==='FONT')?_pgHrColor(n.getAttribute('color')):'', css=_pgHrSafeCss(n.getAttribute('style'));
+        var face=(tag==='FONT')?_pgHrFam(n.getAttribute('face')):'', fsz=(tag==='FONT' && /^[1-7]$/.test(String(n.getAttribute('size')||'')))?n.getAttribute('size'):'';
+        [].slice.call(n.attributes).forEach(function(a){ n.removeAttribute(a.name); });
+        if(href){ n.setAttribute('href',href); n.setAttribute('target','_blank'); n.setAttribute('rel','noopener noreferrer'); }
+        if(col) n.setAttribute('color',col);
+        if(face) n.setAttribute('face',face);
+        if(fsz) n.setAttribute('size',fsz);
+        if(css) n.setAttribute('style',css);
+      });
+    })(t.content);
+    return t.innerHTML.trim();
+  }
+  function _pgHrEmpty(html){ var t=document.createElement('template'); t.innerHTML=String(html||''); return !String(t.content.textContent||'').replace(/\u00a0/g,' ').trim() && !t.content.querySelector('li'); }
+  function _pgHrSame(a,b){ var ea=_pgHrEmpty(a), eb=_pgHrEmpty(b); if(ea||eb) return ea&&eb; return a===b; }
+  try{ if(typeof window!=='undefined') window._pgHrSanitize=_pgHrSanitize; }catch(_e){}
+  function buildHrSection(g){
+    var gid=String(g.id);
+    if(!document.getElementById('pg-hr-css')){
+      $('<style id="pg-hr-css">').text(
+        '.pg-hr-view{font-size:12.5px;line-height:1.5;color:#212529;border-radius:6px;padding:10px 10px;margin:0px;outline:none;transition:background-color .12s,box-shadow .12s}'+
+        '.pg-hr-view[role=button]{cursor:pointer}'+   /* read mode, editable: hover / keyboard focus says "click to edit" (never the open editor) */
+        '.pg-hr-view[role=button]:hover,.pg-hr-view[role=button]:focus-visible{background:#f8f9fb;box-shadow:inset 0 0 0 1px #dee2e6}'+
+        '.pg-hr-view p,.pg-hr-editor p,.pg-hr-view ul,.pg-hr-view ol,.pg-hr-editor ul,.pg-hr-editor ol{margin:0 0 6px}'+
+        '.pg-hr-view ul,.pg-hr-view ol,.pg-hr-editor ul,.pg-hr-editor ol{padding-left:20px}'+
+        '.pg-hr-view h3,.pg-hr-editor h3{font-size:14px;font-weight:600;margin:4px 0 6px}.pg-hr-view h4,.pg-hr-editor h4{font-size:13px;font-weight:600;margin:4px 0 4px}'+
+        '.pg-hr-view a,.pg-hr-editor a{color:#0d6efd;text-decoration:underline}'+
+        '.pg-hr-edit .wysiwyg-body.pg-hr-editor{min-height:110px;max-height:360px;font-size:12.5px}'+
+        '.pg-hr-tb{display:flex;align-items:center;flex-wrap:nowrap;gap:1px;background:#edf2fa;border-radius:16px;padding:2px 8px;width:max-content;box-sizing:border-box;white-space:nowrap}'+   /* ONE row, always */
+        '.pg-hr-tbrow{overflow-x:auto}.pg-hr-tb>*{flex:0 0 auto}'+
+        '.pg-hr-tbtn{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 4px;border:none;background:none;border-radius:4px;color:#444746;cursor:pointer;line-height:1}'+
+        '.pg-hr-tbtn:hover{background:rgba(68,71,70,.08)}.pg-hr-tbtn:focus-visible{outline:2px solid #0b57d0;outline-offset:-2px}.pg-hr-tbtn.on{background:rgba(11,87,208,.12);color:#0b57d0}'+
+        '.pg-hr-tbtn-text{font-size:13px;color:#444746;padding:0 2px 0 8px;gap:2px}.pg-hr-tbtn-lbl{min-width:70px;text-align:left}.pg-hr-caret{display:inline-flex;margin-left:-2px}'+
+        '.pg-hr-sep{display:inline-block;width:1px;height:20px;background:#c4c7c5;margin:0 4px}'+
+        '.pg-hr-view blockquote,.pg-hr-editor blockquote{margin:0 0 6px 8px;padding-left:10px;border-left:2px solid #dadce0;color:#5f6368}').appendTo('head');
+    }
+    var $sec=$('<div class="card border-0 shadow-sm rounded-2 mt-2 pg-hr-section" style="overflow:visible;width:fit-content;min-width:360px;max-width:100%;">').attr('id','hr-section-'+gid);
+    var $hd=$('<div class="px-3 py-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
+    $hd.append($('<span class="fw-bold text-dark pg-area-label" style="font-size:12px;white-space:nowrap;">').text('HR'));
+    var $body=$('<div class="pg-hr-body">').css({padding:'0px'});
+    $sec.append($hd,$body);
+    attachSectionCollapse({ key:g.id+'|hr', $hd:$hd, $body:$body, label:'HR', defaultCollapsed:true });   // collapsed by default (Paul, Oct 2026)
+    function saved(){ return _pgHrSanitize(getGuideDetail(g.id).hrNote||''); }
+    function ro(){ try{ return _pgGuideMode(g.id)==='view'; }catch(_e){ return false; } }
+    var ed=null, _block=null;
+    function stopWatch(){ document.removeEventListener('mousedown',onDown,true); document.removeEventListener('focusin',onFocus,true); }
+    function renderRead(){
+      stopWatch(); try{ closePop(); }catch(_e){} ed=null; delete _pgHrDrafts[gid]; $('.pg-hr-confirm').remove(); $body.empty();
+      var html=saved();
+      if(_pgHrEmpty(html)){
+        if(ro()){ $body.append($('<span style="font-size:12px;color:#adb5bd;">').text('\u2014')); return; }
+        $body.append($('<button type="button" class="pg-hr-add">').text('+ Note').attr('aria-label','Add an HR note')
+          .css({border:'none',background:'none',padding:'0',fontSize:'12px',color:'#868e96',cursor:'pointer'})
+          .on('mouseenter',function(){ $(this).css('color','#495057'); }).on('mouseleave',function(){ $(this).css('color','#868e96'); })
+          .on('click',function(e){ e.preventDefault(); if(!ro()) openEditor(''); }));
+        return;
+      }
+      var $v=$('<div class="pg-hr-view">').html(html).css({width:'640px',maxWidth:'100%',boxSizing:'border-box'});
+      if(!ro()){
+        $v.attr({role:'button',tabindex:'0','aria-label':'HR note. Edit',title:'Click to edit'})
+          .on('click',function(e){ if($(e.target).closest('a').length) return; if(ro()) return; openEditor(saved()); })   // links open in a new tab
+          .on('keydown',function(e){ if(e.target!==this) return; if(e.key==='Enter'){ e.preventDefault(); if(!ro()) openEditor(saved()); } });
+      }
+      $body.append($v);
+    }
+    function dirty(){ return !!ed && !_pgHrSame(_pgHrSanitize(ed.$nb.html()), ed.base); }
+    function check(){ if(!ed) return; var d=dirty(); ed.$foot.css('display',d?'flex':'none'); if(d) _pgHrDrafts[gid]={html:ed.$nb.html()}; else delete _pgHrDrafts[gid]; }
+    function doSave(){
+      if(!ed) return;
+      var html=_pgHrSanitize(ed.$nb.html()), was=saved();
+      if(!_pgHrSame(html,was)){
+        try{ _pgUndo.begin(g.id); }catch(_u){}
+        if(_pgHrEmpty(html)){ var d0=getGuideDetail(g.id); delete d0.hrNote; try{ _pgHist.schedule(); }catch(_e){} }
+        else setGuideDetail(g.id,'hrNote',html);
+        try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'HR note changed',desc:_pgHrEmpty(html)?'Removed the HR note.':'Saved the HR note.'}); }catch(_e){}
+        try{ _pgUndo.offer(g.id,{lead:'HR note',tail:' saved.'}); }catch(_u){}
+      }
+      renderRead();
+    }
+    function attemptLeave(){ if(!ed) return; if(!dirty()){ renderRead(); return; } ask(); }
+    function onDown(e){
+      if(!ed) return; if(!$body[0].isConnected){ stopWatch(); ed=null; return; }   // a rebuilt section: this one is gone
+      var t=e.target; if(!t || !t.closest) return;
+      if(ed.$wrap[0].contains(t) || t.closest('.pg-hr-confirm') || t.closest('.pg-hr-pop')){ if($pop && !t.closest('.pg-hr-pop') && !t.closest('.pg-hr-tbtn[aria-haspopup]')) closePop(); return; }
+      closePop();
+      if(!dirty()){ renderRead(); return; }   // nothing to lose: close, and let the click carry on
+      e.preventDefault(); e.stopPropagation();   // hold the outside action until the user decides
+      if(_block) document.removeEventListener('click',_block,true);
+      _block=function(ev){ if(ev.target && ev.target.closest && ev.target.closest('.pg-hr-confirm')) return; ev.preventDefault(); ev.stopPropagation(); };
+      document.addEventListener('click',_block,true);
+      setTimeout(function(){ if(_block){ document.removeEventListener('click',_block,true); _block=null; } },600);
+      ask();
+    }
+    function onFocus(e){
+      if(!ed) return; if(!$body[0].isConnected){ stopWatch(); ed=null; return; }   // a rebuilt section: this one is gone
+      var t=e.target; if(!t || !t.closest) return;
+      if(ed.$wrap[0].contains(t) || t.closest('.pg-hr-confirm') || t.closest('.pg-hr-pop')) return;
+      closePop();
+      if(!dirty()){ renderRead(); return; }
+      ask();
+    }
+    function ask(){
+      if($('.pg-hr-confirm').length) return;
+      var $ov=$('<div class="pg-hr-confirm" role="dialog" aria-modal="true" aria-labelledby="pg-hr-confirm-t">')
+        .css({position:'fixed',left:'0',top:'0',right:'0',bottom:'0',background:'rgba(0,0,0,.25)',zIndex:'10050',display:'flex',alignItems:'center',justifyContent:'center'});
+      var $box=$('<div>').css({background:'#fff',borderRadius:'10px',boxShadow:'0 10px 30px rgba(0,0,0,.2)',padding:'16px 18px',maxWidth:'400px',fontSize:'13px'});
+      $box.append($('<div id="pg-hr-confirm-t">').text('HR note').css({fontWeight:'600',marginBottom:'12px',color:'#212529'}));
+      var $row=$('<div>').css({display:'flex',gap:'8px',justifyContent:'flex-end',flexWrap:'wrap'});
+      function close(){ $ov.remove(); }
+      var $s=$('<button type="button" class="btn btn-sm btn-primary pg-hr-c-save">').text('Save Changes').on('click',function(){ close(); doSave(); });
+      var $k=$('<button type="button" class="btn btn-sm btn-outline-secondary pg-hr-c-keep">').text('Continue Editing').on('click',function(){ close(); if(ed){ try{ ed.$nb[0].focus(); restoreRange(); }catch(_e){} } });
+      var $x=$('<button type="button" class="btn btn-sm btn-outline-danger pg-hr-c-discard">').text('Discard').on('click',function(){ close(); renderRead(); });
+      $row.append($s,$k,$x); $box.append($row); $ov.append($box);
+      $ov.on('keydown',function(e){
+        if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); $k.trigger('click'); }
+        else if(e.key==='Tab'){ var b=[$s[0],$k[0],$x[0]], i=b.indexOf(document.activeElement); e.preventDefault(); b[(i+(e.shiftKey?b.length-1:1))%b.length].focus(); }
+      });
+      $('body').append($ov);
+      setTimeout(function(){ try{ $s[0].focus(); }catch(_e){} },0);
+    }
+    function saveRange(){ try{ var s=window.getSelection(); if(ed && s && s.rangeCount && ed.$nb[0].contains(s.anchorNode)) ed.range=s.getRangeAt(0).cloneRange(); }catch(_e){} }
+    function restoreRange(){ try{ if(!ed) return; ed.$nb[0].focus(); if(ed.range){ var s=window.getSelection(); s.removeAllRanges(); s.addRange(ed.range); } }catch(_e){} }
+    function exec(cmd,val){ restoreRange(); try{ document.execCommand('styleWithCSS',false,true); }catch(_e){} var ok=false; try{ ok=document.execCommand(cmd,false,val); }catch(_e){} saveRange(); check(); try{ if(ed && ed.states) ed.states(); }catch(_e){} return ok; }
+    // ── the Gmail-style toolbar (Paul, Oct 2026): one compact rounded strip of small icons with subtle separators:
+    // Font | Size | B I U Colour | Align, numbered, bulleted, outdent, indent, quote | strikethrough | link |
+    // remove formatting. Buttons never take the focus or selection out of the note; menus (font, size, colour, align)
+    // are body-level popovers that count as part of the editor (.pg-hr-pop), so formatting never closes it or prompts.
+    var _HR_ICON={
+      size:'M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z',
+      bold:'M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z',
+      italic:'M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z',
+      underline:'M12 17c3.31 0 6-2.69 6-6V3h-2.5v8c0 1.93-1.57 3.5-3.5 3.5S8.5 12.93 8.5 11V3H6v8c0 3.31 2.69 6 6 6zm-7 2v2h14v-2H5z',
+      color:'M11 3L5.5 17h2.25l1.12-3h6.25l1.12 3h2.25L13 3h-2zm-1.38 9L12 5.67 14.38 12H9.62z',
+      left:'M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z',
+      center:'M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z',
+      right:'M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z',
+      ol:'M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z',
+      ul:'M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z',
+      outdent:'M11 17h10v-2H11v2zm-8-5l4 4V8l-4 4zm0 9h18v-2H3v2zM3 3v2h18V3H3zm8 6h10V7H11v2zm0 4h10v-2H11v2z',
+      indent:'M3 21h18v-2H3v2zM3 8v8l4-4-4-4zm8 9h10v-2H11v2zM3 3v2h18V3H3zm8 6h10V7H11v2zm0 4h10v-2H11v2z',
+      quote:'M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z',
+      strike:'M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z',
+      link:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',
+      clear:'M3.27 5L2 6.27l6.97 6.97L6.5 19h3l1.57-3.66L16.73 21 18 19.73 3.55 5.27 3.27 5zM6 5v.18L8.82 8h2.4l-.72 1.68 2.1 2.1L14.21 8H20V5H6z',
+      caret:'M7 10l5 5 5-5z'
+    };
+    var _HR_FONTS=[['Sans Serif','arial, sans-serif'],['Serif','times new roman, serif'],['Fixed Width','monospace'],['Wide','arial black, sans-serif'],['Narrow','arial narrow, sans-serif'],
+      ['Comic Sans MS','comic sans ms, sans-serif'],['Garamond','garamond, times new roman, serif'],['Georgia','georgia, serif'],['Tahoma','tahoma, sans-serif'],['Trebuchet MS','trebuchet ms, sans-serif'],['Verdana','verdana, sans-serif']];
+    var _HR_SIZES=[['Small','1','10px'],['Normal','2','13px'],['Large','4','18px'],['Huge','6','26px']];
+    var _HR_PALETTE=['#000000','#444444','#666666','#999999','#cccccc','#eeeeee','#f3f3f3','#ffffff','#ff0000','#ff9900','#ffff00','#00ff00','#00ffff','#0000ff','#9900ff','#ff00ff',
+      '#f4cccc','#fce5cd','#fff2cc','#d9ead3','#d0e0e3','#cfe2f3','#d9d2e9','#ead1dc','#ea9999','#f9cb9c','#ffe599','#b6d7a8','#a2c4c9','#9fc5e8','#b4a7d6','#d5a6bd',
+      '#e06666','#f6b26b','#ffd966','#93c47d','#76a5af','#6fa8dc','#8e7cc3','#c27ba0','#cc0000','#e69138','#f1c232','#6aa84f','#45818e','#3d85c6','#674ea7','#a64d79',
+      '#990000','#b45f06','#bf9000','#38761d','#134f5c','#0b5394','#351c75','#741b47','#660000','#783f04','#7f6000','#274e13','#0c343d','#073763','#20124d','#4c1130'];
+    function _hrSvg(d,sz){ return '<svg width="'+(sz||18)+'" height="'+(sz||18)+'" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="'+d+'"/></svg>'; }
+    var $pop=null, $popAnchor=null;
+    function closePop(refocus){ if($pop){ $pop.remove(); $pop=null; } if($popAnchor){ $popAnchor.attr('aria-expanded','false'); if(refocus) try{ $popAnchor[0].focus(); }catch(_e){} } $popAnchor=null; }
+    function openPop($anchor, build){
+      var same=$popAnchor && $popAnchor[0]===$anchor[0]; closePop(); if(same) return;   // a second click closes it
+      $pop=$('<div class="pg-hr-pop" role="menu">').css({position:'fixed',zIndex:'10040',background:'#fff',border:'1px solid #dadce0',borderRadius:'8px',boxShadow:'0 2px 6px rgba(60,64,67,.3)',padding:'6px 0',fontSize:'13px',color:'#202124'});
+      build($pop);
+      $pop.on('mousedown',function(e){ e.preventDefault(); })   // keep the selection in the note
+        .on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closePop(true); } });
+      $('body').append($pop); $popAnchor=$anchor.attr('aria-expanded','true');
+      var r=$anchor[0].getBoundingClientRect(), h=$pop[0].offsetHeight||200, vh=window.innerHeight||800, w=$pop[0].offsetWidth||200, vw=window.innerWidth||1200;
+      var top=(r.bottom+4+h>vh && r.top-h-4>4)?(r.top-h-4):(r.bottom+4);
+      $pop.css({left:Math.max(4,Math.min(r.left,vw-w-8))+'px',top:top+'px'});
+      setTimeout(function(){ try{ var f=$pop && $pop.find('button').get(0); if(f && document.activeElement && document.activeElement.closest && document.activeElement.closest('.pg-hr-tb')) f.focus(); }catch(_e){} },0);   // keyboard users land in the menu
+    }
+    function menuItem(label, css, onPick, on){
+      return $('<button type="button" class="pg-hr-mi" role="menuitem">').css(Object.assign({display:'flex',alignItems:'center',gap:'8px',width:'100%',border:'none',background:'none',padding:'5px 16px 5px 10px',textAlign:'left',cursor:'pointer',color:'#202124',whiteSpace:'nowrap'},css||{}))
+        .append($('<span aria-hidden="true">').css({width:'14px',display:'inline-block',color:'#1a73e8'}).text(on?'\u2713':''), $('<span>').text(label))
+        .on('mouseenter',function(){ $(this).css('background','#f1f3f4'); }).on('mouseleave',function(){ $(this).css('background','none'); })
+        .on('click',function(e){ e.preventDefault(); onPick(); closePop(); });
+    }
+    function openEditor(html){
+      if(ro()) return;
+      stopWatch(); $body.empty();
+      var base=saved(), curFont='Sans Serif', curSize='Normal';
+      var $wrap=$('<div class="pg-hr-edit wysiwyg-wrap">').css({width:'680px',maxWidth:'100%'});
+      var $nb=$('<div class="wysiwyg-body pg-hr-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="HR note" data-placeholder="Write the HR note\u2026">').html(_pgHrSanitize(html));
+      var $tb=$('<div class="pg-hr-tb" role="toolbar" aria-label="Formatting">');
+      function sep(){ return $('<span class="pg-hr-sep" aria-hidden="true">'); }
+      function btn(key, label, icon, opts){
+        opts=opts||{};
+        var $b=$('<button type="button" class="pg-hr-tbtn">').attr({'data-hr':key,'aria-label':label,title:label}).html(opts.text?'':_hrSvg(icon,opts.sz||18));
+        if(opts.text) $b.addClass('pg-hr-tbtn-text').append($('<span class="pg-hr-tbtn-lbl">').text(opts.text));
+        if(opts.pop) $b.attr({'aria-haspopup':'menu','aria-expanded':'false'}).append($('<span class="pg-hr-caret">').html(_hrSvg(_HR_ICON.caret,16)));
+        if(opts.toggle) $b.attr('aria-pressed','false');
+        $b.on('mousedown',function(e){ e.preventDefault(); saveRange(); })   // keep the selection in the note
+          .on('click',function(e){ e.preventDefault(); opts.run($b); });
+        return $b;
+      }
+      var $font=btn('font','Font',null,{text:'Sans Serif',pop:true,run:function($b){ openPop($b,function($p){
+        _HR_FONTS.forEach(function(f){ $p.append(menuItem(f[0],{fontFamily:f[1]},function(){ curFont=f[0]; $font.find('.pg-hr-tbtn-lbl').text(f[0]); exec('fontName',f[1]); },f[0]===curFont)); }); }); }});
+      $tb.append($font, sep());
+      $tb.append(btn('size','Size',_HR_ICON.size,{pop:true,run:function($b){ openPop($b,function($p){
+        _HR_SIZES.forEach(function(z){ $p.append(menuItem(z[0],{fontSize:z[2]},function(){ curSize=z[0]; exec('fontSize',z[1]); },z[0]===curSize)); }); }); }}), sep());
+      $tb.append(btn('bold','Bold',_HR_ICON.bold,{toggle:true,run:function(){ exec('bold'); }}),
+                 btn('italic','Italic',_HR_ICON.italic,{toggle:true,run:function(){ exec('italic'); }}),
+                 btn('underline','Underline',_HR_ICON.underline,{toggle:true,run:function(){ exec('underline'); }}));
+      $tb.append(btn('color','Text color',_HR_ICON.color,{pop:true,run:function($b){ openPop($b,function($p){
+        $p.css({padding:'10px 12px'}).attr('role','dialog').attr('aria-label','Text and background color');
+        var $cols=$('<div>').css({display:'flex',gap:'16px'});
+        [['Background color',function(c){ if(!exec('hiliteColor',c)) exec('backColor',c); },'pg-hr-pal-bg'],['Text color',function(c){ exec('foreColor',c); },'pg-hr-pal-fg']].forEach(function(pal){
+          var $col=$('<div>').addClass(pal[2]);
+          $col.append($('<div>').text(pal[0]).css({fontSize:'12px',color:'#5f6368',marginBottom:'6px'}));
+          var $g=$('<div class="pg-hr-swatches">').css({display:'grid',gridTemplateColumns:'repeat(8,14px)',gap:'2px'});
+          _HR_PALETTE.forEach(function(c){
+            $g.append($('<button type="button" class="pg-hr-sw">').attr({'data-color':c,'aria-label':pal[0]+' '+c,title:c})
+              .css({width:'14px',height:'14px',padding:'0',border:'1px solid '+(c==='#ffffff'?'#dadce0':'transparent'),borderRadius:'2px',background:c,cursor:'pointer'})
+              .on('click',function(e){ e.preventDefault(); pal[1](c); closePop(); }));
+          });
+          $col.append($g); $cols.append($col);
+        });
+        $p.append($cols); }); }}), sep());
+      $tb.append(btn('align','Align',_HR_ICON.left,{pop:true,run:function($b){ openPop($b,function($p){
+        $p.css({display:'flex',padding:'4px'});
+        [['justifyLeft','Align left',_HR_ICON.left],['justifyCenter','Align center',_HR_ICON.center],['justifyRight','Align right',_HR_ICON.right]].forEach(function(a){
+          $p.append($('<button type="button" class="pg-hr-mi pg-hr-tbtn" role="menuitem">').attr({'data-hr':a[0],'aria-label':a[1],title:a[1]}).html(_hrSvg(a[2],18))
+            .on('click',function(e){ e.preventDefault(); exec(a[0]); closePop(); }));
+        }); }); }}));
+      $tb.append(btn('insertOrderedList','Numbered list',_HR_ICON.ol,{run:function(){ exec('insertOrderedList'); }}),
+                 btn('insertUnorderedList','Bulleted list',_HR_ICON.ul,{run:function(){ exec('insertUnorderedList'); }}),
+                 btn('outdent','Decrease indent',_HR_ICON.outdent,{run:function(){ exec('outdent'); }}),
+                 btn('indent','Increase indent',_HR_ICON.indent,{run:function(){ exec('indent'); }}),
+                 btn('quote','Quote',_HR_ICON.quote,{run:function(){ exec('formatBlock','<blockquote>'); }}), sep());
+      $tb.append(btn('strikeThrough','Strikethrough',_HR_ICON.strike,{toggle:true,run:function(){ exec('strikeThrough'); }}), sep());
+      var $lnk=btn('link','Link',_HR_ICON.link,{run:function(){ $lrow.css('display','flex'); setTimeout(function(){ try{ $url[0].focus(); }catch(_e){} },0); }});
+      $lnk.addClass('pg-hr-link');
+      $tb.append($lnk, sep());
+      $tb.append(btn('removeFormat','Remove formatting',_HR_ICON.clear,{run:function(){ exec('removeFormat'); }}));
+      var $lrow=$('<div class="pg-hr-linkrow">').css({display:'none',gap:'6px',alignItems:'center',padding:'4px 8px',borderTop:'1px solid var(--bd)',background:'#fff',order:'2'});
+      var $url=$('<input type="text" class="pg-hr-url" placeholder="https://" aria-label="Link address">').css({fontSize:'12px',height:'22px',padding:'0 6px',border:'1px solid var(--bd)',borderRadius:'4px',width:'260px'});
+      function applyLink(){ var u=_pgHrSafeUrl($url.val()); if(!u){ $url.css('borderColor','#dc3545'); return; }
+        restoreRange(); var s=window.getSelection(), collapsed=!s || !s.rangeCount || s.getRangeAt(0).collapsed;
+        if(collapsed){ var a=document.createElement('a'); a.href=u; a.textContent=u; try{ var r=s.getRangeAt(0); r.insertNode(a); r.setStartAfter(a); r.collapse(true); s.removeAllRanges(); s.addRange(r); }catch(_e){ ed.$nb.append(a); } }
+        else exec('createLink',u);
+        $lrow.css('display','none'); $url.val('').css('borderColor',''); saveRange(); check(); }
+      $lrow.append($url,
+        $('<button type="button" class="btn btn-sm btn-outline-primary pg-hr-url-add">').text('Add link').css({padding:'0 8px',fontSize:'11.5px',height:'22px'}).on('click',function(e){ e.preventDefault(); applyLink(); }),
+        $('<button type="button" class="btn btn-sm btn-outline-secondary pg-hr-url-rm">').text('Remove link').css({padding:'0 8px',fontSize:'11.5px',height:'22px'}).on('click',function(e){ e.preventDefault(); exec('unlink'); $lrow.css('display','none'); }));
+      $url.on('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); applyLink(); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); $lrow.css('display','none'); restoreRange(); } });
+      var $tbRow=$('<div class="pg-hr-tbrow">').css({order:'2',padding:'4px 6px',background:'#fff'}).append($tb);
+      var $foot=$('<div class="pg-hr-foot">').css({display:'none',gap:'8px',padding:'6px 8px',borderTop:'1px solid var(--bd)',background:'#fff',order:'3'});
+      $foot.append($('<button type="button" class="btn btn-sm btn-primary pg-hr-save">').text('Save').on('click',function(e){ e.preventDefault(); doSave(); }),
+                   $('<button type="button" class="btn btn-sm btn-outline-secondary pg-hr-cancel">').text('Cancel').on('click',function(e){ e.preventDefault(); renderRead(); }));
+      $wrap.append($nb,$tbRow,$lrow,$foot);
+      $body.append($wrap);
+      ed={base:base,$nb:$nb,$wrap:$wrap,$foot:$foot,$tb:$tb,range:null};
+      function states(){ ['bold','italic','underline','strikeThrough'].forEach(function(c){ var on=false; try{ on=!!document.queryCommandState(c); }catch(_e){} $tb.find('[data-hr="'+c+'"]').attr('aria-pressed',on?'true':'false').toggleClass('on',on); }); }
+      ed.states=states;
+      $nb.on('input keyup',function(){ saveRange(); check(); states(); }).on('mouseup',function(){ saveRange(); states(); }).on('blur',saveRange);
+      $wrap.on('keydown',function(e){
+        if(e.key!=='Escape' || $(e.target).closest('.pg-hr-linkrow').length) return;
+        e.preventDefault(); e.stopPropagation();
+        if($pop){ closePop(); return; }   // Esc first closes an open menu
+        attemptLeave();
+      });
+      document.addEventListener('mousedown',onDown,true); document.addEventListener('focusin',onFocus,true);
+      check();
+      setTimeout(function(){ try{ $nb[0].focus(); var s=window.getSelection(), r=document.createRange(); r.selectNodeContents($nb[0]); r.collapse(false); s.removeAllRanges(); s.addRange(r); saveRange(); }catch(_e){} },0);
+    }
+    if(_pgHrDrafts[gid] && !ro()) openEditor(_pgHrDrafts[gid].html);   // a draft survives a rerender
+    else renderRead();
+    return $sec;
+  }
   var NEW_GUIDE_ROLES=[{key:'coach', name:'Coach', isCoach:true, spc:20}];
   // Returns the live roles array for a guide (inits defaults if missing)
   function getRoles(gid){
@@ -26849,6 +27157,8 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     try{ _pgTagFields.forEach(function(F){ F.close(false); }); }catch(_e){}
     try{ Object.keys(_pgActEditing).forEach(function(k){ var e=_pgActEditing[k]; if(e && e.end) e.end(); }); }catch(_e){}
     $P.find('.pg-onb-rm').remove();   /* Onboarding Requirements: read-only in the locked View */
+    $P.find('.pg-hr-add').replaceWith($('<span style="font-size:12px;color:#adb5bd;">').text('\u2014'));   /* HR note: read-only */
+    $P.find('.pg-hr-view').off('click keydown').removeAttr('role tabindex aria-label title').css('cursor','default');
     $P.find('td.pg-cal-svctype').each(function(){ var $c=$(this); $('.pg-st-dd').remove();   /* Service Type: read-only text, or a dash */
       $c.off('click.pgst keydown.pgst').removeAttr('role tabindex aria-haspopup aria-label title').css('cursor','default');
       $c.find('.pg-st-clear').remove();
@@ -26971,7 +27281,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
         collapse:function(){ if(!_pgCalCollapse[gid]){ clickIf($(q('[data-pg-sec-key="calsetup"] .pg-cal-toggle'))); } },
         expand:function(){ if(_pgCalCollapse[gid]){ clickIf($(q('[data-pg-sec-key="calsetup"] .pg-cal-toggle'))); } } });
       // Discounts / Staff Roles / Special Days — attachSectionCollapse, state in _pgSecCollapse[gid|key]
-      [['Summary','summary'],['Program Details','progdetails'],['Program Launch Timeline','launch'],['Pricing Calculator','discounts'],['Not to Exceed','nte'],['Staff Roles','roles'],['Special Days','specialdays']].forEach(function(pair){
+      [['Summary','summary'],['Program Details','progdetails'],['Program Launch Timeline','launch'],['HR','hr'],['Pricing Calculator','discounts'],['Not to Exceed','nte'],['Staff Roles','roles'],['Special Days','specialdays']].forEach(function(pair){
         var key=gid+'|'+pair[1];
         out.push({ name:pair[0],
           isCollapsed:function(){ return !!_pgSecCollapse[key]; },
@@ -29656,7 +29966,8 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
 
     $discSection.insertAfter($calSetupSection);
     var $pdSec=buildProgramDetailsSection(g).insertAfter($calSetupSection);   // Programs -> Program Details -> Program Launch Timeline -> Pricing Calculator
-    buildProgramLaunchTimelineSection(g).insertAfter($pdSec);
+    var $tlSec=buildProgramLaunchTimelineSection(g).insertAfter($pdSec);
+    buildHrSection(g).insertAfter($tlSec);   // HR (Oct 2026) right after Program Launch Timeline
 
     // ── Not to Exceed area (this spec) ── A collapsible card immediately after Discounts. Four
     // interdependent money/percent fields: Initial Contract Amount (ica), % (pct), Additional Amount
