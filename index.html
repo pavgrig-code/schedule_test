@@ -10498,7 +10498,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(_pgHrEmpty(html)){
         if(ro()){ $body.append($('<span style="font-size:12px;color:#adb5bd;">').text('\u2014')); return; }
         $body.append($('<button type="button" class="pg-hr-add">').text('+ Note').attr('aria-label','Add an HR note')
-          .css({border:'none',background:'none',padding:'0',fontSize:'12px',color:'#868e96',cursor:'pointer'})
+          .css({border:'none',background:'none',padding:'10px',fontSize:'12px',color:'#868e96',cursor:'pointer'})   // padding 10px (Paul, Oct 2026)
           .on('mouseenter',function(){ $(this).css('color','#495057'); }).on('mouseleave',function(){ $(this).css('color','#868e96'); })
           .on('click',function(e){ e.preventDefault(); if(!ro()) openEditor(''); }));
         return;
