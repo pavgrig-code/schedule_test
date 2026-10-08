@@ -602,9 +602,10 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
    in every guide, filled or empty (Oct 2026): the main tab then shows only its title and chevron, like every other tab. */
 #planning-panel.pgpc-cal .pg-cal-hdr-ctl { display:none !important; }
 
-/* MAIN-TAB ICONS (Paul, Oct 2026): one distinct icon per main section, immediately before its title. One style for all (16px line
-   icon, 8px before the title), each in its own mid-tone colour (hues spread so neighbours never match); drawn by CSS on the title itself, so it survives every rebuild and never enters
-   the title text. */
+/* MAIN-TAB ICONS (Paul, Oct 2026), Apple-style: every main section keeps its own glyph, drawn WHITE on a small rounded-square
+   tile (20px, 5px radius) filled with an Apple system colour and a very subtle top-to-bottom gradient plus a hairline shadow, the
+   iOS / macOS Settings treatment. Neighbouring tabs never share a hue. Drawn by CSS on the title, so it survives every rebuild and
+   never enters the title text. */
 #planning-panel [id^="pg-guide-summary-card-"] > :first-child .pg-area-label::before,
 #planning-panel .pg-calsetup-card > :first-child .pg-area-label::before,
 #planning-panel [id^="pricing-section-"] > :first-child .pg-area-label::before,
@@ -615,22 +616,28 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
 #planning-panel [id^="cal-section-"] > :first-child .pg-area-label::before,
 #planning-panel [id^="summary-section-"] > :first-child .pg-area-label::before,
 #planning-panel [id^="progdetails-section-"] > :first-child .pg-area-label::before,
-#planning-panel [id^="fulfillment-section-"] > :first-child .pg-area-label::before { content:''; display:inline-block; width:16px; height:16px; margin-right:8px; vertical-align:-3px; background:no-repeat center / 16px 16px; flex:0 0 auto; }
-#planning-panel [id^="pg-guide-summary-card-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='9' rx='1'/%3E%3Crect x='14' y='3' width='7' height='5' rx='1'/%3E%3Crect x='14' y='12' width='7' height='9' rx='1'/%3E%3Crect x='3' y='16' width='7' height='5' rx='1'/%3E%3C/svg%3E"); }   /* Summary (dashboard) */
-#planning-panel .pg-calsetup-card > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 2 7 12 12 22 7 12 2'/%3E%3Cpolyline points='2 17 12 22 22 17'/%3E%3Cpolyline points='2 12 12 17 22 12'/%3E%3C/svg%3E"); }   /* Programs (layers) */
-#planning-panel [id^="pricing-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316a34a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='1' x2='12' y2='23'/%3E%3Cpath d='M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'/%3E%3C/svg%3E"); }   /* Pricing (dollar) */
-#planning-panel .pg-roles-row > .card:nth-child(1) > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c026d3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'/%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E"); }   /* Staff Roles (people) */
-#planning-panel .pg-roles-row > .card:nth-child(2) > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d97706' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/%3E%3C/svg%3E"); }   /* Special Days (star) */
-#planning-panel [id^="calgroups-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230891b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'/%3E%3Cpath d='M9 22v-4h6v4'/%3E%3Cpath d='M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01'/%3E%3C/svg%3E"); }   /* Site Breakdown (building) */
-#planning-panel [id^="staffing-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ea580c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"); }   /* Staffing Hours (clock) */
-#planning-panel [id^="cal-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e11d48' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E"); }   /* Calendars (calendar) */
-#planning-panel [id^="summary-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2365a30d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='20' x2='18' y2='10'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='6' y1='20' x2='6' y2='14'/%3E%3C/svg%3E"); }   /* Program Summaries (bar chart) */
-#planning-panel [id^="progdetails-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M12 11h4M12 16h4M8 11h.01M8 16h.01'/%3E%3C/svg%3E"); }   /* Program Details (clipboard list) */
-#planning-panel [id^="fulfillment-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d9488' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E"); }   /* Fulfillment (check circle) */
+#planning-panel [id^="fulfillment-section-"] > :first-child .pg-area-label::before { content:''; display:inline-block; width:20px; height:20px; margin-right:8px; vertical-align:-5px; border-radius:5px; flex:0 0 auto;
+  background-repeat:no-repeat, no-repeat; background-position:center, center; background-size:13px 13px, 100% 100%;
+  box-shadow:0 1px 1.5px rgba(0,0,0,.16), inset 0 0 0 .5px rgba(0,0,0,.08); }
+#planning-panel [id^="pg-guide-summary-card-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='9' rx='1'/%3E%3Crect x='14' y='3' width='7' height='5' rx='1'/%3E%3Crect x='14' y='12' width='7' height='9' rx='1'/%3E%3Crect x='3' y='16' width='7' height='5' rx='1'/%3E%3C/svg%3E"), linear-gradient(180deg, #7371dd, #5856d6); }   /* Summary (dashboard) */
+#planning-panel .pg-calsetup-card > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 2 7 12 12 22 7 12 2'/%3E%3Cpolyline points='2 17 12 22 22 17'/%3E%3Cpolyline points='2 12 12 17 22 12'/%3E%3C/svg%3E"), linear-gradient(180deg, #298fff, #007aff); }   /* Programs (layers) */
+#planning-panel [id^="pricing-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='1' x2='12' y2='23'/%3E%3Cpath d='M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'/%3E%3C/svg%3E"), linear-gradient(180deg, #54d074, #34c759); }   /* Pricing (dollar) */
+#planning-panel .pg-roles-row > .card:nth-child(1) > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'/%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E"), linear-gradient(180deg, #bc6ee3, #af52de); }   /* Staff Roles (people) */
+#planning-panel .pg-roles-row > .card:nth-child(2) > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/%3E%3C/svg%3E"), linear-gradient(180deg, #ffa629, #ff9500); }   /* Special Days (star) */
+#planning-panel [id^="calgroups-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'/%3E%3Cpath d='M9 22v-4h6v4'/%3E%3Cpath d='M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01'/%3E%3C/svg%3E"), linear-gradient(180deg, #b19878, #a2845e); }   /* Site Breakdown (building) */
+#planning-panel [id^="staffing-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"), linear-gradient(180deg, #51bdd0, #30b0c7); }   /* Staffing Hours (clock) */
+#planning-panel [id^="cal-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E"), linear-gradient(180deg, #ff5a51, #ff3b30); }   /* Calendars (calendar) */
+#planning-panel [id^="summary-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='20' x2='18' y2='10'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='6' y1='20' x2='6' y2='14'/%3E%3C/svg%3E"), linear-gradient(180deg, #53baea, #32ade6); }   /* Program Summaries (bar chart) */
+#planning-panel [id^="progdetails-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M12 11h4M12 16h4M8 11h.01M8 16h.01'/%3E%3C/svg%3E"), linear-gradient(180deg, #ff4f70, #ff2d55); }   /* Program Details (clipboard list) */
+#planning-panel [id^="fulfillment-section-"] > :first-child .pg-area-label::before { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E"), linear-gradient(180deg, #29d0c8, #00c7be); }   /* Fulfillment (check circle) */
 
 /* Collapsed Fulfillment (Paul, Oct 2026): the tab shows ONLY its icon + title and chevron; the upload control, the status line and the
    Program-block buttons hide while collapsed and return, unchanged, when Fulfillment is expanded. */
 #planning-panel.pgpc-ff [id^="fulfillment-section-"] > :first-child > :not(.pg-area-label):not(.ff-parent-toggle) { display:none !important; }
+
+/* Sport rows (Oct 2026): the rows share the width of the widest row, so a row's top / bottom line spans the full row like the Clubs
+   Enrichment table rows (each row still sizes to its content as a group; nothing stretches to the page). */
+#planning-panel .pg-act-rows[data-act-key$="|sport"] { width:fit-content !important; align-items:stretch !important; }
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -10126,7 +10133,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   var _pgTH=null;
   (function(){
     var OPT={
-      sports:  {pfx:'sp', noun:'Sports',     itemNoun:'Sport',     cellTag:'div', minW:'80px', maxW:'460px'},
+      sports:  {pfx:'sp', stacked:true, noun:'Sports', itemNoun:'Sport', cellTag:'div', minW:'80px', maxW:'460px'},   // stacked like the Clubs (Oct 2026)
       themes:  {pfx:'th', noun:'Themes',     itemNoun:'Theme',     fixedTitle:'Edit/Add Themes',      stacked:true,  minW:'150px', maxW:'340px'},
       clubsTkk:{pfx:'ck', stacked:true, noun:'TK-K Clubs', itemNoun:'TK-K Club', fixedTitle:'Add/Edit TK-K Clubs', searchable:true, minW:'140px', maxW:'260px', menuMaxW:'360px'},
       clubsG15:{pfx:'c1', stacked:true, noun:'G1-5 Clubs', itemNoun:'G1-5 Club', fixedTitle:'Add/Edit G1-5 Clubs', searchable:true, minW:'140px', maxW:'260px', menuMaxW:'360px'},
@@ -10463,7 +10470,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       (t.fields||[]).forEach(function(fd){
         if(fd.multi && fd.tag){   // Sports: the Themes / Clubs multi-select, badges in one row (wrapping only when out of room)
           $r.css({height:'auto',minHeight:'18px',alignItems:'flex-start'});
-          $r.append(_pgTagCell(fd.tag, g, a, a.id, {}, function(){ try{ save(); }catch(_e){} }).css({display:'block',flex:'0 1 auto',padding:'0 0 0 6px',minHeight:'18px'}));
+          $r.append(_pgTagCell(fd.tag, g, a, a.id, {}, function(){ try{ save(); }catch(_e){} updateDividers(t); }).css({display:'block',flex:'0 1 auto',padding:'0 0 0 6px',minHeight:'18px'}));
           return;
         }
         if(fd.icons) $r.append(icoOf(t,a,fd.key)); $r.append(fieldOf(t,a,fd.key)); });
@@ -10535,8 +10542,19 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       },0);
     }
     function tallRec(t,a){ return (t.fields||[]).some(function(fd){ return fd.multi && Array.isArray(a[fd.key]) && a[fd.key].length>1; }); }
+    var _ACT_DIV='1px solid #e6e9ed';   // the one activity-row divider (Clubs Enrichment's)
     function updateDividers(t){
-      if(!(_below && t.table)) return;
+      if(!_below) return;
+      if(!t.table){   // list rows (Sport, Oct 2026): a row with more than one value gets a line at its top AND bottom (shared with
+        // the next row, never doubled). The LAST row never gets a bottom line: the divider after the Sport block already separates it.
+        var $lg=$td.find('.pg-act-group[data-act="'+t.key+'"]'), $lr=$lg.find('.pg-act-rows'); if(!$lr.length) return;
+        var lById={}; peek(t.key).forEach(function(a){ lById[a.id]=a; });
+        var $li=$lr.children('[data-act-id]'), ln=$li.length, lPrev=false;
+        $li.each(function(i){ var a=lById[this.getAttribute('data-act-id')], tall=!!(a && tallRec(t,a)), top=tall||(i>0&&lPrev), bot=false;   // (Oct 2026: no bottom line on the last Sport row)
+          $(this).toggleClass('pg-act-row-multi',tall).css({borderTop:top?_ACT_DIV:'',borderBottom:bot?_ACT_DIV:'',paddingTop:top?'3px':'',paddingBottom:bot?'3px':''});
+          lPrev=tall; });
+        return;
+      }
       var $tbl=$td.find('table.pg-act-table[data-act="'+t.key+'"]'); if(!$tbl.length) return;
       var byId={}; peek(t.key).forEach(function(a){ byId[a.id]=a; });
       var prevTall=false;
@@ -10545,6 +10563,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         $(this).toggleClass('pg-act-div',on).children('tr.pg-act-row').children('td').css('borderTop',on?'1px solid #e6e9ed':'none');
         prevTall=tall;
       });
+      var $its=$tbl.children('tbody.pg-act-item');   // more than one row: the last row gets a bottom line too (Oct 2026)
+      $its.children('tr.pg-act-row').children('td').css('borderBottom','');
+      if($its.length>1) $its.last().children('tr.pg-act-row').children('td').css('borderBottom',_ACT_DIV);
       updateCycles(t);   // labels follow the same order
     }
     function tableRowEl(t,a){   // Clubs Enrichment: <tbody.pg-act-item><tr.pg-act-row> Dates | each field | empty extra cells | x
@@ -10748,11 +10769,11 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Esc. Selected requirements show ONE PER ROW under "+ Add", always in the master order, each with a direct x.
   // Stored as det.onboarding (ordered keys). Replaces the earlier checkbox table (its det.onboardingOff is retired).
   // weeks (Paul, Oct 2026): each Hiring Requirement's typical lead time, a NUMBER kept apart from its name (for a later
-  // timeline calculation; nothing is totalled yet). Mandated Reporter Training has no value given, so it shows none.
+  // timeline calculation; nothing is totalled yet). Mandated Reporter Training: 1 week (Oct 2026).
   var ONBOARDING_REQS=[
     {k:'elevo-livescan',     l:'Elevo LiveScan',             weeks:1},
     {k:'tb-assessment',      l:'TB Assessment',              weeks:1},
-    {k:'mandated-reporter',  l:'Mandated Reporter Training', weeks:null},
+    {k:'mandated-reporter',  l:'Mandated Reporter Training', weeks:1},
     {k:'elevo-ia-exam',      l:'Elevo IA Exam',              weeks:2},
     {k:'district-livescan',  l:'District LiveScan',          weeks:2},
     {k:'tb-skin-test',       l:'TB Skin Test',               weeks:2},
@@ -10802,6 +10823,61 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     attachHeaderClickToggle($hd, toggle);
     apply();
     return { apply:apply, toggle:toggle };
+  }
+  // PROGRAM TYPE (Paul, Oct 2026): a guide-level single-select at the top of the Program Launch Timeline, the SAME control as
+  // District Category / Service Category (search, pick, pill with x) plus a soft colour per option (dropdown AND pill), and
+  // click-the-value-to-change. Stored as det.programType (one of the names below); Undo / History / JSON like the categories.
+  var PG_PROGRAM_TYPES=[
+    {v:'Sports',             bg:'#e6f4ea', fg:'#1e5e33', border:'#bfe2c9', weeks:4, dot:'#6fbf8a'},
+    {v:'PLC',                bg:'#e8effc', fg:'#1f4a8a', border:'#c6d6f5', weeks:4, dot:'#7ea6e8'},
+    {v:'Lunch Recess',       bg:'#fdf3e1', fg:'#7a4a00', border:'#f1dcb3', weeks:4, dot:'#e3ad55'},
+    {v:'ELO Full Service',   bg:'#f0eafb', fg:'#553593', border:'#d9cdf3', weeks:5, dot:'#a68ad9'},
+    {v:'VAPA',               bg:'#fbe9f1', fg:'#8c2655', border:'#f1c9da', weeks:5, dot:'#df8db0'},
+    {v:'ECWC',               bg:'#e2f4f6', fg:'#0d5866', border:'#bde3e9', weeks:5, dot:'#66bfca'},
+    {v:'Credential Teacher', bg:'#f2eee7', fg:'#5f4626', border:'#ded3c1', weeks:5, dot:'#bda37c'}
+  ];
+  // Base Launch Timeline per Program Type (Oct 2026): numeric weeks, kept apart from the name, for a later launch-timeline
+  // calculation (nothing is calculated yet). Shown as subtle secondary text in the dropdown and on the pill.
+  function _pgProgramTypeWeeks(name){ for(var i=0;i<PG_PROGRAM_TYPES.length;i++){ if(PG_PROGRAM_TYPES[i].v===name) return PG_PROGRAM_TYPES[i].weeks; } return null; }
+  try{ if(typeof window!=='undefined') window._pgProgramTypeWeeks=_pgProgramTypeWeeks; }catch(_e){}
+  // EXPECTED LAUNCH TIMELINE (Paul, Oct 2026): read-only, derived from the STORED guide data only: Program Type Base + the
+  // HIGHEST lead time among the selected Hiring Requirements (0 when none) + 1. No Program Type: the label stays, muted (the
+  // app's .text-muted), with no value at all. Repainted whenever Program Type or Hiring Requirements change.
+  function _pgExpectedLaunchWeeks(det){
+    det=det||{}; var base=_pgProgramTypeWeeks(det.programType||''); if(typeof base!=='number') return null;
+    var mx=0; (Array.isArray(det.onboarding)?det.onboarding:[]).forEach(function(k){ var w=_pgHiringWeeks(k); if(typeof w==='number' && w>mx) mx=w; });
+    return base+mx+1;
+  }
+  try{ if(typeof window!=='undefined') window._pgExpectedLaunchWeeks=_pgExpectedLaunchWeeks; }catch(_e){}
+  function _pgExpectedLaunchFill($e, w, pt){
+    var on=(typeof w==='number');
+    $e.toggleClass('pg-launch-exp-off',!on);
+    $e.find('.pg-launch-exp-label').toggleClass('text-muted',!on).css('color',on?'#343a40':'');
+    // the weeks as a badge in the selected Program Type's own colours (its pill tint / text / border; Oct 2026)
+    var o=null; for(var i=0;i<PG_PROGRAM_TYPES.length;i++){ if(PG_PROGRAM_TYPES[i].v===pt){ o=PG_PROGRAM_TYPES[i]; break; } }
+    $e.find('.pg-launch-exp-val').text(on?(w+(w===1?' week':' weeks')):'').css(on?{display:'inline-flex',alignItems:'center',background:(o?o.bg:'#f1f3f5'),color:(o?o.fg:'#212529'),border:'1px solid '+(o?o.border:'#dee2e6'),borderRadius:'999px',padding:'2px 10px',fontWeight:'600',lineHeight:'1.3'}:{display:'none',background:'',color:'',border:'',padding:''});
+  }
+  function _pgExpectedLaunchPaint(gid){
+    var _d=getGuideDetail(gid), w=_pgExpectedLaunchWeeks(_d);
+    $('#planning-panel .pg-launch-expected[data-gid="'+String(gid)+'"]').each(function(){ _pgExpectedLaunchFill($(this), w, _d.programType); });
+  }
+  function _pgExpectedLaunchEl(g){
+    var $e=$('<div class="pg-launch-expected">').attr('data-gid',String(g.id)).css({display:'flex',alignItems:'baseline',gap:'12px',marginTop:'10px',paddingTop:'8px',borderTop:'1px solid #eef1f4'});
+    $e.append($('<span class="pg-launch-exp-label">').text('Expected Launch Timeline').css({fontSize:'12px',fontWeight:'600'}));
+    $e.append($('<span class="pg-launch-exp-val">').css({fontSize:'12px',fontWeight:'700',color:'#212529'}));
+    var _d0=getGuideDetail(g.id); _pgExpectedLaunchFill($e, _pgExpectedLaunchWeeks(_d0), _d0.programType);
+    return $e;
+  }
+  var _pgCatCtl=null;
+  function _pgProgramTypeField(g){
+    var $w=$('<div class="pg-launch-ptype">').css({marginBottom:'10px'});
+    if(typeof _pgCatCtl!=='function') return $w;
+    $w.append(_pgCatCtl({ key:'programType', label:'Program Type', histLabel:'Program Type', cls:'pg-ptype', width:188, opts:PG_PROGRAM_TYPES,
+      undoable:true, editOnClick:true, placeholder:'Search program type',   // standard options with a colour circle (Oct 2026)
+      optMeta:function(o){ return (typeof o.weeks==='number')?(o.weeks+(o.weeks===1?' week':' weeks')):''; },
+      onPick:function(){ _pgExpectedLaunchPaint(g.id); } }));   // pick / change / clear: the Expected Launch Timeline at once
+    if(!document.getElementById('pg-ptype-css')) $('<style id="pg-ptype-css">').text('.pg-opt-tinted:hover,.pg-opt-tinted:focus{filter:brightness(0.95);}').appendTo('head');
+    return $w;
   }
   // Subsections inside a major section (Paul, Oct 2026): one header style for every subsection (Pricing's too).
   function _pgSubsec(cls, id, title){
@@ -10908,12 +10984,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     var gid=String(g.id);
     var _ss=_pgSubsec('pg-launch-section','launch-section-'+gid,'Program Launch Timeline'), $sec=_ss.$sec, $hd=_ss.$hd;   // a subsection of Program Details (Oct 2026)
     var $body=$('<div class="pg-launch-body">').css({padding:'8px 12px'});
+    $body.append(_pgProgramTypeField(g));   // Program Type first (Oct 2026)
     $body.append(_pgOnboarding(g));
     // [pencil] Specialty Requirement Details (Paul, Oct 2026): after + Hiring Requirements, shown ONLY while Specialty
     // Requirements is selected there (a visibility change: the saved det.launchNote is kept and comes back when re-selected)
     var $notes=$('<div class="pg-launch-notes">').attr('data-gid',String(g.id)).css('display',_pgSpecialtyOn(g.id)?'':'none'); $body.append($notes);
     _pgRichNote(g, $notes, {field:'launchNote', addLabel:'Specialty Requirement Details', addIcon:true, addAria:'Add Specialty Requirement Details', name:'Specialty Requirement Details', title:'Specialty Requirement Details',
       heading:'Specialty Requirement Details', roEmpty:'', addCss:{display:'inline-block',padding:'0',fontSize:'12px',color:'rgb(134, 142, 150)',marginTop:'6px',marginBottom:'4px'}});   // colour rgb(134,142,150), normal weight (Paul, Oct 2026)
+    $body.append(_pgExpectedLaunchEl(g));   // Expected Launch Timeline: the bottom of the subsection (Oct 2026)
     $sec.append($body);
     return $sec;
   }
@@ -10990,7 +11068,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Specialty Requirement Details shows only while Hiring Requirements includes Specialty Requirements; synced on every
   // Onboarding change (popup tick or item x) so it appears / disappears at once
   function _pgSpecialtyOn(gid){ try{ return _pgOB.ordered(getGuideDetail(gid).onboarding).indexOf('specialty-reqs')>=0; }catch(_e){ return false; } }
-  function _pgLaunchNotesSync(gid){ var on=_pgSpecialtyOn(gid); $('#planning-panel .pg-launch-notes[data-gid="'+String(gid)+'"]').each(function(){ this.style.display=on?'':'none'; }); }
+  function _pgLaunchNotesSync(gid){ try{ _pgExpectedLaunchPaint(gid); }catch(_e){}   // Hiring Requirements changed: recalc (Oct 2026)
+    var on=_pgSpecialtyOn(gid); $('#planning-panel .pg-launch-notes[data-gid="'+String(gid)+'"]').each(function(){ this.style.display=on?'':'none'; }); }
   // FIELD PROGRAMS (Paul, Oct 2026): a major collapsible section right BEFORE Fulfillment, collapsed by default (new guides
   // too). A table Name | Programs (+ Del): det.fieldPrograms = [{id, name}], each row with its own stable id. Name is typed
   // in place; Programs stays empty for now; Del (the Programs-row button) removes just that row as one Undo step;
@@ -28420,17 +28499,23 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       function _color(v){ for(var i=0;i<cfg.opts.length;i++){ if(cfg.opts[i].v===v) return cfg.opts[i]; } return null; }
       var $field=$('<div>').css({ flex:'0 0 auto' });   // content-based width: sizes to the label / pill / search input, no reserved space
       $field.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:5px;">').text(cfg.label));
-      function build(){
+      function build(forceEdit){   // forceEdit (cfg.editOnClick): the search input even though a value is set (Oct 2026)
         var $f=$('<div style="position:relative;">');
         var cur=(getGuideDetail(g.id)[cfg.key])||'';
         var cc=_color(cur);
         if(cur && !cc && cfg.keepLegacy) cc={ bg:'#ffffff', fg:'#495057', border:'#adb5bd', legacy:true };   // a saved value no longer in the list stays VISIBLE, never silently replaced
-        if(cur && cc){
+        if(cur && cc && !forceEdit){
           var $chip=$('<div class="d-inline-flex align-items-center rounded-pill gap-2 '+cfg.cls+'-pill" style="font-size:12px;font-weight:500;padding:4px 12px;white-space:nowrap;max-width:100%;box-sizing:border-box;">')
             .css({background:cc.bg,color:cc.fg,border:'1px solid '+cc.border});
-          $chip.append($('<span class="fw-semibold" style="overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;">').text(cur));
+          var _cm=(typeof cfg.optMeta==='function' && !cc.legacy)?cfg.optMeta(cc):'';
+          if(_cm){   // name + secondary value share ONE baseline (Oct 2026); the x (a separate flex item) stays centred on the row
+            $chip.append($('<span class="'+cfg.cls+'-txt">').css({display:'inline-flex',alignItems:'baseline',gap:'6px',minWidth:'0',lineHeight:'1.3'})
+              .append($('<span class="fw-semibold" style="overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;">').text(cur))
+              .append($('<span class="'+cfg.cls+'-meta">').text(_cm).css({fontSize:'10.5px',fontWeight:'400',opacity:'0.72',whiteSpace:'nowrap',flex:'0 0 auto'})));
+          } else $chip.append($('<span class="fw-semibold" style="overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;">').text(cur));
           var $clrBtn=$('<button type="button" class="'+cfg.cls+'-clear" style="background:none;border:none;padding:0 0 0 4px;cursor:pointer;font-size:14px;opacity:0.7;line-height:1;flex:0 0 auto;">').css('color',cc.fg).text('\u00d7');
-          $clrBtn.on('click',function(){
+          $clrBtn.on('click',function(e){
+            try{ e.preventDefault(); e.stopPropagation(); }catch(_s){}   // the x only clears: it never opens the search (Oct 2026)
             var _catPrevC=(getGuideDetail(g.id)[cfg.key])||'';
             if(cfg.undoable){ try{ _pgUndo.begin(g.id); }catch(_u){} }
             setGuideDetail(g.id,cfg.key,'');
@@ -28440,12 +28525,19 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
             if(cfg.undoable){ try{ _pgUndo.offer(g.id,{lead:cfg.histLabel,tail:' cleared.'}); }catch(_u){} }
           });
           $chip.append($clrBtn);
+          if(cfg.editOnClick && _pgvCur.mode!=='view'){   // clicking the value (not the x) reopens the search; the value stays until a new pick
+            $chip.css('cursor','pointer').attr('title','Change '+cfg.label).on('click',function(e){
+              if($(e.target).closest('.'+cfg.cls+'-clear').length) return;
+              var $n=build(true); $f.replaceWith($n); try{ $n.find('input').trigger('focus'); }catch(_f){}
+            });
+          }
           if(cc.legacy){ $chip.addClass(cfg.cls+'-legacy').css('border-style','dashed').attr('title','Saved from an earlier category list. Clear it (\u00d7) to choose a current '+cfg.label+'.'); }
           $f.append($chip);
         } else if(_pgvCur.mode==='view'){
           $f.append($('<span style="font-size:12px;color:#6c757d;">').text('\u2014'));
         } else {
           var $inp=$('<input type="text" class="form-control form-control-sm '+cfg.cls+'-input" placeholder="Search category" style="font-size:12px;width:140px;">');
+          if(cfg.placeholder) $inp.attr('placeholder',cfg.placeholder);
           var $dd=$('<div class="list-group '+cfg.cls+'-dd" style="max-height:190px;overflow-y:auto;display:none;position:absolute;left:0;min-width:100%;width:max-content;z-index:9999;border:1px solid #dee2e6;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.10);background:#fff;">');
           var _hideT=null;
           function buildDd(q){
@@ -28453,8 +28545,14 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
             var qlo=(q||'').toLowerCase().trim();
             cfg.opts.filter(function(o){ return !qlo||o.v.toLowerCase().includes(qlo); }).forEach(function(o){
               var $item=$('<button type="button" class="list-group-item list-group-item-action border-0 '+cfg.cls+'-opt" style="display:flex;align-items:center;white-space:nowrap;">').css({fontSize:'12px',padding:'6px 28px 6px 14px'}).attr('data-cat',o.v);
-              $item.append($('<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;flex:0 0 auto;">').css('background',o.bg).css('border','1px solid '+o.border));
-              $item.append($('<span class="fw-semibold">').text(o.v));
+              if(cfg.optBg){ $item.addClass('pg-opt-tinted').css({background:o.bg,color:o.fg,border:'1px solid '+o.border,borderRadius:'6px',margin:'3px 4px',width:'auto'}); }   // each option in its own soft colour (Oct 2026)
+              else $item.append($('<span class="'+cfg.cls+'-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;flex:0 0 auto;">').css('background',o.dot||o.bg).css('border','1px solid '+(o.dot||o.border)));
+              var _om=(typeof cfg.optMeta==='function')?cfg.optMeta(o):'';
+              if(_om){   // name + secondary value share ONE baseline (Oct 2026); the circle stays centred on the row
+                $item.append($('<span class="'+cfg.cls+'-txt">').css({display:'inline-flex',alignItems:'baseline',gap:'8px',lineHeight:'1.3'})
+                  .append($('<span class="fw-semibold">').text(o.v))
+                  .append($('<span class="'+cfg.cls+'-meta">').text(_om).css({fontSize:'10.5px',fontWeight:'400',opacity:'0.72',whiteSpace:'nowrap'})));
+              } else $item.append($('<span class="fw-semibold">').text(o.v));
               $item.on('mousedown',function(e){
                 e.preventDefault(); if(_hideT){ clearTimeout(_hideT); _hideT=null; }
                 var _catPrev=(getGuideDetail(g.id)[cfg.key])||'';
@@ -28471,7 +28569,8 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
           }
           $inp.on('input',function(){ buildDd($(this).val()); });
           $inp.on('focus',function(){ buildDd($(this).val()||''); });
-          $inp.on('blur',function(){ _hideT=setTimeout(function(){ $dd.hide(); },200); });
+          $inp.on('blur',function(){ _hideT=setTimeout(function(){ $dd.hide(); if(forceEdit && $f[0].isConnected){ $f.replaceWith(build()); } },200); });   // editing a set value: leaving without a pick keeps it
+          if(forceEdit) $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); if(_hideT){ clearTimeout(_hideT); } $f.replaceWith(build()); } });
           $f.append($('<div style="position:relative;display:inline-block;">').append($inp,$dd));
         }
         return $f;
@@ -28480,6 +28579,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       return $field;
     }
 
+    _pgCatCtl=_mkCategoryControl;   // shared with the Program Launch Timeline's Program Type (built later in this same render)
     // District Category: two options (Renewal/Expansion, New). 188px fits the wider option + slack.
     var $catField=_mkCategoryControl({
       key:'districtCategory', label:'District Category', histLabel:'District Category', cls:'pg-cat', width:188,
