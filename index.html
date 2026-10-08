@@ -281,7 +281,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .wysiwyg-body{min-height:72px;max-height:140px;overflow-y:auto;padding:8px 10px;font-size:13px;color:var(--tx);outline:none;line-height:1.5;order:1;}
 .wysiwyg-body:empty:before{content:attr(data-placeholder);color:var(--tx2);pointer-events:none;}
 /* Staff column */
-.staff-col{width:162px;flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);display:flex;flex-direction:column;}
+.staff-col{width:var(--pg-sidecol-w,162px);flex-shrink:0;border-right:1px solid var(--bd2);overflow-y:auto;overflow-x:hidden;background:var(--bg);display:flex;flex-direction:column;}
 /* Filter bar */
 .filter-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bd2);background:var(--bg);flex-shrink:0;}
 .filter-item{display:flex;align-items:center;gap:6px;}
@@ -655,6 +655,29 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
 #planning-panel table.pg-rt.pg-tbl-gap { margin-top: var(--pg-tbl-gap) !important; }
 #planning-panel table.pg-rt > thead > tr > th { padding-top:5px !important; padding-bottom:5px !important; }
 #planning-panel table.pg-nte-table > thead > tr > th { background:#f0f4f8 !important; color:#495057 !important; font-size:10px !important; }
+
+/* RESIZABLE SIDE LIST (Paul, Oct 2026): one shared drag handle right of .staff-col for every module (Planning Guides, Shifts, Staff,
+   Admin). It takes no layout width (negative margins), so the main content simply gets narrower as the list widens. */
+.pg-sidecol-handle{flex:0 0 7px;width:7px;margin:0 -4px 0 -3px;cursor:col-resize;position:relative;z-index:6;align-self:stretch;touch-action:none;background:transparent;outline:none;}
+.pg-sidecol-handle::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background .12s;}
+.pg-sidecol-handle:hover::after,.pg-sidecol-handle:focus-visible::after,body.pg-sidecol-dragging .pg-sidecol-handle::after{left:2px;width:3px;background:#8ab4f8;}
+body.pg-sidecol-dragging,body.pg-sidecol-dragging *{cursor:col-resize !important;user-select:none !important;}
+.staff-col[style*="display: none"] + .pg-sidecol-handle,.staff-col[style*="display:none"] + .pg-sidecol-handle{display:none;}
+
+/* TOP NAVIGATION ICON COLOURS (Paul, Oct 2026): each module has its own colour identity, very subtle: a SOFT tone (40% toward white)
+   while inactive, the FULL tone while active (.mode-btn.active). Only the icon is coloured; labels stay neutral. Staff shares the
+   Staff Roles purple, Planning Guides the app blue. */
+.mode-btn > svg { opacity:1 !important; transition:color .15s ease; }
+#btn-workspace > svg { color:#78BB8B !important; }   /* Workspace soft */
+#btn-workspace.active > svg { color:#1E8E3E !important; }   /* Workspace full */
+#btn-planning > svg { color:#76ABF1 !important; }   /* Planning Guides soft */
+#btn-planning.active > svg { color:#1A73E8 !important; }   /* Planning Guides full */
+#btn-schedule > svg { color:#71C8CF !important; }   /* Shifts soft */
+#btn-schedule.active > svg { color:#12A4AF !important; }   /* Shifts full */
+#btn-people > svg { color:#BE85F0 !important; }   /* Staff soft */
+#btn-people.active > svg { color:#9334E6 !important; }   /* Staff full */
+#btn-admin > svg { color:#F1AA6C !important; }   /* Admin soft */
+#btn-admin.active > svg { color:#E8710A !important; }   /* Admin full */
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -689,15 +712,15 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
     <div class="mode-toggle">
       <button class="mode-btn" id="btn-workspace"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></svg>Workspace</button>
       <span class="mode-divider" aria-hidden="true"></span>
-      <button class="mode-btn" id="btn-planning">Planning Guides</button>
-      <button class="mode-btn" id="btn-schedule">Shifts</button>
+      <button class="mode-btn" id="btn-planning"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707A1 1 0 0 0 13.707 4L10 .293A1 1 0 0 0 9.293 0M9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1M4.5 9a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM4 10.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5m.5 2.5a.5.5 0 0 1 0-1h4a.5.5 0 0 1 0 1z"/></svg>Planning Guides</button>
+      <button class="mode-btn" id="btn-schedule"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/></svg>Shifts</button>
       <span class="mode-divider" aria-hidden="true"></span>
-      <button class="mode-btn" id="btn-people">Staff</button>
+      <button class="mode-btn" id="btn-people"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6m-5.784 6A2.24 2.24 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.3 6.3 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1zM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/></svg>Staff</button>
       <!-- Availability and Staff Schedule are hidden from the menu bar for now (Paul, Oct 2026); the pages and their links still work -->
       <button class="mode-btn" id="btn-availability" style="display:none">Availability</button>
       <button class="mode-btn" id="btn-staff-schedule" style="display:none">Staff Schedule</button>
       <span class="mode-divider" aria-hidden="true"></span>
-      <button class="mode-btn" id="btn-admin">Admin</button>
+      <button class="mode-btn" id="btn-admin"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>Admin</button>
     </div>
     <div class="view-toggle">
       <button class="view-btn active" id="btn-day">Day</button>
@@ -10957,6 +10980,39 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   $(function(){ var P=document.getElementById('planning-panel'); if(!P || typeof MutationObserver==='undefined' || /jsdom/i.test((navigator&&navigator.userAgent)||'')) return;
     new MutationObserver(_pgRtSchedule).observe(P,{childList:true,subtree:true}); _pgRtSchedule(); });
   try{ window._pgRtPass=_pgRtPass; window._pgRtProcess=_pgRtProcess; }catch(_e){}
+  // RESIZABLE SIDE LIST (Paul, Oct 2026): ONE shared pattern for the .staff-col list in every module. Default 162px; limits 140px and
+  // 420px, and never more than 40% of the window (the main content keeps the rest). The chosen width survives navigation and rerenders
+  // (one CSS variable) and reloads (localStorage); a narrower window only constrains it temporarily. Drag, double-click to reset,
+  // arrow keys (16px) / Home / End when the handle has focus.
+  (function(){
+    var DEF=162, MIN=140, MAX=420, KEY='pg.sidecolW', stored=DEF;
+    try{ var v=parseInt(window.localStorage.getItem(KEY),10); if(v>=MIN && v<=MAX) stored=v; }catch(_e){}
+    function maxNow(){ return Math.max(MIN, Math.min(MAX, Math.floor((window.innerWidth||1280)*0.4))); }
+    function apply(){ var w=Math.max(MIN, Math.min(stored, maxNow())); document.documentElement.style.setProperty('--pg-sidecol-w', w+'px');
+      var h=document.getElementById('pg-sidecol-handle'); if(h){ h.setAttribute('aria-valuenow',String(w)); h.setAttribute('aria-valuemin',String(MIN)); h.setAttribute('aria-valuemax',String(maxNow())); } return w; }
+    function save(){ try{ window.localStorage.setItem(KEY,String(stored)); }catch(_e){} }
+    function set(w, keep){ stored=Math.max(MIN, Math.min(MAX, Math.round(w))); var eff=apply(); if(keep) save(); return eff; }
+    window._pgSideCol={ get:function(){ return stored; }, set:set, apply:apply, maxNow:maxNow, MIN:MIN, MAX:MAX, DEF:DEF };
+    apply();
+    $(function(){
+      var col=document.getElementById('staff-col'); if(!col || document.getElementById('pg-sidecol-handle')) return;
+      var h=document.createElement('div'); h.id='pg-sidecol-handle'; h.className='pg-sidecol-handle';
+      h.setAttribute('role','separator'); h.setAttribute('aria-orientation','vertical'); h.setAttribute('aria-label','Resize the side list'); h.tabIndex=0;
+      h.title='Drag to resize. Double-click to reset.';
+      col.parentNode.insertBefore(h, col.nextSibling); apply();
+      var drag=false, x0=0, w0=0;
+      h.addEventListener('pointerdown',function(e){ if(e.button!==0) return; e.preventDefault(); drag=true; x0=e.clientX; w0=col.getBoundingClientRect().width;
+        try{ h.setPointerCapture(e.pointerId); }catch(_e){} document.body.classList.add('pg-sidecol-dragging'); });
+      h.addEventListener('pointermove',function(e){ if(drag) set(w0+(e.clientX-x0), false); });
+      function end(){ if(!drag) return; drag=false; document.body.classList.remove('pg-sidecol-dragging'); save(); }
+      h.addEventListener('pointerup',end); h.addEventListener('pointercancel',end); h.addEventListener('lostpointercapture',end);
+      h.addEventListener('dblclick',function(){ set(DEF, true); });
+      h.addEventListener('keydown',function(e){ var cur=Math.min(stored, maxNow());
+        if(e.key==='ArrowLeft'||e.key==='ArrowRight'){ e.preventDefault(); set(cur+(e.key==='ArrowRight'?16:-16), true); }
+        else if(e.key==='Home'){ e.preventDefault(); set(MIN, true); } else if(e.key==='End'){ e.preventDefault(); set(maxNow(), true); } });
+      window.addEventListener('resize', apply);
+    });
+  })();
   // Subsections inside a major section (Paul, Oct 2026): one header style for every subsection (Pricing's too).
   function _pgSubsec(cls, id, title){
     var $sec=$('<div class="pg-subsec '+cls+'">').attr('id',id).css({borderTop:'1px solid #e9ecef',marginTop:'4px'});
