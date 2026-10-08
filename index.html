@@ -17227,7 +17227,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
               : {height:'',overflow:'',visibility:'',marginTop:'',marginBottom:'',paddingTop:'',paddingBottom:''});
             // Fifty-seventh spec part 4: the collapsed program header drops Options / Staffing
             // Allocation / Copy to / Clear (no reserved space); they return on expand.
-            $calHdr.find('.sf-hdr-ctl').css('display', col?'none':'');
+            // hide / show the header controls WITHOUT losing their own display (Oct 2026): the Staffing Allocation label is an inline-flex
+            // checkbox + label; resetting it to '' made it a plain block, so its 6px checkbox-label gap collapsed to 0 after a collapse / expand
+            $calHdr.find('.sf-hdr-ctl').each(function(){ if(col){ if(this.style.display!=='none') this.setAttribute('data-sf-disp', this.style.display||''); this.style.display='none'; } else if(this.style.display==='none'){ this.style.display=this.getAttribute('data-sf-disp')||''; } });
             // Fifty-seventh spec part 3: collapsed program sections sit 8px apart (vs 26px expanded);
             // the gap element precedes this section.
             try{ var _gap=$sec.prev('.sf-cal-gap'); if(_gap&&_gap.length) _gap.css('height', col?'8px':''); }catch(_e){}
