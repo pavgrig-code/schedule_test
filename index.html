@@ -640,9 +640,9 @@ td.pg-wk-vis-cell.pg-wk-vis-hover, th.pg-wk-vis-cell.pg-wk-vis-hover{background-
 
 /* Rounded table corners (Oct 2026): see _pgRtProcess. One radius for every bordered table. */
 #planning-panel table.pg-rt { border-collapse:separate !important; border-spacing:0 !important; }
-#planning-panel table.pg-rt > * > tr > * { border-top:var(--rt-t,0 none) !important; border-left:var(--rt-l,0 none) !important; border-right:0 none !important; border-bottom:0 none !important; }
-#planning-panel table.pg-rt > * > tr > .pg-rt-r { border-right:var(--rt-r,0 none) !important; }
-#planning-panel table.pg-rt > * > tr > .pg-rt-b { border-bottom:var(--rt-b,0 none) !important; }
+#planning-panel table.pg-rt > * > tr > * { border-top:var(--rt-t,var(--rt-def,0 none)) !important; border-left:var(--rt-l,var(--rt-def,0 none)) !important; border-right:0 none !important; border-bottom:0 none !important; }
+#planning-panel table.pg-rt > * > tr > .pg-rt-r { border-right:var(--rt-r,var(--rt-def,0 none)) !important; }
+#planning-panel table.pg-rt > * > tr > .pg-rt-b { border-bottom:var(--rt-b,var(--rt-def,0 none)) !important; }
 #planning-panel table.pg-rt .pg-rt-tl { border-top-left-radius:6px !important; }
 #planning-panel table.pg-rt .pg-rt-tr { border-top-right-radius:6px !important; }
 #planning-panel table.pg-rt .pg-rt-bl { border-bottom-left-radius:6px !important; }
@@ -10677,9 +10677,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
           var $hr=$('<tr class="pg-act-thead-row">');
           if(t.table.cycle) $hr.append($('<th scope="col">').text('Cycle').css(_thc));   // Cycle first (Oct 2026)
           $hr.append($('<th scope="col">').text('Dates').css(_thc));
-          // Clubs Enrichment (Oct 2026): each Club column's header label sits on a chip in its own colour (white text on the red and green,
-          // dark text on the light orange for contrast); the cell itself, its size and its text stay as before
-          var _CLUB_HD={ clubsTkk:{bg:'#F04B3E',fg:'#ffffff'}, clubsG15:{bg:'#FAA738',fg:'#212529'}, clubsG68:{bg:'#179263',fg:'#ffffff'} };
+          // Clubs Enrichment (Oct 2026): each Club column's header label sits on a chip in its own colour, white text on all three (G1-5 set
+          // to Paul's exact rgb(212 128 16) / rgb(255 255 255)); the cell itself, its size and its text stay as before
+          var _CLUB_HD={ clubsTkk:{bg:'#F04B3E',fg:'#ffffff'}, clubsG15:{bg:'rgb(212 128 16)',fg:'rgb(255 255 255)'}, clubsG68:{bg:'#179263',fg:'#ffffff'} };
           (t.fields||[]).forEach(function(fd){ var _lbl=(t.table.heads||{})[fd.key]||fd.placeholder, $th=$('<th scope="col">').css(_thc), _hc=(t.key==='clubs')?_CLUB_HD[fd.key]:null;
             if(_hc) $th.addClass('pg-club-hd').append($('<span class="pg-club-hd-chip">').attr('data-club-col',fd.key).text(_lbl).css({display:'inline-block',background:_hc.bg,color:_hc.fg,borderRadius:'4px',padding:'2px 8px',lineHeight:'1.35',whiteSpace:'nowrap'}));
             else $th.text(_lbl);
@@ -10978,14 +10978,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // edge keep their right line and only the cells on the bottom edge keep their bottom line (an exact single-line grid, row / column
   // spans included), and the four corner cells are rounded. Edge cells come from the table's real grid (rowspan / colspan aware).
   // New or rebuilt tables are handled by one batched observer pass per frame.
-  function _pgRtProcess(t){
-    var rows=t.rows, sig=rows.length+':'; for(var a=0;a<rows.length;a++) sig+=rows[a].cells.length+',';
-    if(t.getAttribute('data-pg-rt')===sig) return;
-    var had=t.classList.contains('pg-rt'); if(had) t.classList.remove('pg-rt');   // read the table in its OWN collapse model
-    var c0=rows[0]&&rows[0].cells[0]; if(!c0){ if(had) t.classList.add('pg-rt'); return; }
+  // (Oct 2026, performance) READ phase only: no DOM writes; returns the WRITE phase (a function) or null. _pgRtPass prepares every
+  // table first and only then commits them all, so the browser recomputes styles about twice instead of once per table.
+  function _pgRtSig(t){ var rows=t.rows, sig=rows.length+':'; for(var a=0;a<rows.length;a++) sig+=rows[a].cells.length+','; return sig; }
+  function _pgRtPrepare(t, had, sig){
+    var rows=t.rows;
+    var c0=rows[0]&&rows[0].cells[0]; if(!c0) return had?function(){ t.classList.add('pg-rt'); }:null;
     if(!had){   // eligibility: a visible outer border drawn by the cells (first cell has top + left lines), collapse model
-      var cs0=window.getComputedStyle(c0); if(!(parseFloat(cs0.borderTopWidth)>0 && cs0.borderTopStyle!=='none' && parseFloat(cs0.borderLeftWidth)>0 && cs0.borderLeftStyle!=='none')) return;
-      if(window.getComputedStyle(t).borderCollapse!=='collapse') return;
+      var cs0=window.getComputedStyle(c0); if(!(parseFloat(cs0.borderTopWidth)>0 && cs0.borderTopStyle!=='none' && parseFloat(cs0.borderLeftWidth)>0 && cs0.borderLeftStyle!=='none')) return null;
+      if(window.getComputedStyle(t).borderCollapse!=='collapse') return null;
     }
     // one side: {w, css}; best(a,b): the wider wins, a tie keeps a (the left / top side, as collapsed borders do)
     function side(cs,sd){ var st=cs['border'+sd+'Style'], w=(st==='none'||st==='hidden')?0:(parseFloat(cs['border'+sd+'Width'])||0); return { w:w, css:w?(cs['border'+sd+'Width']+' '+st+' '+cs['border'+sd+'Color']):'0 none' }; }
@@ -11001,9 +11002,15 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         for(var y=r;y<Math.min(rows.length,r+rs);y++){ occ[y]=occ[y]||[]; for(var x=c;x<c+csn;x++) occ[y][x]=cell; }
         var ccs=window.getComputedStyle(cell);
         cells.push({el:cell,r:r,c:c,r2:Math.min(rows.length,r+rs)-1,c2:c+csn-1,T:side(ccs,'Top'),B:side(ccs,'Bottom'),L:side(ccs,'Left'),R:side(ccs,'Right')}); c+=csn; if(c>maxC) maxC=c; } }
+    // a table directly under a main-tab title or a subsection header, with nothing spacing it, gets the shared gap (read here, applied below;
+    // per-Program block tables are the bodies of their block cards and stay flush)
+    var e=t, pad=0, hd=null; for(var q=0;q<4&&e;q++){ if(e!==t) pad+=parseFloat(window.getComputedStyle(e).paddingTop)||0; var sb=e.previousElementSibling; if(sb){ hd=sb; break; } e=e.parentElement; }
+    var under=!!hd && (hd.classList.contains('pg-subsec-hd') || !!hd.querySelector('.pg-area-label'));
+    return function(){   // WRITE phase
     var lastR=rows.length-1, lastC=maxC-1, byEl=new Map(); cells.forEach(function(o){ byEl.set(o.el,o); });
     function uniq(list){ var out=[]; list.forEach(function(e){ if(e && out.indexOf(e)<0) out.push(e); }); return out; }
     var marks=['pg-rt-r','pg-rt-b','pg-rt-tl','pg-rt-tr','pg-rt-bl','pg-rt-br'];
+    var plan=[], freq={};
     cells.forEach(function(o){ var el=o.el, x, y, top, left;
       // top edge: the strongest of the upper neighbours' bottoms (incl. their row / group) and this cell's top (incl. its row / group)
       var mine=best(o.T,rowTop[o.r]);
@@ -11012,22 +11019,32 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var lmine=o.L;
       if(o.c===0) left=lmine; else { var lf=[]; for(y=o.r;y<=o.r2;y++) lf.push(occ[y][o.c-1]); left=NONE;
         uniq(lf).forEach(function(u){ var uo=byEl.get(u); if(uo) left=best(left,uo.R); }); left=best(left,lmine); }
-      el.style.setProperty('--rt-t',top.css); el.style.setProperty('--rt-l',left.css);
-      el.style.setProperty('--rt-r',o.R.css); el.style.setProperty('--rt-b',best(o.B,rowBot[o.r2]).css);
-      marks.forEach(function(m){ el.classList.remove(m); });
-      if(o.c2===lastC) el.classList.add('pg-rt-r'); if(o.r2===lastR) el.classList.add('pg-rt-b');
-      if(o.r===0&&o.c===0) el.classList.add('pg-rt-tl'); if(o.r===0&&o.c2===lastC) el.classList.add('pg-rt-tr');
-      if(o.r2===lastR&&o.c===0) el.classList.add('pg-rt-bl'); if(o.r2===lastR&&o.c2===lastC) el.classList.add('pg-rt-br'); });
-    t.classList.add('pg-rt'); t.setAttribute('data-pg-rt',sig);
-    // Oct 2026: a table directly under a main-tab title or a subsection header, with nothing spacing it, gets the shared gap
-    // (per-Program block tables are the bodies of their block cards and stay flush)
-    var e=t, pad=0, hd=null; for(var q=0;q<4&&e;q++){ if(e!==t) pad+=parseFloat(window.getComputedStyle(e).paddingTop)||0; var sb=e.previousElementSibling; if(sb){ hd=sb; break; } e=e.parentElement; }
-    var under=!!hd && (hd.classList.contains('pg-subsec-hd') || !!hd.querySelector('.pg-area-label'));
-    t.classList.toggle('pg-tbl-gap', under && pad===0);
+      var pl={el:el, t:top.css, l:left.css, r:(o.c2===lastC)?o.R.css:null, b:(o.r2===lastR)?best(o.B,rowBot[o.r2]).css:null,
+        cls:[(o.c2===lastC)?'pg-rt-r':'', (o.r2===lastR)?'pg-rt-b':'', (o.r===0&&o.c===0)?'pg-rt-tl':'', (o.r===0&&o.c2===lastC)?'pg-rt-tr':'', (o.r2===lastR&&o.c===0)?'pg-rt-bl':'', (o.r2===lastR&&o.c2===lastC)?'pg-rt-br':''] };
+      freq[pl.t]=(freq[pl.t]||0)+1; freq[pl.l]=(freq[pl.l]||0)+1; plan.push(pl); });
+    // (Oct 2026, performance) the table's most common line is set ONCE on the table (--rt-def); a cell carries its own value only
+    // where it differs (outer edges, separators, missing lines), so most cells keep no inline style and the browser can share styles
+    var def='0 none', top_n=-1; Object.keys(freq).forEach(function(k2){ if(freq[k2]>top_n){ top_n=freq[k2]; def=k2; } });
+    t.style.setProperty('--rt-def', def);
+    var setv=function(el,k2,v){ if(v===null||v===def){ if(el.style.getPropertyValue(k2)) el.style.removeProperty(k2); } else el.style.setProperty(k2,v); };
+    plan.forEach(function(pl){ var el=pl.el; setv(el,'--rt-t',pl.t); setv(el,'--rt-l',pl.l); setv(el,'--rt-r',pl.r); setv(el,'--rt-b',pl.b);
+      marks.forEach(function(m){ if(el.classList.contains(m) && pl.cls.indexOf(m)<0) el.classList.remove(m); });
+      pl.cls.forEach(function(m){ if(m && !el.classList.contains(m)) el.classList.add(m); }); });
+      t.classList.add('pg-rt'); t.setAttribute('data-pg-rt',sig);
+      t.classList.toggle('pg-tbl-gap', under && pad===0);
+    };
   }
+  function _pgRtProcess(t){ var sig=_pgRtSig(t); if(t.getAttribute('data-pg-rt')===sig) return; var had=t.classList.contains('pg-rt'); if(had) t.classList.remove('pg-rt'); var c=_pgRtPrepare(t,had,sig); if(c) c(); }
   var _pgRtQueued=false;
   function _pgRtPass(){ _pgRtQueued=false; var P=document.getElementById('planning-panel'); if(!P) return;
-    var ts=P.getElementsByTagName('table'); for(var i=0;i<ts.length;i++){ try{ _pgRtProcess(ts[i]); }catch(_e){} } }
+    var ts=P.getElementsByTagName('table'), todo=[], i;
+    for(i=0;i<ts.length;i++){ var t=ts[i], sig=_pgRtSig(t); if(t.getAttribute('data-pg-rt')!==sig) todo.push({t:t, sig:sig, had:t.classList.contains('pg-rt')}); }
+    if(!todo.length) return;
+    todo.forEach(function(x){ if(x.had) x.t.classList.remove('pg-rt'); });   // one batch of writes: read each table in its OWN collapse model
+    todo.forEach(function(x){ try{ x.c=_pgRtPrepare(x.t, x.had, x.sig); }catch(_e){ x.c=x.had?function(){ x.t.classList.add('pg-rt'); }:null; } });   // reads only
+    todo.forEach(function(x){ if(x.c){ try{ x.c(); }catch(_e){} } });   // writes only
+  }
+
   function _pgRtSchedule(){ if(_pgRtQueued) return; _pgRtQueued=true; (window.requestAnimationFrame||setTimeout)(_pgRtPass); }
   // (a purely visual pass that needs real layout: not run automatically in the jsdom test harness; t193 calls _pgRtProcess directly)
   $(function(){ var P=document.getElementById('planning-panel'); if(!P || typeof MutationObserver==='undefined' || /jsdom/i.test((navigator&&navigator.userAgent)||'')) return;
