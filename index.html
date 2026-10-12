@@ -692,6 +692,11 @@ body.pg-sidecol-dragging,body.pg-sidecol-dragging *{cursor:col-resize !important
 #planning-panel td:hover > .pg-tag-more, #planning-panel td:focus-within > .pg-tag-more { opacity:1; pointer-events:auto; }
 .pg-tag-more:hover, .pg-tag-more:focus-visible { background:#e8eaed; outline:none; }
 #planning-panel.pg-view-mode .pg-tag-more { display:none !important; }   /* locked: no data actions (the action also refuses) */
+
+/* Per-Program COLA (Oct 2026): the COLA cell offers the right-click menu (subtle hover + pointer, edit mode only); removed = muted, struck. */
+#planning-panel:not(.pg-view-mode) td.pg-cola-cell { cursor:pointer; }
+#planning-panel:not(.pg-view-mode) td.pg-cola-cell:hover { box-shadow: inset 0 0 0 999px rgba(26,115,232,.05); }
+/* removed: the cell is simply empty (same column tint, same hover / pointer, still right-clickable) */
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -24551,7 +24556,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       validCals.forEach(function(vc){
         var cr=vc.cr;
         var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;
-        price=pgColaPrice(g.id,price);   // COLA: gross figures use the starting rate, as on screen
+        price=pgColaPrice(g.id,price,cr&&cr.calId);   // COLA: gross figures use the starting rate, as on screen (per Program)
         var st=secTitle(ws5,((cr.name&&cr.name.trim())||('Program '+(vc.origIdx+1)))+' \u2014 Summary');
         st.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:toARGB(cr.color,'FFCFD6DF')}};
         hdrRow(ws5,[null,'#','School Name','Hours','Amount']);
@@ -25469,7 +25474,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       // Fifty-eighth spec parts 4/5: the summary Amount + PPH column use the EFFECTIVE PPH (Net) from
       // the same source as the Programs table (discFinalFor), NOT the editable base Price/Hr. Falls
       // back to base price only when no discount data is available.
-      var _startPph=pgColaPrice(g.id,price);   // COLA: the starting rate (== price when COLA is off)
+      var _startPph=pgColaPrice(g.id,price,cr&&cr.calId);   // COLA (per Program): the starting rate (== price when COLA is off)
       var _netPph=_startPph;
       try{ var _dnf=(window._pgDiscNet&&window._pgDiscNet[String(g.id)]); var _dn=_dnf&&_dnf(cr&&cr.calId,0); if(_dn&&isFinite(_dn.price)) _netPph=_dn.price; }catch(_e){}   // net PPH (price is hours-independent), no snapshot
       var calTotal=schoolTotals.reduce(function(a,s){return a+s.hours;},0);
@@ -25753,7 +25758,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var _guideSched=_schedT;
       var _guideTot=Math.round((_guideSched+_guideRem)*100)/100;
       guideRollup.push({ name:calName, color:(cr&&cr.color)||'#ffffff', hours:_guideTot, amount:_netPph*_guideTot, netPph:_netPph, calId:(cr&&cr.calId), nSchools:(schoolTotals?schoolTotals.length:0) });
-      _guideCalc.push({ calId:(cr&&cr.calId)||null, name:calName, pricePerHour:price, staffingHours:_guideSched, allocatedHours:_allocT, unallocatedHours:_guideRem, totalHours:_guideTot, amount:Math.round(_startPph*_guideTot*100)/100, schools:schoolTotals.filter(function(st){return st.hours>0;}).map(function(st){ return { name:st.name, hours:Math.round(st.hours*100)/100, amount:Math.round(_startPph*st.hours*100)/100 }; }) });
+      _guideCalc.push({ calId:(cr&&cr.calId)||null, name:calName, pricePerHour:price, staffingHours:_guideSched, allocatedHours:_allocT, unallocatedHours:_guideRem, totalHours:_guideTot, amount:Math.round(price*_guideTot*100)/100,   /* (Oct 2026 fix) Amount = Hours x INITIAL PPH (was the COLA-adjusted rate, so it equalled Amount (Net) whenever no discount applied); Amount (Net) = Hours x PPH (Net) via discFinalFor */ schools:schoolTotals.filter(function(st){return st.hours>0;}).map(function(st){ return { name:st.name, hours:Math.round(st.hours*100)/100, amount:Math.round(_startPph*st.hours*100)/100 }; }) });
       if(_allocAbsT>0) _guideCalc[_guideCalc.length-1].absorbedAllocHours=_allocAbsT;   // only when present: other exports stay byte-identical
       if(_startPph!==price){ var _gcL=_guideCalc[_guideCalc.length-1]; var _cc=pgColaOf(g.id); _gcL.colaPct=_cc.pct; _gcL.pricePerHourCola=_startPph; }   // only when COLA is on: exports without COLA stay byte-identical
     });
@@ -27447,13 +27452,17 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     var p=c?parseFloat(c.pct):NaN; if(!isFinite(p)||p<0) p=PG_COLA_DEFAULT_PCT;
     return { on:_pgColaAllowed(gid), pct:p };   // COLA is on exactly when the District Category is Renewal/Expansion
   }
-  function pgColaPrice(gid, price){
+  // (Oct 2026) per-Program COLA exceptions: det.colaOff = { <calId>: true } (stable id; kept when the District Category changes, so
+  // returning to Renewal/Expansion restores them). A Program with COLA removed is priced from its base PPH; the rate is untouched.
+  function _pgColaIsOff(gid, cid){ var d=guideDetails[String(gid)]||{}; return cid!=null && !!(d.colaOff && d.colaOff[String(cid)]); }
+  function pgColaPrice(gid, price, calId){
     var p=parseFloat(price); if(!isFinite(p)) p=0;
     var c=pgColaOf(gid); if(!c.on) return p;
+    if(_pgColaIsOff(gid, calId)) return p;
     return Math.round(p*(1+c.pct/100)*100)/100;
   }
   function pgColaPctDisp(p){ return String(Math.round((p||0)*1000)/1000)+'%'; }
-  try{ if(typeof window!=='undefined'){ window._pgColaOf=pgColaOf; window._pgColaPrice=pgColaPrice; } }catch(_e){}
+  try{ if(typeof window!=='undefined'){ window._pgColaOf=pgColaOf; window._pgColaPrice=pgColaPrice; window._pgColaIsOff=_pgColaIsOff; } }catch(_e){}
   // Display name of a program by id: its own name, else the positional placeholder 'Program N' (N = its row
   // in the Programs table), matching every other place an unnamed program is shown. Display only.
   // The Programs area's header name. det.programsLabel is stored ONLY when the user has set a custom
@@ -27579,6 +27588,12 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
         .append($('<span class="pg-vis-name">').text(nm)))
       .on('mouseenter',function(){ this.style.background='#f1f3f5'; }).on('mouseleave',function(){ this.style.background='none'; })
       .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgLenMenuClose(); _pgVisSet(gid, cid, field, !hid); });
+    _pgCtxMenuShow($m, $it, ev, td);
+    return true;
+  }
+  // ONE show / position / close for every compact right-click menu (Oct 2026): anchored at the click (else the cell), kept in the viewport,
+  // focus on the item; closes on an outside click, Esc, resize or blur; a right-click on another menu-able cell replaces it (one at a time)
+  function _pgCtxMenuShow($m, $it, ev, td){
     $m.append($it).appendTo(document.body);
     var vw=window.innerWidth||1200, vh=window.innerHeight||800, r=td.getBoundingClientRect(), mw=$m.outerWidth(), mh=$m.outerHeight();
     var x=Math.min(Math.max(4, (ev.clientX||r.left)), vw-mw-4), y=(r.bottom+4+mh<=vh)?r.bottom+4:Math.max(4, r.top-mh-4);
@@ -27586,11 +27601,36 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     setTimeout(function(){
       $(document).on('mousedown.pglenmenu',function(e2){ if(!$(e2.target).closest('.pg-len-menu').length) _pgLenMenuClose(); })
                  .on('keydown.pglenmenu',function(e2){ if(e2.key==='Escape'){ e2.preventDefault(); _pgLenMenuClose(); } })
-                 .on('contextmenu.pglenmenu',function(e2){ if(!$(e2.target).closest('.pg-len-menu, td.pg-vis-cell, td.pg-cal-length, td.pg-gs-length').length) _pgLenMenuClose(); });
+                 .on('contextmenu.pglenmenu',function(e2){ if(!$(e2.target).closest('.pg-len-menu, td.pg-vis-cell, td.pg-cal-length, td.pg-gs-length, td.pg-cola-cell').length) _pgLenMenuClose(); });
       $(window).on('resize.pglenmenu blur.pglenmenu', _pgLenMenuClose);
     },0);
+  }
+  // Per-Program COLA (Paul, Oct 2026): right-click a Program's COLA value in the Pricing Calculator (Renewal/Expansion only) ->
+  // "Remove COLA for [circle] {Program}" / "Add COLA for [circle] {Program}" (current name and colour at open). The toggle runs inside
+  // the Pricing section (_pgColaToggle[gid]): one Undo step, History, then the same full recalculation as a COLA % change.
+  var _pgColaToggle={};
+  function _pgColaMenuOpen(ev, td, gid, cid){
+    _pgLenMenuClose(); try{ _pgTagMoreClose(); }catch(_e){}
+    var det=getGuideDetail(gid), row=(det.calendarRows||[]).filter(function(r){ return r && String(r.calId)===String(cid); })[0]; if(!row) return false;
+    var off=_pgColaIsOff(gid,cid), nm=String(row.name||'').trim()||'this Program';
+    var $m=$('<div class="sf-action-menu pg-len-menu pg-cola-menu" role="menu">').css({position:'fixed',zIndex:'999999',background:'#fff',border:'1px solid #dee2e6',borderRadius:'6px',boxShadow:'0 4px 12px rgba(0,0,0,.15)',padding:'4px',minWidth:'180px'});
+    var $it=$('<button type="button" class="pg-len-item pg-cola-item" role="menuitem">').css({display:'flex',alignItems:'center',gap:'8px',width:'100%',border:'none',background:'none',borderRadius:'4px',padding:'6px 10px',fontSize:'12.5px',color:'#212529',textAlign:'left',cursor:'pointer',whiteSpace:'nowrap'})
+      .append('<svg width="16" height="16" viewBox="0 0 24 24" fill="#5f6368" aria-hidden="true" style="flex:0 0 auto;"><path d="'+(off?'M12 7c-.55 0-1 .45-1 1v3H8c-.55 0-1 .45-1 1s.45 1 1 1h3v3c0 .55.45 1 1 1s1-.45 1-1v-3h3c.55 0 1-.45 1-1s-.45-1-1-1h-3V8c0-.55-.45-1-1-1zm0-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z':'M7 12c0 .55.45 1 1 1h8c.55 0 1-.45 1-1s-.45-1-1-1H8c-.55 0-1 .45-1 1zm5-10C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z')+'"/></svg>')
+      .append($('<span class="pg-vis-label">').css({display:'inline-flex',alignItems:'center',gap:'5px'})
+        .append($('<span>').text((off?'Add':'Remove')+' COLA for '))
+        .append(_calCircle(row.color).addClass('pg-vis-circle'))
+        .append($('<span class="pg-vis-name">').text(nm)))
+      .on('mouseenter',function(){ this.style.background='#f1f3f5'; }).on('mouseleave',function(){ this.style.background='none'; })
+      .on('click',function(e){ e.preventDefault(); e.stopPropagation(); _pgLenMenuClose(); var f=_pgColaToggle[String(gid)]; if(typeof f==='function') f(cid, !off); });
+    _pgCtxMenuShow($m, $it, ev, td);
     return true;
   }
+  $(document).on('contextmenu', '#planning-panel td.pg-cola-cell', function(ev){
+    var cid=this.getAttribute('data-disc-cal'), gid=(typeof selectedGuideId!=='undefined' && selectedGuideId)||(_pgvCur&&_pgvCur.gid);
+    if(!cid || cid==='null' || gid==null || !_pgColaAllowed(gid)) return;
+    if(_pgvCur && _pgvCur.mode==='view') return;   // locked: COLA is pricing data, not a display preference
+    ev.preventDefault(); ev.stopPropagation(); _pgColaMenuOpen(ev, this, gid, cid);
+  });
   function _pgLenMenuOpen(ev, td){ return _pgVisMenuOpen(ev, td, 'length'); }
   $(document).on('contextmenu', '#planning-panel td.pg-cal-length, #planning-panel td.pg-gs-length', function(ev){ ev.preventDefault(); ev.stopPropagation(); _pgVisMenuOpen(ev, this, 'length'); });
   $(document).on('contextmenu', '#planning-panel td.pg-cal-maxcnt, #planning-panel td.pg-gs-maxcnt', function(ev){ if(!this.getAttribute('data-calc-cal')) return; ev.preventDefault(); ev.stopPropagation(); _pgVisMenuOpen(ev, this, 'maxcnt'); });
@@ -30326,7 +30366,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       for(var i=0;i<rows.length;i++){ if(rows[i]&&String(rows[i].calId)===String(calId)) cr=rows[i]; }
       if(!cr) return null;
       var price=parseFloat(cr.pricePerHour); if(!isFinite(price)) price=0;
-      var orig=price; price=pgColaPrice(g.id,price);   // COLA: PPH (COLA) is the starting rate for every stage
+      var orig=price; price=pgColaPrice(g.id,price,calId);   // COLA: PPH (COLA) is the starting rate for every stage
       var h=parseFloat(hours); if(!isFinite(h)) h=0;
       var base={ price:price, orig:orig, hours:h, amount:Math.round(price*h*100)/100 };
       var ser=discSeriesFor(base,calId);
@@ -30358,7 +30398,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       var rec=pgCalCalcGet(snap,(cr&&cr.calId!=null)?cr.calId:null);
       var price=parseFloat(cr&&cr.pricePerHour);
       if(!isFinite(price)) price=0;
-      var orig=price; price=pgColaPrice(g.id,price);   // COLA: PPH (COLA) is the starting rate for every stage
+      var orig=price; price=pgColaPrice(g.id,price,(cr&&cr.calId!=null)?cr.calId:null);   // COLA: PPH (COLA) is the starting rate for every stage
       var hours=rec?parseFloat(rec.totalHours):NaN;
       if(!isFinite(hours)) hours=0;
       return { price:price, orig:orig, hours:hours, amount:Math.round(price*hours*100)/100 };
@@ -30667,7 +30707,9 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
         $tr.append($nmTd);
         $tr.append($('<td class="pg-disc-base-price pg-disc-col-basepph">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtAmt(base.orig)));
         if(_cola.on){
-          $tr.append($('<td class="pg-disc-cola pg-disc-col-cola">').css(Object.assign({},tdBase,{textAlign:'right',background:'#fff8e8'})).text(pgColaPctDisp(_cola.pct)));
+          var _colaOffRow=_pgColaIsOff(g.id,calId);   // per-Program COLA (Oct 2026): removed -> the cell shows NO value (still right-clickable)
+          $tr.append($('<td class="pg-disc-cola pg-disc-col-cola pg-cola-cell">').attr('data-disc-cal',String(calId)).toggleClass('pg-cola-off',_colaOffRow).css(Object.assign({},tdBase,{textAlign:'right',background:'#fff8e8'})).text(_colaOffRow?'':pgColaPctDisp(_cola.pct))
+            .attr('title',_pgvCur.mode==='view'?'':(_colaOffRow?'COLA removed for this Program. Right-click to add it back.':'Right-click to remove COLA for this Program.')));
           $tr.append($('<td class="pg-disc-cola-price pg-disc-col-pphcola">').css(Object.assign({},tdBase,{textAlign:'right',fontWeight:'600'})).text(pgFmtAmt(base.price)));
         }
         $tr.append($('<td class="pg-disc-base-hours">').css(Object.assign({},tdBase,{textAlign:'right'})).text(pgFmtHours(base.hours)));
@@ -30793,6 +30835,17 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     // refreshSummary alongside pgCalcCellsRefresh, so Price/Hr edits, staffing/allocated hour
     // changes, imports and calendar add/delete all flow through one path.
     _pgDiscHooks[String(g.id)]=function(){ refreshDiscTable(); };
+    _pgColaToggle[String(g.id)]=function(cid, off){   // per-Program COLA (Oct 2026): ONE logical action
+      if(_pgvCur.mode==='view') return;
+      var det=getGuideDetail(g.id), row=(det.calendarRows||[]).filter(function(r){ return r && String(r.calId)===String(cid); })[0]; if(!row) return;
+      var nm=String(row.name||'').trim()||'this Program';
+      try{ _pgUndo.begin(g.id); }catch(_u){}
+      var m=Object.assign({}, det.colaOff||{}); if(off) m[String(cid)]=true; else delete m[String(cid)];
+      if(Object.keys(m).length) setGuideDetail(g.id,'colaOff',m); else { delete det.colaOff; try{ _pgHist.schedule(); }catch(_e){} }
+      try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:(off?'COLA removed':'COLA added'),desc:(off?'Removed COLA for ':'Added COLA back for ')+nm+' ('+pgColaPctDisp(pgColaOf(g.id).pct)+').'}); }catch(_e){}
+      colaPropagate();
+      try{ _pgUndo.offer(g.id,{lead:'COLA',tail:(off?' removed for ':' added back for ')+nm+'.'}); }catch(_u){}
+    };
 
     // (Pricing Calculator is no longer its own collapsible section: the Pricing section collapses, hiding it all.)
 
