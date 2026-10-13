@@ -164,9 +164,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 
 /* Schedule-mode shift staff-remove "x": hidden until its shift block (day block or week/month chip)
    is hovered; nudges to full strength on direct hover. Opacity-only so block size never changes. */
-.shift-x{opacity:0;flex:0 0 auto;transition:opacity .12s ease;}
-.sched-block:hover .shift-x,.sched-chip:hover .shift-x{opacity:.5;}
-.sched-block:hover .shift-x:hover,.sched-chip:hover .shift-x:hover{opacity:1;}
 
 .block-title{font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;position:relative;z-index:2;flex-shrink:0;}
 .block-school{font-size:9px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:2;flex-shrink:0;margin-top:0px;}
@@ -733,11 +730,8 @@ body.pg-sidecol-dragging,body.pg-sidecol-dragging *{cursor:col-resize !important
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-planning"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707A1 1 0 0 0 13.707 4L10 .293A1 1 0 0 0 9.293 0M9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1M4.5 9a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM4 10.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5m.5 2.5a.5.5 0 0 1 0-1h4a.5.5 0 0 1 0 1z"/></svg>Planning Guides</button>
       <button class="mode-btn" id="btn-schedule"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/></svg>Shifts</button>
-      <span class="mode-divider" aria-hidden="true"></span>
-      <button class="mode-btn" id="btn-people"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6m-5.784 6A2.24 2.24 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.3 6.3 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1zM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/></svg>Staff</button>
-      <!-- Availability and Staff Schedule are hidden from the menu bar for now (Paul, Oct 2026); the pages and their links still work -->
+      <!-- Availability is hidden from the menu bar (Paul, Oct 2026). The Staff section and Staff Schedule were REMOVED in Oct 2026: staff assignment lives in another application. -->
       <button class="mode-btn" id="btn-availability" style="display:none">Availability</button>
-      <button class="mode-btn" id="btn-staff-schedule" style="display:none">Staff Schedule</button>
       <span class="mode-divider" aria-hidden="true"></span>
       <button class="mode-btn" id="btn-admin"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.75;" aria-hidden="true"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>Admin</button>
     </div>
@@ -801,8 +795,6 @@ body.pg-sidecol-dragging,body.pg-sidecol-dragging *{cursor:col-resize !important
     <div id="workspace-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="planning-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="schedule-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
-    <div id="people-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
-    <div id="staff-schedule-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     <div id="admin-panel" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg);flex-direction:column;gap:16px;"></div>
     
   </div>
@@ -1130,7 +1122,7 @@ $(function(){
   // Staff assignments + shift notes: keys 'gid|si|origIdx|date|role|num' (module stores, inside Undo snapshots).
   function _pgShiftSchedStores(gid, mode, ci, removed){
     var pre=String(gid)+'|';
-    [scheduleAssignments, scheduleShiftNotes].forEach(function(store){ if(!store) return; var next={};
+    [scheduleShiftNotes].forEach(function(store){ if(!store) return; var next={};
       Object.keys(store).forEach(function(k){ if(k.indexOf(pre)!==0){ next[k]=store[k]; return; }
         var p=k.split('|'); var si=parseInt(p[1],10), oi=parseInt(p[2],10);
         if(mode==='school'){ if(oi===ci){ if(si===removed) return; if(si>removed) p[1]=String(si-1); } }
@@ -1193,7 +1185,7 @@ $(function(){
     _pgShiftSessions(gid, 'program', removedCi, calId, removedCi);
     _pgShiftSchedStores(gid, 'program', removedCi, removedCi);
   }
-  try{ if(typeof window!=='undefined'){ window._pgSchedStores=function(){ return { sa:scheduleAssignments, sn:scheduleShiftNotes }; }; } }catch(_e){}
+  try{ if(typeof window!=='undefined'){ window._pgSchedStores=function(){ return { sn:scheduleShiftNotes }; }; } }catch(_e){}
   function _pgOnSchoolRowRemoved(gid, calId, removedIdx, removedRow){
     try{ _pgFreezeOnSchoolRemoved(gid, calId, removedIdx); }catch(_e){}   // frozen state + dated cell overrides
     try{ _pgPurgeSchoolOwned(gid, calId, removedIdx, removedRow); }catch(_e){}   // name / schoolId / row-id keyed data + sessions + assignments
@@ -2024,7 +2016,7 @@ $(function(){
   let sProg='',sCoach='',sSchool='',sDays=[],sDs='',sDe='',sColor=0,sStaffType='Coach';
   var staffFilter='';
   var viewMode='day';
-  var shiftDayLayout='timeline';   // Shift Schedule Day-view layout: 'timeline' (roles down, time across) | 'grid' (time down, roles across)
+  var shiftDayLayout='grid';   // (Oct 2026) Grid is the default Shift Schedule Day-view layout: 'timeline' (roles down, time across) | 'grid' (time down, roles across)
   var draggingId=null; // track which block is being dragged
   var _dragOrigDow=undefined; // day-of-week of the chip being dragged
   var pageMode='schedule';
@@ -2566,7 +2558,7 @@ $(function(){
   /* ── URL state sync ── */
   function buildURLParams(){
     var params = new URLSearchParams();
-    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='admin' ? 'admin' : (pageMode==='people' ? 'staff' : (pageMode==='staff_schedule' ? 'staff_schedule' : (pageMode==='planning' ? 'planning_guides' : 'shift_schedule')))));
+    params.set('section', pageMode==='workspace' ? 'workspace' : (pageMode==='admin' ? 'admin' : (pageMode==='planning' ? 'planning_guides' : 'shift_schedule')));
     if(pageMode==='workspace'){
       // Workspace is a standalone, user-specific area — no guide/staff/date params ride along with it.
     } else if(pageMode==='admin'){
@@ -2595,7 +2587,7 @@ $(function(){
       if(staffFilter)     params.set('search',      staffFilter);
     }
     // Shift Schedule Day-view layout rides along only when it differs from the default.
-    if(pageMode==='schedule' && viewMode==='day' && shiftDayLayout!=='timeline') params.set('layout', shiftDayLayout);
+    if(pageMode==='schedule' && viewMode==='day' && shiftDayLayout!=='grid') params.set('layout', shiftDayLayout);   // only when not the default (grid)
     return window.location.pathname + '?' + params.toString();
   }
 
@@ -2682,20 +2674,10 @@ $(function(){
     } else if(sec==='planning_guides'||sec==='planning'){
       pageMode='planning';
       try{ var _gid=params.get('planning_guide'); if(_gid) selectedGuideId=_gid; }catch(e){}
-    } else if(sec==='staff'||sec==='people'){
-      pageMode='people';
-      selectedPersonId=null;
-    } else if(sec==='staff_schedule'){
-      pageMode='staff_schedule';
-      selectedPersonId=null;
-      var _ssm=params.get('ss_month');
-      if(_ssm && /^\d{4}-\d{1,2}$/.test(_ssm)){ var _sp=_ssm.split('-'); _ssY=parseInt(_sp[0],10); _ssM=parseInt(_sp[1],10)-1; _ssScrollDate=null; }
-      else {
-        var _sd=params.get('date');   // open the month containing the passed date and scroll to it
-        if(_sd && /^\d{4}-\d{2}-\d{2}$/.test(_sd)){ var _dp=_sd.split('-'); _ssY=parseInt(_dp[0],10); _ssM=parseInt(_dp[1],10)-1; _ssScrollDate=_sd; }
-      }
+    } else if(sec==='staff'||sec==='people'||sec==='staff_schedule'){   // (Oct 2026) the Staff section and Staff Schedule were REMOVED: legacy links open the Shift Schedule
+      pageMode='schedule';
     } else if(sec==='schedule'||sec==='site_schedule'||sec==='shift_schedule'){   // legacy values accepted; render() re-writes the URL as shift_schedule
-      var _lay=params.get('layout'); if(_lay==='grid'||_lay==='timeline') shiftDayLayout=_lay;
+      var _lay=params.get('layout'); shiftDayLayout=(_lay==='timeline')?'timeline':'grid';   // (Oct 2026) the URL decides: no / unknown value = Grid, the default (also on Back / Forward)
       pageMode='schedule';
       // Restore guide + Calendars/Schools filters from the URL
       try{ var _sgid=params.get('planning_guide'); selectedGuideId=_sgid||null; }catch(e){ selectedGuideId=null; }
@@ -4195,12 +4177,12 @@ $(function(){
           selectedPersonId=s.id;
           rStaff();  // re-render list — only new selectedPersonId row gets highlight
           updateURL(false);
-          showPeopleDetail(s);
+          void 0; /* Staff page removed (Oct 2026) */
         });
         // If a staff member is already selected, show their details
         if(selectedPersonId && !$('#people-panel').children().length){
           var _sel=STAFF.find(function(x){return x.id===selectedPersonId;});
-          if(_sel) showPeopleDetail(_sel);
+          if(_sel) void 0; /* Staff page removed (Oct 2026) */
         }
       },0);
       return;
@@ -4219,7 +4201,7 @@ $(function(){
       rStaff();                       // reuse Staff mode list styling; New Staff header auto-hidden outside people mode
       $('#staff-col').show();
       $('#staff-schedule-panel').css({'display':'flex','flex-direction':'column'});
-      renderStaffSchedule();          // staff month matrix if a staff is selected; clean empty state otherwise
+      void 0; /* Staff Schedule removed (Oct 2026) */          // staff month matrix if a staff is selected; clean empty state otherwise
       updateURL(replace);
       setTimeout(function(){
         // Selection works like Staff mode: set selectedPersonId and re-render so exactly one row
@@ -4230,7 +4212,7 @@ $(function(){
           var s=STAFF.find(function(x){return x.n===name;});
           if(!s) return;
           selectedPersonId=s.id;
-          renderStaffSchedule();
+          void 0; /* Staff Schedule removed (Oct 2026) */
           rStaff();           // re-render highlights only the selectedPersonId row
           updateURL(false);   // persist staff_id in the URL, same as Staff mode
         });
@@ -4447,7 +4429,7 @@ $(function(){
           selectedPersonId=newId;
           try{history.pushState({},'',buildURLParams());}catch(e){}
           rStaff();
-          showPeopleDetail(ns);
+          void 0; /* Staff page removed (Oct 2026) */
           // Auto-enter edit mode for the new staff member
           setTimeout(function(){
             $('#people-panel').find('button').filter(function(){ return $(this).text()==='Edit'; }).first().trigger('click');
@@ -4545,7 +4527,7 @@ $(function(){
                   if(next){
                     selectedPersonId=next.id;
                     try{history.pushState({},'',buildURLParams());}catch(e){}
-                    rStaff(); showPeopleDetail(next);
+                    rStaff(); void 0; /* Staff page removed (Oct 2026) */
                   } else {
                     selectedPersonId=null;
                     try{var p2=new URLSearchParams(window.location.search);p2.delete('staff_id');history.pushState({},'',window.location.pathname+(p2.toString()?'?'+p2.toString():''));}catch(e){}
@@ -5411,24 +5393,12 @@ $(function(){
         var gi=PLANNING_GUIDES.findIndex(function(x){return x.id===gObj.id;});
         try{
           guideDetails[String(gObj.id)]=clone;              // full replace of saved state (no merge)
-          // Restore assigned staff + shift notes from the export's gid-agnostic suffixes,
-          // rebuilt under THIS guide's id. Ids are checked against the roster; a missing id
-          // falls back to a UNIQUE name match so assignments survive roster id drift.
+          // Restore shift notes from the export's gid-agnostic suffixes, rebuilt under THIS guide's id. (Staff assignment was
+          // removed from the Planning Guide in Oct 2026: a saved staffAssignments block is ignored; assignment lives in another application.)
           (function(){
             var pfx=String(gObj.id)+'|';
-            Object.keys(scheduleAssignments).forEach(function(k){ if(k.indexOf(pfx)===0) delete scheduleAssignments[k]; });
             Object.keys(scheduleShiftNotes).forEach(function(k){ if(k.indexOf(pfx)===0) delete scheduleShiftNotes[k]; });
-            var sa=clone.staffAssignments||{}, sn=clone.shiftNotes||{};
-            Object.keys(sa).forEach(function(suf){
-              var rec=sa[suf]; if(!rec||rec.staffId==null) return;
-              var sid=rec.staffId;
-              var hit=STAFF.find(function(x){ return String(x.id)===String(sid); });
-              if(!hit && rec.staffName){
-                var nm=STAFF.filter(function(x){ return (x.n||'')===rec.staffName; });
-                if(nm.length===1){ sid=nm[0].id; }
-              }
-              scheduleAssignments[pfx+suf]=sid;
-            });
+            var sn=clone.shiftNotes||{};
             Object.keys(sn).forEach(function(suf){ if(sn[suf]!=null&&sn[suf]!=='') scheduleShiftNotes[pfx+suf]=sn[suf]; });
           })();
           if(gi>-1) PLANNING_GUIDES[gi].name=newName;
@@ -5993,7 +5963,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       if(schedFilterSchool!=='')   p.set('school',  schedFilterSchool);
       if(schedFilterCalendar!=='') p.set('calendar',schedFilterCalendar);
       p.set('view', viewMode);
-      if(viewMode==='day' && shiftDayLayout!=='timeline') p.set('layout', shiftDayLayout);   // Day-view layout, only when non-default
+      if(viewMode==='day' && shiftDayLayout!=='grid') p.set('layout', shiftDayLayout);   // Day-view layout, only when not the default (grid)
       p.set('day',  viewDateStr());
       var url=window.location.pathname+'?'+p.toString();
       if(replace) history.replaceState({},'',url); else history.pushState({},'',url);
@@ -6128,8 +6098,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Assignment is kept separate from Planning Guide data and never alters the
   // generated time/hours, nor makes the block draggable/resizable.
   // ══════════════════════════════════════════════════════════════════════════
-  var scheduleAssignments = {}; // shiftKey -> staffId
-  var scheduleShiftNotes = {}; // shiftKey -> Notes HTML (per-shift, mirrors scheduleAssignments persistence)
+  var scheduleShiftNotes = {}; // shiftKey -> Notes HTML (per-shift)
 
   // ── Schedule conflict detection ──────────────────────────────────────────────
   // Registry of the shifts currently rendered in the Schedule matrix (rebuilt each full
@@ -6137,60 +6106,8 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // staff name. A conflict = the SAME assigned staff on the SAME date with OVERLAPPING time
   // (touching endpoints don't overlap, matching the app's Math.max(starts) < Math.min(ends)).
   // Only the staff NAME turns red (#E24B4A); avatar, block size/position are untouched.
-  var _shiftRegistry = []; // { shiftKey, dateStr, start, end, $host }
-
-  // Persistent per-shift details (NOT cleared each render) so the staff-search dropdown can show a
-  // candidate's OTHER overlapping assignments — including shifts in a different Planning Guide or a
-  // view that isn't currently on screen. Assignments are in-session only, so any assigned shift was
-  // rendered at some point and its details captured here. shiftKey -> details.
-  var _assignmentDetails = {}; // shiftKey -> { dateStr, start, end, schoolName, calendarName, roleLabel, num, guideId, guideName }
-
-  function _recomputeConflicts(){
-    var byStaff = {};
-    _shiftRegistry.forEach(function(s){
-      var sid = scheduleAssignments[s.shiftKey];
-      if(sid==null) return;
-      (byStaff[sid] = byStaff[sid] || []).push(s);
-    });
-    var conflict = {};
-    Object.keys(byStaff).forEach(function(sid){
-      var a = byStaff[sid];
-      for(var i=0;i<a.length;i++){
-        for(var j=i+1;j<a.length;j++){
-          if(a[i].dateStr===a[j].dateStr && a[i].start!=null && a[i].end!=null && a[j].start!=null && a[j].end!=null
-             && Math.max(a[i].start,a[j].start) < Math.min(a[i].end,a[j].end)){
-            conflict[a[i].shiftKey]=true; conflict[a[j].shiftKey]=true;
-          }
-        }
-      }
-    });
-    _shiftRegistry.forEach(function(s){
-      var $nm = s.$host.find('.shift-staff-name');
-      if(!$nm.length) return;
-      if(conflict[s.shiftKey]){ $nm.css('color','#E24B4A').attr('title','Schedule conflict'); }
-      else { $nm.css('color','').removeAttr('title'); }
-    });
-  }
-
-  // For the staff-search dropdown: every OTHER shift assigned to staffId that overlaps the current
-  // shift (same date + overlapping time). Returns compact summary strings:
-  //   "9:00 AM – 12:00 PM · School 1 · Calendar 1 · TK/K #1"   (+ " · Planning Guide: X" if a different guide)
-  function _overlapDetailsFor(staffId, curKey, curDet){
-    var out = [];
-    if(!curDet || curDet.start==null || curDet.end==null) return out;
-    Object.keys(scheduleAssignments).forEach(function(k){
-      if(k===curKey) return;
-      if(String(scheduleAssignments[k])!==String(staffId)) return;
-      var d = _assignmentDetails[k]; if(!d) return;
-      if(d.dateStr!==curDet.dateStr || d.start==null || d.end==null) return;
-      if(!(Math.max(d.start,curDet.start) < Math.min(d.end,curDet.end))) return; // strict overlap (touching ≠ overlap)
-      var summary = fmtT(d.start)+' \u2013 '+fmtT(d.end)+' \u00b7 '+(d.schoolName||'—')+' \u00b7 '+(d.calendarName||'—')+' \u00b7 '+(d.roleLabel||'Role')+' #'+d.num;
-      if(d.guideId!==curDet.guideId && d.guideName) summary += ' \u00b7 Planning Guide: '+d.guideName;
-      out.push(summary);
-    });
-    return out;
-  }
-
+  // Shift context captured at render (date, times, school, Program, role, guide): what the Shift Details window shows.
+  var _shiftDetails = {}; // shiftKey -> { dateStr, start, end, schoolName, calendarName, roleLabel, num, guideId, guideName }
   function _staffIdxById(sid){ for(var i=0;i<STAFF.length;i++){ if(String(STAFF[i].id)===String(sid)) return i; } return -1; }
 
   // Mini avatar matching Staff mode (round, AVATAR_COLORS, initials, white bold) — sized to fit a shift line.
@@ -6203,126 +6120,38 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Assigned vs. unassigned shift styling. Changes COLOR/BORDER-STYLE only (border width is kept
   // identical), so block size, line positions, and matrix layout never change. Status markers keep
   // their own green/blue/red. Unassigned = subtle warm bg + dashed muted border + muted label.
-  function _styleShift($block, assigned, compact){
-    var bw = compact ? '1px' : '1.5px';
-    if(assigned){
-      $block.css({background:'#e7f1ff',border:bw+' solid #9ec5fe',color:'#0a4ea8'});
-    } else {
-      $block.css({background:'#faf6ef',border:bw+' dashed #dccfb5',color:'#6b717a'});
-    }
-  }
-
-  function renderShiftAssign($host, $block, shiftKey, placeholderText, compact){
+  // A shift block's OWN look (Oct 2026): applied by every block renderer (Timeline, Grid, week chips) the moment the block is
+  // created. It used to be applied only through the staff-assignment row, so removing Assign Staff left Grid blocks unpainted
+  // (transparent, invisible). A block's appearance now depends only on the shift existing; this is the look every shift had
+  // before (no staff assigned).
+  // The role-label line of a Timeline block / week chip: the same layout, colour and truncation the line always had, now
+  // purely presentational (no assign / pointer / underline: assignment lives in another application).
+  function _shiftLabelLine($host, text, compact){
     $host.empty().css({display:'flex',alignItems:'center',gap:'4px',minWidth:'0',minHeight:(compact?'15px':'17px')});
-    var sid = scheduleAssignments[shiftKey];
-    var idx = (sid!=null) ? _staffIdxById(sid) : -1;
-    _styleShift($block, idx>=0, compact);
-    if(idx>=0){
-      var st = STAFF[idx];
-      var $main=$('<span>').attr('title', st.n+' — click to change').css({display:'flex',alignItems:'center',gap:'4px',flex:'0 1 auto',minWidth:'0',maxWidth:'100%',cursor:'pointer'});
-      $main.append(_shiftAvatar(st.n, idx, compact?14:16));
-      $main.append($('<span>').addClass('shift-staff-name').css({flex:'0 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700'}).text(st.n));
-      var $rm=$('<span>').addClass('shift-x').attr('title','Remove staff').css({cursor:'pointer',fontWeight:'700',lineHeight:'1',padding:'0 1px',fontSize:(compact?'11px':'12px')}).html('&times;');
-      $rm.on('click',function(e){ e.stopPropagation(); delete scheduleAssignments[shiftKey]; renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts(); });
-      $main.append($rm);
-      $main.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
-      $host.append($main);
-      $host.removeAttr('title');
-    } else {
-      var $lbl=$('<span>').attr('title', placeholderText+' — click to assign staff').css({flex:'1 1 auto',minWidth:'0',cursor:'pointer',color:'#9d8a66',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(placeholderText);
-      $lbl.on('mouseenter',function(){$(this).css('textDecoration','underline');}).on('mouseleave',function(){$(this).css('textDecoration','none');});
-      $lbl.on('click',function(e){ e.stopPropagation(); _openShiftSearch($host,$block,shiftKey,placeholderText,compact); });
-      $host.append($lbl);
-    }
+    $host.append($('<span class="shift-label">').css({flex:'1 1 auto',minWidth:'0',color:'#9d8a66',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(text));
+  }
+  function _styleShiftBlock($block, compact){
+    var bw = compact ? '1px' : '1.5px';
+    $block.css({background:'#faf6ef',border:bw+' dashed #dccfb5',color:'#6b717a'});
   }
 
-  // Turn the first line into an inline staff search field (integrated in the block); results show
-  // as a body-level popup so they are not clipped by the block's overflow.
-  function _openShiftSearch($host, $block, shiftKey, placeholderText, compact){
-    $host.empty().removeAttr('title');
-    var $inp=$('<input type="text" autocomplete="off" placeholder="Search staff…">').css({
-      flex:'0 1 auto',width:(compact?'112px':'150px'),maxWidth:'100%',minWidth:'0',boxSizing:'border-box',border:'1px solid #9ec5fe',borderRadius:'3px',
-      padding:'0 4px',height:(compact?'15px':'17px'),fontSize:(compact?'9px':'10px'),fontWeight:'600',color:'#0a4ea8',background:'#fff',outline:'none'});
-    $host.append($inp);
-
-    var $pop=$('<div>').css({position:'fixed',zIndex:'99999',background:'#fff',border:'1px solid #cdd6e0',borderRadius:'6px',
-      boxShadow:'0 6px 22px rgba(20,30,50,.16)',maxHeight:'230px',overflowY:'auto',padding:'4px',fontSize:'11px'});
-    function place(){ var r=$inp[0].getBoundingClientRect(); var w=Math.max(250,r.width);
-      $pop.css({left:Math.max(6,Math.min(r.left,window.innerWidth-w-6))+'px',top:(r.bottom+4)+'px',width:w+'px'}); }
-    var onScroll=function(){ place(); };
-    function close(){ $pop.remove(); window.removeEventListener('scroll',onScroll,true); window.removeEventListener('resize',onScroll); }
-    function revert(){ close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); }
-    function commit(s){
-      // Site Schedule assignments are ALWAYS keyed by the staff member's stable staff_id, never by
-      // name — the name is used only for display (see renderShiftAssign). Guard against a staff record
-      // that somehow lacks an id so we never fall back to storing anything else.
-      if(s && s.id!=null){ scheduleAssignments[shiftKey]=s.id; try{ _pgHist.schedule(); }catch(e){} }
-      close(); renderShiftAssign($host,$block,shiftKey,placeholderText,compact); _recomputeConflicts();
-    }
-    function refresh(){
-      var curKey=shiftKey, curDet=_assignmentDetails[shiftKey];
-      var assignedId=scheduleAssignments[shiftKey];
-      var q=$inp.val().trim().toLowerCase(); $pop.empty();
-      var list=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
-      // Empty search → float the currently-assigned staff to the top so it's easy to confirm or keep.
-      if(!q && assignedId!=null){
-        var ai=list.findIndex(function(s){ return String(s.id)===String(assignedId); });
-        if(ai>0){ list.unshift(list.splice(ai,1)[0]); }
-      }
-      if(!list.length){ $pop.append($('<div>').css({padding:'8px 10px',color:'#868e96'}).text('No staff found')); return; }
-      list.slice(0,12).forEach(function(s){
-        var isCur=(assignedId!=null && String(s.id)===String(assignedId)); // currently assigned to THIS shift
-        var baseBg=isCur?'#e7f1ff':'transparent', hoverBg=isCur?'#d8e8fd':'#eef3fb';
-        var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'5px 8px',borderRadius:'4px',cursor:'pointer',background:baseBg,boxShadow:isCur?'inset 3px 0 0 #7fb0e8':'none'});
-        $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 24));
-        var $info=$('<div>').css({minWidth:'0',flex:'1 1 auto'});
-        var $nameLine=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',minWidth:'0'});
-        $nameLine.append($('<span>').css({flex:'0 1 auto',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#212529',fontWeight:'600',lineHeight:'1.3'}).text(s.n));
-        if(isCur){ $nameLine.append($('<span>').attr('title','Currently assigned to this shift').css({flex:'0 0 auto',fontSize:'9px',fontWeight:'600',color:'#3f7fc8'}).text('\u2713 Assigned')); }
-        $info.append($nameLine);
-        var ov=_overlapDetailsFor(s.id, curKey, curDet);
-        if(ov.length){
-          ov.slice(0,2).forEach(function(txt){
-            $info.append($('<div>').attr('title',txt).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(txt));
-          });
-          if(ov.length>2){
-            $info.append($('<div>').attr('title',ov.join('\n')).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',marginTop:'1px',fontStyle:'italic'}).text('+'+(ov.length-2)+' more overlapping'));
-          }
-        }
-        $r.append($info);
-        $r.on('mouseenter',function(){$(this).css('background',hoverBg);}).on('mouseleave',function(){$(this).css('background',baseBg);});
-        $r.on('mousedown',function(e){ e.preventDefault(); commit(s); });
-        $pop.append($r);
-      });
-    }
-    $inp.on('input',refresh);
-    $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); revert(); } });
-    $inp.on('blur',function(){ setTimeout(function(){ if(document.body.contains($pop[0])) revert(); },130); });
-    $('body').append($pop); place(); refresh();
-    window.addEventListener('scroll',onScroll,true); window.addEventListener('resize',onScroll);
-    $inp.focus();
-  }
-
-  // ── Shift Details window ──────────────────────────────────────────────────────
   // Opens when a Site Schedule shift block/chip is clicked (Day / Week / Month). Mirrors the block's
-  // info, lets the user (re)assign staff and edit Notes as a DRAFT, and protects unsaved changes.
+  // info, lets the user edit Notes as a DRAFT, and protects unsaved changes. (Staff assignment removed Oct 2026.)
   // Start–End, Total hours and Meal break are read-only (the same figures the matrix shows). Staff
   // assignment reuses the same search + overlap/conflict logic as the inline block picker but commits
-  // to a draft; Save writes the draft into the live stores (scheduleAssignments + scheduleShiftNotes),
+  // to a draft; Save writes the draft into the live store (scheduleShiftNotes),
   // refreshes the block, and recomputes conflicts. Notes persist per shiftKey exactly like assignments.
   function openShiftDetails(shiftKey){
-    var det = _assignmentDetails[shiftKey];
+    var det = _shiftDetails[shiftKey];
     if(!det) return;   // no captured details for this key → nothing to show
 
-    var origAssign = (scheduleAssignments[shiftKey]!=null) ? scheduleAssignments[shiftKey] : null;
     var origNotes  = scheduleShiftNotes[shiftKey] || '';
-    var draftAssign = origAssign;   // staffId or null
     var _notesHost = null;
     var confirmOpen = false;
 
     function notesHtml(){ return _notesHost ? (_notesHost.innerHTML||'') : origNotes; }
     function notesIsEmpty(h){ return !h || !h.replace(/<br\s*\/?>/gi,'').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').replace(/\u00a0/g,' ').trim().length; }
-    function isDirty(){ return (String(draftAssign)!==String(origAssign)) || (notesHtml()!==origNotes); }
+    function isDirty(){ return notesHtml()!==origNotes; }
 
     // ---- overlay + modal shell (reuses the app's shared modal chrome) ----
     var $ov = $('<div class="modal-overlay">').css({zIndex:'100050'});
@@ -6377,10 +6206,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $roleField.append($('<div>').css({fontSize:'13px',fontWeight:'600',color:'#212529',padding:'2px 0'}).text(det.roleLabel+' #'+det.num));
 
 
-    // ---- Assigned staff (interactive: click to assign / change / remove) ----
-    var $staffField=$('<div class="field">');
-    var $staffArea=$('<div>');
-    $staffField.append($staffArea);
 
 
     // ---- read-only: Start–End, Total hours, Meal break ----
@@ -6404,8 +6229,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $totRow.append($tc);
     $body.append($totRow);
     // Assigned staff: its own row below Total (Role now leads the time row).
-    $staffField.css({minWidth:'0',marginBottom:''});
-    $body.append($staffField);
     // ── Related Sessions ── every session overlapping this shift on this school grid, date
     // and role, as compact grid-styled blocks; hidden entirely when none exist. The section
     // scrolls internally so the window never outgrows its height, and _shiftDetRefreshSess
@@ -6482,104 +6305,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     function syncFooter(){ $footer.css('display', isDirty()?'flex':'none'); }
 
     // ---- draft-aware staff area ----
-    function staffConflicts(){ return (draftAssign!=null) ? _overlapDetailsFor(draftAssign, shiftKey, det) : []; }
-    function renderStaffArea(){
-      $staffArea.empty();
-      var idx=(draftAssign!=null)?_staffIdxById(draftAssign):-1;
-      if(idx>=0){
-        var st=STAFF[idx], conf=staffConflicts();
-        var $row=$('<div>').css({display:'flex',alignItems:'center',gap:'8px'});
-        var $pick=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',flex:'1 1 auto',minWidth:'0',cursor:'pointer',border:'1px solid #dee2e6',borderRadius:'7px',padding:'6px 9px',background:'#fff'}).attr('title','Click to change staff');
-        $pick.append(_shiftAvatar(st.n, idx, 22));
-        $pick.append($('<span>').addClass('shift-staff-name').css({flex:'0 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'700',fontSize:'13px',color:conf.length?'#E24B4A':'#212529'}).text(st.n));
-        if(conf.length) $pick.append($('<span>').css({flexShrink:'0',fontSize:'10px',fontWeight:'700',color:'#E24B4A'}).text('Conflict'));
-        $pick.on('click',openPicker);
-        $row.append($pick);
-        var $rm=$('<button type="button" title="Remove staff">').css({flexShrink:'0',background:'none',border:'1px solid #dee2e6',borderRadius:'7px',padding:'6px 10px',cursor:'pointer',color:'#6c757d',fontSize:'13px',fontWeight:'700',lineHeight:'1'}).html('&#215;');
-        $rm.on('click',function(){ draftAssign=null; renderStaffArea(); syncFooter(); });
-        $row.append($rm);
-        $staffArea.append($row);
-        if(conf.length){
-          var $warn=$('<div>').css({marginTop:'6px',fontSize:'10.5px',color:'#9a6700',lineHeight:'1.4'});
-          $warn.append($('<div>').css({fontWeight:'700',color:'#E24B4A',marginBottom:'2px'}).text('Schedule conflict \u2014 also assigned this day:'));
-          conf.slice(0,3).forEach(function(t){ $warn.append($('<div>').attr('title',t).css({overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text('\u2022 '+t)); });
-          if(conf.length>3) $warn.append($('<div>').css({fontStyle:'italic'}).text('+'+(conf.length-3)+' more'));
-          $staffArea.append($warn);
-        }
-      } else {
-        var $assign=$('<div>').css({cursor:'pointer',border:'1px dashed #c9cfd6',borderRadius:'7px',padding:'8px 10px',background:'#faf6ef',color:'#9d8a66',fontSize:'12.5px',fontWeight:'600'}).text('Click to assign staff');
-        $assign.on('click',openPicker);
-        $staffArea.append($assign);
-      }
-    }
-
-    // draft-aware staff picker — same search + overlap surfacing as the inline block picker, but the
-    // selection updates the DRAFT only (nothing is written to scheduleAssignments until Save).
-    function openPicker(){
-      $staffArea.empty();
-      var $inp=$('<input type="text" autocomplete="off" placeholder="Search staff\u2026" class="std-input">').css({fontSize:'13px'});
-      $staffArea.append($inp);
-      $staffArea.css({position:'relative'});
-      // Viewport-fixed so neither the modal body's scroll clipping nor the window's bottom
-      // edge can swallow the results; sized and placed from the input's live rect.
-      var $list=$('<div id="shiftdet-staff-dd">').css({position:'fixed',zIndex:'100060',background:'#fff',boxShadow:'0 6px 18px rgba(20,30,40,.18)',maxHeight:'190px',overflowY:'auto',border:'1px solid #e9ecef',borderRadius:'7px'});
-      function placeList(){
-        var ir=$inp[0].getBoundingClientRect();
-        var vw3=window.innerWidth||1024, vh3=window.innerHeight||768;
-        var w3=Math.max(ir.width,220), l3=Math.min(Math.max(ir.left,8), Math.max(vw3-w3-8,8));
-        var t3=ir.bottom+4;
-        var mh=Math.max(Math.min(190, vh3-t3-10), 90);
-        if(t3+mh>vh3-8 && ir.top-4-190>8){ t3=ir.top-4-190; mh=190; }
-        $list.css({left:l3+'px',top:t3+'px',width:w3+'px',maxHeight:mh+'px'});
-      }
-      $staffArea.append($list);
-      function refresh(){
-        var q=$inp.val().trim().toLowerCase(); $list.empty();
-        var arr=STAFF.filter(function(s){ return !q || (s.n||'').toLowerCase().indexOf(q)>-1; });
-        if(!q && draftAssign!=null){ var ai=arr.findIndex(function(s){ return String(s.id)===String(draftAssign); }); if(ai>0) arr.unshift(arr.splice(ai,1)[0]); }
-        if(!arr.length){ $list.append($('<div>').css({padding:'8px 10px',color:'#868e96',fontSize:'12px'}).text('No staff found')); return; }
-        arr.slice(0,20).forEach(function(s){
-          var isCur=(draftAssign!=null && String(s.id)===String(draftAssign));
-          var $r=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',padding:'6px 9px',cursor:'pointer',background:isCur?'#e7f1ff':'#fff',borderBottom:'1px solid #f1f3f5'});
-          $r.append(_shiftAvatar(s.n, STAFF.indexOf(s), 22));
-          var $info=$('<div>').css({minWidth:'0',flex:'1 1 auto'});
-          var $nl=$('<div>').css({display:'flex',alignItems:'center',gap:'5px',minWidth:'0'});
-          $nl.append($('<span>').css({flex:'0 1 auto',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'600',fontSize:'12.5px',color:'#212529'}).text(s.n));
-          if(isCur) $nl.append($('<span>').css({flexShrink:'0',fontSize:'9px',fontWeight:'700',color:'#3f7fc8'}).text('\u2713 Assigned'));
-          $info.append($nl);
-          var ov=_overlapDetailsFor(s.id, shiftKey, det);
-          if(ov.length){
-            ov.slice(0,2).forEach(function(t){ $info.append($('<div>').attr('title',t).css({fontSize:'9px',color:'#9a6700',lineHeight:'1.3',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}).text(t)); });
-            if(ov.length>2) $info.append($('<div>').css({fontSize:'9px',color:'#9a6700',fontStyle:'italic'}).text('+'+(ov.length-2)+' more overlapping'));
-          }
-          $r.append($info);
-          $r.on('mouseenter',function(){ $(this).css('background',isCur?'#d8e8fd':'#eef3fb'); }).on('mouseleave',function(){ $(this).css('background',isCur?'#e7f1ff':'#fff'); });
-          $r.on('click',function(){ if(s.id!=null){ draftAssign=s.id; } renderStaffArea(); syncFooter(); });
-          $list.append($r);
-        });
-      }
-      $inp.on('input',function(){ placeList(); refresh(); });
-      $inp.on('focus click',function(){ placeList(); refresh(); });
-      placeList();
-      $inp.on('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); renderStaffArea(); } });
-      refresh(); $inp.focus();
-    }
-
     // ---- commit / discard ----
     function closeWin(){ _shiftDetRefreshSess=null; $ov.remove(); $(document).off('keydown._shiftdet'); }
     function doSave(){
-      if(draftAssign!=null) scheduleAssignments[shiftKey]=draftAssign; else delete scheduleAssignments[shiftKey];
       try{ _pgHist.schedule(); }catch(e){}
       var nh=notesHtml();
       if(!notesIsEmpty(nh)) scheduleShiftNotes[shiftKey]=nh; else delete scheduleShiftNotes[shiftKey];
-      // refresh the live matrix block(s) for this shift, then recompute conflict styling
-      _shiftRegistry.forEach(function(entry){
-        if(entry.shiftKey!==shiftKey) return;
-        var $host=entry.$host; if(!$host||!$host[0]||!document.body.contains($host[0])) return;
-        var $blk=$host.closest('.sched-block, .sched-chip');
-        renderShiftAssign($host, $blk, shiftKey, det.roleLabel+' #'+det.num, $blk.hasClass('sched-chip'));
-      });
-      _recomputeConflicts();
       closeWin();
     }
     function doCancel(){ closeWin(); }   // draft discarded — stores untouched
@@ -6610,7 +6341,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     $ov.on('click',function(e){ if($(e.target).is($ov)) attemptClose(); });
     $(document).on('keydown._shiftdet',function(e){ if(e.key==='Escape'){ e.preventDefault(); attemptClose(); } });
 
-    renderStaffArea();
     syncFooter();
     $('body').append($ov);
     $ov.addClass('open');
@@ -6848,7 +6578,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
     $bd.append($shF).append($('<hr class="section-div"/>'));
     function shiftRowHtml(d,inc){
-      var nm=(function(){ var sid=scheduleAssignments[d.shiftKey]; if(sid==null) return null; var i=_staffIdxById(sid); return i>=0?STAFF[i].n:null; })();
+      var nm=null;   // staff assignment removed (Oct 2026)
       var base=instFor(opts.clicked)||d;
       var timeTxt=(d.ds!==base.ds||d.de!==base.de)?(fmtT(d.ds)+' – '+fmtT(d.de)):'';
       return {label:d.roleLabel+' #'+d.num, time:timeTxt, staff:nm, included:inc};
@@ -7281,7 +7011,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
   // Planning Guide's Calendar + Staffing Hours data. Hours match the Calendar breakdown
   // popup exactly (same resolution: per-school Special Day column, Week A/B, byCalendar).
   function renderScheduleMatrices(g, $panel){
-    _shiftRegistry.length = 0; // rebuilt as shifts are rendered below; conflicts recomputed at the end
     var det = getGuideDetail(g.id);
     var sopts = det.staffingOpts || {alternateWeeks:false,bySchool:false,byCalendar:false};
     var sfSlots = det.staffingHoursSlots || {};
@@ -7342,7 +7071,14 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       var slot = anyOpt ? (sfSlots[_sfxRD+slotKey2(null, ci, wk)]||{}) : (det.staffingHours||{});
       var sdId=markerSdId(_rdCalId, dateKey, si);
       var sd=sdId?getSdById(g.id, sdId):null;
-      if(!_pgFzBypass(g.id,_rdCalId,dateKey,si) && ((sd && sd.noHours) || _wkDisabledOn(g.id,_rdCalId,si,dateKey))) return {noHours:true, sd:sd, blocks:[]};   // frozen: snapshot governs   // no-hours Special Day OR rotation-disabled week
+      // (Oct 2026) the Planning Guide is the source of truth: the SAME gates in the SAME order as its resolveDay / Calendar cell /
+      // Summary walk. A frozen school bypasses them (its snapshot governs); otherwise a no-hours Special Day, a Staffing Allocation
+      // exclusion (keyed by the Special Day id on a Special Day, like the Planning Guide) and a disabled / excluded week give no shifts.
+      // The Staffing Allocation gate was MISSING here, so Shifts showed shifts on days the Planning Guide does not schedule.
+      var _fzRD=_pgFzBypass(g.id,_rdCalId,dateKey,si);
+      if(!_fzRD && sd && sd.noHours) return {noHours:true, sd:sd, blocks:[]};
+      if(!_fzRD && !staffAllocAllows(g.id,origIdx,wk||'',si,(sd && !sd.noHours)?sd.id:dayKey)) return {noHours:true, sd:sd, blocks:[], allocOff:true};
+      if(!_fzRD && _wkDisabledOn(g.id,_rdCalId,si,dateKey)) return {noHours:true, sd:sd, blocks:[]};   // rotation-disabled or excluded week
       var srcKey=(sd && !sd.noHours)?sd.id:dayKey;
       var _rdRows=(origIdx!=null&&calRows[origIdx]&&calRows[origIdx].calId!=null)?siteRowsFor(g,calRows[origIdx].calId):siteRows;
       var siteRow=_rdRows[si]||{};
@@ -7475,6 +7211,25 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
       var _calSiteRows=(cr.calId!=null)?siteRowsFor(g,cr.calId):siteRows;
       var calSchs=_calSiteRows.map(function(r,i){ return {idx:i, id:r.schoolId, name:(r.school||r.schoolAbbr||'').trim()||('School '+(i+1))}; });
+      // Allocated Hours (Paul, Oct 2026): in Day view, the Program's Allocated Hours for THAT day, read from the Planning Guide's own
+      // helpers (allocForDate / allocDayTotal / allocAbsorbedKind: the same source as the Calendar cell, Summary and exports), shown
+      // as one Program-level line before the Program's school cards. They are dated day totals with no role, time or staff count,
+      // so they are not drawn as shift blocks.
+      if(viewMode==='day' && cr.calId!=null){
+        var _alDk=isoD(datesInRange[0]), _alRows=allocForDate(g.id,cr.calId,_alDk);
+        if(_alRows.length){
+          var _alTot=allocDayTotal(g.id,cr.calId,_alDk), _alAbs=allocAbsorbedKind(g.id,cr.calId,_alDk);
+          var _alNotes=_alRows.map(function(r){ return r.notes; }).filter(function(n){ return n && n.trim(); });
+          var $al=$('<div class="ss-alloc-line" role="note">').attr({'data-alloc-cal':String(cr.calId),'data-alloc-date':_alDk,'data-alloc-h':String(_alTot)})
+            .css({display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',margin:'0 0 12px',padding:'9px 12px',border:'1px solid #e3e7ec',borderLeft:'4px solid '+(cal.color||'#cfd6df'),borderRadius:'10px',background:'#f8f9fb',fontSize:'13px',color:'#212529'});
+          $al.append($('<span>').css({display:'inline-flex',alignItems:'center',gap:'6px',fontWeight:'600'}).append(_calCircle(cr.color)).append($('<span>').text((cr.name&&cr.name.trim())?cr.name:('Program '+(origIdx+1)))));
+          $al.append($('<span>').css({color:'#5f6368'}).text('Allocated Hours for this day'));
+          $al.append($('<span class="ss-alloc-val">').css({fontWeight:'700',color:'#0d6efd',fontVariantNumeric:'tabular-nums'}).text(hrsShort(_alTot)));
+          if(_alNotes.length) $al.append($('<span class="ss-alloc-notes">').css({color:'#5f6368'}).text('\u00b7 '+_alNotes.join(', ')));
+          if(_alAbs) $al.append($('<span class="ss-alloc-abs">').css({color:'#8a6d3b',fontSize:'12px'}).text('(included in this day\u2019s '+(_alAbs==='ff'?'Fulfillment':'Override Day Total')+' hours)'));
+          $wrap.append($al); anyMatrix=true;
+        }
+      }
       var visSchsCal=schedFilterSchool ? calSchs.filter(function(s){ return String(s.id)===String(schedFilterSchool); }) : calSchs;
       visSchsCal.forEach(function(sch){
         var si=sch.idx;
@@ -7544,7 +7299,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       $wrap.append($('<div>').css({padding:'18px 8px',fontSize:'12px',color:'var(--tx2)'}).text('No matrices to display for the current filters and time period.'));
     }
     $panel.append($wrap);
-    _recomputeConflicts(); // mark any overlapping same-staff assignments (red name) now the matrix is built
     if(!_siteNowTimer) _siteNowTimer=setInterval(_siteUpdateNowLine, 60000);   // keep today's current-time line moving (1-min tick, position-only)
 
     // ── DAY view: roles × 6am–midnight timeline (same look as the Availability day grid) ──
@@ -7596,10 +7350,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">').css({left:x+'px',top:'4px',width:w+'px',height:bh+'px',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(dateObj)+'|'+inst.roleKey+'|'+inst.num;
             var $line1=$('<div class="block-title">');
-            renderShiftAssign($line1, $el, shiftKey, inst.roleLabel+' #'+inst.num, false);
+            _shiftLabelLine($line1, inst.roleLabel+' #'+inst.num, false); _styleShiftBlock($el, false);   // Timeline block: the role label + the block's own look
             $el.append($line1);
-            _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(dateObj), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+            _shiftDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
             $l2.append($('<span class="block-time">').text(fmtT(ds)+' \u2013 '+fmtT(de)));
             $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(_shiftSpanH(b))));
@@ -7630,7 +7383,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
     // ── DAY view, GRID layout ── the same day transposed: role instances across the top, time down
     // the side. The axis spans only this day's actual shifts (earliest start → latest end, whole
     // hours) and re-derives every render, so it follows shift and override changes automatically.
-    // Blocks are the same .site-sched-block elements (same shiftKey, assignment row, registry,
+    // Blocks are the same .site-sched-block elements (same shiftKey, Shift Details context,
     // details click, calendar-color styling); Total Hours + meal-break minutes move to a dedicated
     // third line so narrow columns stay readable — height grows instead of width.
     function buildDayGridVertical(si, origIdx, dateObj, insts, schoolName, calendarName){
@@ -7662,20 +7415,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             it.$el=$('<div class="sched-block site-sched-block'+(isXs?' xs-sched-block':'')+'">')
               .css({left:'4px',right:'4px',width:'auto',top:y+'px',height:bh+'px',cursor:'pointer'})
               .attr('title', inst.roleLabel+' #'+inst.num+'  \u00b7  '+fmtT(ds)+' \u2013 '+fmtT(de)+'  \u00b7  '+fmtHrs(_shiftSpanH(b))+(b.status?('  \u00b7  '+b.status.text):''));
-            _assignmentDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+            _styleShiftBlock(it.$el, true);   // Grid block: painted HERE, by its own renderer (it used to be painted only by the removed assign row)
+            _shiftDetails[shiftKey] = {dateStr:isoD(dateObj), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};   // Grid: the Shift Details context (restored; lost in the Oct 2026 assignment removal)
           }
         }
         return it;
       });
-      // Scoped header styles (injected once): the Assign Staff label and the assigned name render at
-      // 12px (both inherit from the row — neither carries an inline font-size), and the remove × is
-      // made visible here — the base .shift-x rule keeps it at opacity 0 until a .sched-block hover,
-      // which can never happen inside a header.
-      if(!document.getElementById('grid-hdr-style')){
-        var _ghs=document.createElement('style'); _ghs.id='grid-hdr-style';
-        _ghs.textContent='.grid-hdr-assign{font-size:12px;} .grid-hdr-assign .shift-x{opacity:.5;} .grid-hdr-assign:hover .shift-x,.grid-hdr-assign .shift-x:hover{opacity:1;}';
-        document.head.appendChild(_ghs);
-      }
       var dayInsts=items.filter(function(it){ return !!it.$el; }).map(function(it){
         return {roleKey:it.inst.roleKey, num:it.inst.num, roleLabel:it.inst.roleLabel, ds:it.ds, de:it.de, shiftKey:it.shiftKey};
       });
@@ -8186,7 +7931,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         });
       }
       // Sticky header row — carries the shift information that used to live inside the blocks:
-      // role, the actionable Assign Staff row, the time range, and Total Hours + status badge.
+      // role, the time range, and Total Hours + status badge. (The Assign Staff row was removed Oct 2026.)
       var $hdrRow=$('<div>').css({display:'flex',height:HDRH+'px',position:'sticky',top:'0',zIndex:'6',background:'var(--bg2)',borderBottom:'1px solid var(--bd2)'});
       $hdrRow.append($('<div>').css({position:'sticky',left:'0',zIndex:'7',flexShrink:'0',width:TIMEW+'px',background:'var(--bg2)',borderRight:'1px solid var(--bd2)'}));
       items.forEach(function(it){
@@ -8197,10 +7942,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         if(isXs) $roleLine.append($('<span>').css({fontSize:'8px',fontWeight:'700',color:'#9a6700',textTransform:'uppercase',letterSpacing:'.04em',marginLeft:'4px'}).text('Extra Shift'));
         $in.append($roleLine);
         if(it.$el){
-          var $aRow=$('<div class="block-assign-row grid-hdr-assign">');
-          renderShiftAssign($aRow, it.$el, it.shiftKey, 'Assign Staff', true);
-          $in.append($aRow);
-          _shiftRegistry.push({shiftKey:it.shiftKey, dateStr:isoD(dateObj), start:it.ds, end:it.de, $host:$aRow});
           var $tRow=$('<div class="block-time-row">').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}).attr('title',fmtT(it.ds)+' \u2013 '+fmtT(it.de));
           $tRow.append($('<span class="block-time">').text(fmtT(it.ds)+' \u2013 '+fmtT(it.de)));
           $in.append($tRow);
@@ -8211,10 +7952,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
         }
         if(it.$el){
           // The header (not the blank block) is the click target for Shift Details. Interactions inside
-          // the assignment row (Assign Staff, staff search, the remove ×) never open the popup.
+          // (the assignment row that used to sit here was removed Oct 2026).
           (function(sk){
             $hc.css('cursor','pointer').on('click',function(e){
-              if($(e.target).closest('.block-assign-row').length) return;
               openShiftDetails(sk);
             });
           })(it.shiftKey);
@@ -8505,10 +8245,9 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
             var $chip=$('<div class="sched-chip">').css({display:'inline-block',maxWidth:'172px',borderRadius:'5px',padding:'2px 5px',fontSize:'9px',fontWeight:'600',lineHeight:'1.3',cursor:'default'});
             var shiftKey=g.id+'|'+si+'|'+origIdx+'|'+isoD(col.date)+'|'+inst.roleKey+'|'+inst.num;
             var $line1=$('<div>').css({fontWeight:'800',whiteSpace:'nowrap',overflow:'hidden',minWidth:'0'});
-            renderShiftAssign($line1, $chip, shiftKey, inst.roleLabel+' #'+inst.num, true);
+            _shiftLabelLine($line1, inst.roleLabel+' #'+inst.num, true); _styleShiftBlock($chip, true);   // week chip: the role label + the chip's own look
             $chip.append($line1);
-            _shiftRegistry.push({shiftKey:shiftKey, dateStr:isoD(col.date), start:ds, end:de, $host:$line1});
-            _assignmentDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
+            _shiftDetails[shiftKey] = {dateStr:isoD(col.date), start:ds, end:de, schoolName:schoolName, calendarName:calendarName, calId:(calRows[origIdx]&&calRows[origIdx].calId!=null?calRows[origIdx].calId:null), roleLabel:inst.roleLabel, num:inst.num, guideId:g.id, guideName:g.name, roleKey:inst.roleKey, si:si, origIdx:origIdx, hrsEach:b.hrsEach, status:b.status, isXs:isXs, calColor:((calRows[origIdx]&&calRows[origIdx].color)||'#cfd6df'), rawHrs:Math.round((de-ds)*100)/100, mealMins:mealBreakMinsForCal(calRows[origIdx], Math.round((de-ds)*100)/100), billable:calRowBillable(calRows[origIdx])};
             var $l2=$('<div>');
             $l2.append($('<span>').css({whiteSpace:'nowrap'}).text(fmtT(ds)+'–'+fmtT(de)));
             $l2.append($('<span>').css({fontWeight:'700',marginLeft:'4px'}).text(fmtHrs(_shiftSpanH(b))));
@@ -8576,7 +8315,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
   // ── Staff Schedule month matrix ─────────────────────────────────────────────
   // Staff-centric, read-only month view of the shifts assigned to a staff member in
-  // Site Schedule mode (scheduleAssignments → _assignmentDetails). Reuses the same
+  // Site Schedule mode (REMOVED Oct 2026 with staff assignment; the month-matrix helpers below are unused). Reuses the same
   // 6 AM–midnight grid (SH/NHRS/HW) + Billable/Non-Billable/Meal-break status text.
   var _ssY=null, _ssM=null, _ssRenderKey=null;     // displayed month (year, 0-based month); _ssRenderKey guards redundant rebuilds (e.g. search keystrokes)
   var _ssScrollDate=null;       // 'YYYY-MM-DD' to scroll into view after render (from a day URL param)
@@ -8603,7 +8342,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
 
   function _ssEnsureMonth(){ if(_ssY==null||_ssM==null){ var t=new Date(); _ssY=t.getFullYear(); _ssM=t.getMonth(); } }
   function _ssMonthLabel(){ return new Date(_ssY,_ssM,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
-  function _ssStep(delta){ _ssEnsureMonth(); var d=new Date(_ssY,_ssM+delta,1); _ssY=d.getFullYear(); _ssM=d.getMonth(); _ssScrollDate=null; renderStaffSchedule(); updateURL(false); }
+  function _ssStep(delta){ _ssEnsureMonth(); var d=new Date(_ssY,_ssM+delta,1); _ssY=d.getFullYear(); _ssM=d.getMonth(); _ssScrollDate=null; void 0; /* Staff Schedule removed (Oct 2026) */ updateURL(false); }
   function _ssDecH(v){ if(v==null) return null; if(typeof v==='number') return v; var p=String(v).split(':'); if(p.length<2) return null; return parseInt(p[0])+(parseInt(p[1]||'0')/60); }
   function _ssFmtT(h){ var hr=Math.floor(h), mn=Math.round((h-hr)*60); if(mn===60){hr+=1;mn=0;} var ap=hr<12?'AM':'PM'; var hh=hr%12||12; return hh+(mn?':'+(mn<10?'0':'')+mn:'')+' '+ap; }
 
@@ -8709,195 +8448,6 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       roleLabel:role.label,
       schoolName:(String(siteRow.school||siteRow.schoolAbbr||'').trim()||('School '+(si+1)))   // live name → abbr → "School N" fallback (matches the unnamed-school convention used elsewhere); si+1 = current row position
     };
-  }
-
-  function renderStaffSchedule(){
-    var $panel=$('#staff-schedule-panel'); if(!$panel.length) return;
-    _ssEnsureMonth();
-    var _ssKey=String(selectedPersonId)+'|'+_ssY+'|'+_ssM;
-    if(_ssKey===_ssRenderKey && $panel.children().length) return;   // unchanged (e.g. staff-search keystroke) — skip costly rebuild
-    _ssRenderKey=_ssKey;
-    $panel.empty();
-    var staff=STAFF.find(function(x){ return String(x.id)===String(selectedPersonId); });
-    if(!staff){
-      $panel.append($('<div>').css({display:'flex',alignItems:'center',justifyContent:'center',flex:'1',color:'var(--tx2)',fontSize:'13px',textAlign:'center',padding:'40px'}).text('Select a staff member to view their schedule.'));
-      return;
-    }
-    function isoD(d){ return d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate(); }
-    function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
-    function toMonday(d){ var dow=d.getDay(); return addDays(d, dow===0?-6:1-dow); }
-    var DOW3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    function r2(n){ return Math.round(n*100)/100; }
-
-    // Build this staff member's shifts for the visible month. Each assigned shift is RE-RESOLVED against
-    // the CURRENT Planning Guide staffing data (via _ssResolveShift), so edits to the Staffing Hours
-    // tables, billable settings, calendars, and Special Days appear here immediately — and shifts that
-    // no longer exist (role unstaffed / hours cleared / no-hours Special Day / out of calendar range) drop out.
-    var byDate={};
-    var _gStart=isoD(toMonday(new Date(_ssY,_ssM,1))), _gEnd=isoD(addDays(toMonday(new Date(_ssY,_ssM+1,0)),6));
-    Object.keys(scheduleAssignments).forEach(function(k){
-      if(String(scheduleAssignments[k])!==String(staff.id)) return;
-      var d=_assignmentDetails[k]; if(!d||!d.dateStr) return;
-      if(d.dateStr<_gStart || d.dateStr>_gEnd) return;                 // outside the visible month grid
-      var parts=String(k).split('|'); if(parts.length<5) return;
-      var gId=parts[0], si=parseInt(parts[1],10), origIdx=parseInt(parts[2],10), roleKey=parts[4];
-      var live=_ssResolveShift(gId, si, origIdx, d.dateStr, roleKey);
-      if(!live) return;                                                // staffing removed/zeroed → shift gone
-      if(live.firstDay && d.dateStr<live.firstDay) return;             // live calendar date range
-      if(live.lastDay && d.dateStr>live.lastDay) return;
-      var rec={
-        dateStr:d.dateStr, start:live.start, end:live.end,
-        schoolName:(live.schoolName!=null?live.schoolName:(d.schoolName||'')), roleLabel:live.roleLabel||d.roleLabel||'', num:d.num,
-        calId:(live.calId!=null?live.calId:('name:'+(live.calName||'—'))),
-        calName:live.calName, calColor:live.calColor,
-        hrs:live.hrsEach, status:live.status,
-        isBillable:live.isBillable, mealMins:live.isBillable?0:mealBreakMinsFor((live.end!=null&&live.start!=null)?(live.end-live.start):null)
-      };
-      (byDate[d.dateStr]||(byDate[d.dateStr]=[])).push(rec);
-    });
-
-    var DATEW=152, totalW=DATEW+TW, todayStr=isoD(new Date());
-
-    // Staff header (avatar + name + ID)
-    var $hd=$('<div>').css({display:'flex',alignItems:'center',gap:'12px',padding:'2px 2px 12px',flexShrink:'0'});
-    var absIdx=STAFF.findIndex(function(s){return s.id===staff.id;}); if(absIdx<0) absIdx=0;
-    $hd.append($('<div class="staff-avatar">').css({width:'44px',height:'44px',fontSize:'15px',flexShrink:'0',background:AVATAR_COLORS[absIdx%AVATAR_COLORS.length]}).text(initials(staff.n)));
-    var $hi=$('<div>');
-    $hi.append($('<div>').css({fontSize:'17px',fontWeight:'700',color:'var(--tx)',lineHeight:'1.2'}).text(staff.n));
-    $hi.append($('<div>').css({fontSize:'11px',color:'var(--tx2)',marginTop:'2px'}).text('ID: '+staff.id));
-    $hd.append($hi);
-    $panel.append($hd);
-
-    // Fixed month header / navigation
-    var $nav=$('<div>').css({display:'flex',alignItems:'center',gap:'12px',padding:'7px 12px',background:'var(--bg2)',border:'1px solid var(--bd2)',borderRadius:'8px',flexShrink:'0',marginBottom:'10px',flexWrap:'wrap'});
-    // Compact ‹ Month YYYY › control — arrows sit right next to the label, no reserved blank space
-    var $navGroup=$('<div>').css({display:'inline-flex',alignItems:'center',gap:'4px'});
-    var $prev=$('<button type="button">').css({border:'1px solid var(--bd)',background:'#fff',borderRadius:'6px',width:'28px',height:'28px',cursor:'pointer',fontSize:'15px',lineHeight:'1',color:'#495057',display:'flex',alignItems:'center',justifyContent:'center',padding:'0'}).html('&lsaquo;');
-    var $next=$('<button type="button">').css({border:'1px solid var(--bd)',background:'#fff',borderRadius:'6px',width:'28px',height:'28px',cursor:'pointer',fontSize:'15px',lineHeight:'1',color:'#495057',display:'flex',alignItems:'center',justifyContent:'center',padding:'0'}).html('&rsaquo;');
-    var $mlbl=$('<div>').css({fontSize:'15px',fontWeight:'700',color:'var(--tx)',textAlign:'center',padding:'0 4px',whiteSpace:'nowrap'}).text(_ssMonthLabel());
-    var $mtot=$('<div>').css({marginLeft:'auto',fontSize:'12px',fontWeight:'700',color:'var(--blue)',whiteSpace:'nowrap'});
-    $prev.on('click',function(){ _ssStep(-1); });
-    $next.on('click',function(){ _ssStep(1); });
-    $navGroup.append($prev,$mlbl,$next);
-    $nav.append($navGroup,$mtot);
-    $panel.append($nav);
-    // Monthly Program Calendar list — filled after the week loop, once month totals are known
-    var $monthCals=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'3px 12px',padding:'0 2px',marginBottom:'10px',flexShrink:'0'});
-    $panel.append($monthCals);
-
-    // Scroll container (vertical: weeks; horizontal: time)
-    var $scroll=$('<div>').css({flex:'1',overflow:'auto',border:'1px solid var(--bd2)',borderRadius:'8px',background:'#fff',position:'relative'});
-
-    // Sticky time-grid header (6 AM – midnight)
-    var $hdr=$('<div>').css({display:'flex',position:'sticky',top:'0',zIndex:'7',height:'34px',width:totalW+'px',background:'var(--bg2)',borderBottom:'1px solid var(--bd2)'});
-    $hdr.append($('<div>').css({position:'sticky',left:'0',zIndex:'8',flexShrink:'0',width:DATEW+'px',height:'34px',background:'var(--bg2)',borderRight:'1px solid var(--bd2)',display:'flex',alignItems:'center',padding:'0 10px',fontSize:'10px',fontWeight:'700',color:'#495057'}).text('Date'));
-    var $hg=$('<div>').css({display:'flex',width:TW+'px',flexShrink:'0'});
-    for(var hh=SH; hh<SH+NHRS; hh++){ $hg.append($('<div>').css({width:HW+'px',flexShrink:'0',fontSize:'9.5px',color:'#868e96',textAlign:'center',lineHeight:'34px',borderLeft:hh>SH?'1px solid var(--bd2)':'none'}).text(hlbl(hh))); }
-    $hdr.append($hg);
-    $scroll.append($hdr);
-
-    var first=new Date(_ssY,_ssM,1), last=new Date(_ssY,_ssM+1,0);
-    var wkStart=toMonday(first), monthTotal=0, $scrollTarget=null, monthCalAgg={}, monthCalOrder=[];
-
-    while(wkStart<=last){
-      var wkEnd=addDays(wkStart,6), weekTotal=0, dayRows=[], calAgg={}, calOrder=[];
-      for(var i=0;i<7;i++){
-        var dd=addDays(wkStart,i), dstr=isoD(dd);
-        var inMonth=(dd.getMonth()===_ssM && dd.getFullYear()===_ssY);
-        var shifts=(byDate[dstr]||[]).slice().sort(function(a,b){ return (a.start||0)-(b.start||0); });
-        var dayTot=0; shifts.forEach(function(sh){ dayTot+=(sh.hrs||0); }); dayTot=r2(dayTot);
-        if(inMonth){
-          weekTotal+=dayTot; monthTotal+=dayTot;
-          shifts.forEach(function(sh){
-            var ck=String(sh.calId);
-            if(!calAgg[ck]){ calAgg[ck]={name:sh.calName,color:sh.calColor,hrs:0}; calOrder.push(ck); }
-            calAgg[ck].hrs+=(sh.hrs||0);
-            if(!monthCalAgg[ck]){ monthCalAgg[ck]={name:sh.calName,color:sh.calColor,hrs:0}; monthCalOrder.push(ck); }
-            monthCalAgg[ck].hrs+=(sh.hrs||0);
-          });
-        }
-        dayRows.push({dd:dd,dstr:dstr,inMonth:inMonth,shifts:shifts,dayTot:dayTot});
-      }
-      weekTotal=r2(weekTotal);
-
-      // Week separator header — label + week total, with a compact per-calendar list beneath
-      var wl=MON3[wkStart.getMonth()]+' '+wkStart.getDate()+' – '+MON3[wkEnd.getMonth()]+' '+wkEnd.getDate();
-      var $wh=$('<div>').css({position:'sticky',left:'0',zIndex:'5',width:totalW+'px',boxSizing:'border-box',background:'#eef2f7',borderTop:'2px solid #cdd4dc',borderBottom:'1px solid var(--bd2)',padding:'5px 10px'});
-      var $whTop=$('<div>').css({display:'flex',alignItems:'center',gap:'8px',fontSize:'10.5px',fontWeight:'700',color:'#495057'});
-      // Week label = date range; combined total appended ONLY when 2+ calendars (a single calendar's own total already shows it)
-      var _wCombined=(calOrder.length>1)?fmtHrs(r2(weekTotal)):null;
-      $whTop.append($('<span>').css({whiteSpace:'nowrap'}).text(wl+(_wCombined?(': '+_wCombined):'')));
-      $wh.append($whTop);
-      if(calOrder.length){
-        var $cl=$('<div>').css({display:'flex',flexWrap:'wrap',gap:'2px 9px',marginTop:'3px'});
-        calOrder.forEach(function(ck){
-          var ca=calAgg[ck]; var _wct=fmtHrs(r2(ca.hrs)); if(!_wct) return;   // skip calendars with no/zero hours
-          var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'4px',maxWidth:'230px',fontSize:'10px',fontWeight:'600',color:'#495057'});
-          $chip.append($('<span>').css({width:'9px',height:'9px',flexShrink:'0',borderRadius:'50%',background:ca.color||'#ffffff',border:'1px solid rgba(0,0,0,.25)'}));
-          $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0'}).attr('title',ca.name).text(ca.name));
-          $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('- '+_wct));   // per-calendar week total ALWAYS shown
-          $cl.append($chip);
-        });
-        $wh.append($cl);
-      }
-      $scroll.append($wh);
-
-      dayRows.forEach(function(row){
-        var dow=row.dd.getDay(), isWknd=(dow===0||dow===6), isToday=(row.dstr===todayStr);
-        var rowBg=row.inMonth?(isWknd?'#f7f7f8':'#fff'):'#fbfbfc';
-        var $r=$('<div>').css({display:'flex',minHeight:'42px',borderTop:'1px solid var(--bd2)',opacity:row.inMonth?'1':'.45'});
-        var $dc=$('<div>').css({position:'sticky',left:'0',zIndex:'3',flexShrink:'0',width:DATEW+'px',background:rowBg,borderRight:'1px solid var(--bd2)',padding:'5px 10px',display:'flex',flexDirection:'column',justifyContent:'center'});
-        $dc.append($('<div>').css({fontSize:'11.5px',fontWeight:isToday?'800':'600',color:isToday?'var(--blue)':(isWknd?'#868e96':'var(--tx)')}).text(DOW3[dow]+', '+MON3[row.dd.getMonth()]+' '+row.dd.getDate()));
-        if(row.dayTot>0) $dc.append($('<div>').css({fontSize:'10px',fontWeight:'700',color:'var(--blue)',marginTop:'1px'}).text(fmtHrs(row.dayTot)));
-        $r.append($dc);
-
-        var $cells=$('<div>').css({position:'relative',width:TW+'px',flexShrink:'0',background:rowBg});
-        for(var c=1;c<NHRS;c++){ $cells.append($('<div>').css({position:'absolute',left:(c*HW)+'px',top:'0',bottom:'0',width:'1px',background:(isWknd?'#ececef':'var(--bd2)')})); }
-        row.shifts.forEach(function(sh){
-          var s2=sh.start, e2=sh.end;
-          if(s2==null||e2==null||e2<=s2) return;
-          var x=Math.max(0,(s2-SH))*HW, w=Math.max((e2-s2)*HW-4,62);
-          var tip=sh.calName+'  •  '+_ssFmtT(s2)+' – '+_ssFmtT(e2)+'  •  '+fmtHrs(sh.hrs||0)+(sh.status&&sh.status.text?('  •  '+sh.status.text):'')+(sh.mealMins?('  •  '+sh.mealMins+'m meal break'):'')+(sh.schoolName?('\n'+sh.schoolName):'')+(sh.roleLabel?('  ·  '+sh.roleLabel):'');
-          var $blk=$('<div class="sched-block">').attr('title',tip).css({position:'absolute',left:x+'px',top:'4px',width:w+'px',minHeight:'32px',cursor:'default',overflow:'hidden',padding:'4px 7px',background:'#f7faff',border:'1px solid #d6e0ec',borderLeft:'3px solid '+(sh.calColor||'#ced4da')});   // left accent = Program Calendar color (live), not Billable/Non-Billable status
-          $blk.append($('<div class="block-title">').css({fontWeight:'700'}).text((sh.schoolName||'')+(sh.roleLabel?' · '+sh.roleLabel:'')));
-          var $l2=$('<div class="block-time-row">').css({display:'block',whiteSpace:'normal'});
-          $l2.append($('<span class="block-time">').text(_ssFmtT(s2)+' – '+_ssFmtT(e2)));
-          $l2.append($('<span class="block-time" style="font-weight:700;margin-left:5px;">').text(fmtHrs(sh.hrs||0)));
-          if(sh.status&&sh.status.text) $l2.append($('<span class="block-status" style="margin-left:5px;font-weight:800;">').css({fontSize:'9px',color:sh.status.color}).text(sh.status.text));
-          $blk.append($l2);
-          $cells.append($blk);
-        });
-        if(isToday){
-          var nowH=new Date().getHours()+new Date().getMinutes()/60;
-          var nx=(nowH<SH)?0:((nowH>SH+NHRS)?(NHRS*HW):((nowH-SH)*HW));
-          $cells.append($('<div class="now-line">').css({left:nx+'px'}).append('<div class="now-dot">'));
-        }
-        $r.append($cells);
-        if(_ssScrollDate && row.dstr===_ssScrollDate) $scrollTarget=$r;
-        $scroll.append($r);
-      });
-      wkStart=addDays(wkStart,7);
-    }
-
-    // Combined month total sits next to the month label ONLY when 2+ calendars (a single calendar's own total already shows it).
-    var _mCombined=fmtHrs(r2(monthTotal));
-    if(monthCalOrder.length>1 && _mCombined){ $mtot.text('Total: '+_mCombined); } else { $mtot.hide(); }
-    // Monthly Program Calendar list — each calendar shows its own month total; only calendars with shifts (and hours) appear
-    if(monthCalOrder.length){
-      monthCalOrder.forEach(function(ck){
-        var ca=monthCalAgg[ck]; var _ct=fmtHrs(r2(ca.hrs)); if(!_ct) return;   // skip calendars with no/zero hours
-        var $chip=$('<span>').css({display:'inline-flex',alignItems:'center',gap:'5px',maxWidth:'260px',fontSize:'11px',fontWeight:'600',color:'#495057'});
-        $chip.append($('<span>').css({width:'10px',height:'10px',flexShrink:'0',borderRadius:'50%',background:ca.color||'#ffffff',border:'1px solid rgba(0,0,0,.25)'}));
-        $chip.append($('<span>').css({whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0'}).attr('title',ca.name).text(ca.name));
-        $chip.append($('<span>').css({flexShrink:'0',color:'var(--tx2)',fontWeight:'700'}).text('- '+_ct));   // per-calendar month total ALWAYS shown
-        $monthCals.append($chip);
-      });
-      if(!$monthCals.children().length) $monthCals.remove();   // all calendars had zero hours — no placeholder space
-    } else { $monthCals.remove(); }   // no calendars this month — drop the container entirely (no reserved blank space)
-    $panel.append($scroll);
-    if($scrollTarget){ setTimeout(function(){ try{ $scrollTarget[0].scrollIntoView({block:'center'}); }catch(e){} },30); }
-    if(!_ssNowTimer) _ssNowTimer=setInterval(_ssUpdateNowLine, 60000);   // keep today's current-time line moving (1-min tick, position-only)
   }
 
   function rScheduleMode(){
@@ -24687,19 +24237,12 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
       calculated:calc
     };
     try{
-      var _pfx=g.id+'|', _sa={}, _sn={};
-      Object.keys(scheduleAssignments).forEach(function(k){
-        if(k.indexOf(_pfx)!==0) return;
-        var _sid=scheduleAssignments[k]; if(_sid==null) return;
-        var _st=STAFF.find(function(x){ return String(x.id)===String(_sid); });
-        _sa[k.slice(_pfx.length)]={ staffId:_sid, staffName:(_st&&_st.n)||null };
-      });
+      var _pfx=g.id+'|', _sn={};
       Object.keys(scheduleShiftNotes).forEach(function(k){
         if(k.indexOf(_pfx)!==0) return;
         var _nv=scheduleShiftNotes[k]; if(_nv==null||_nv==='') return;
         _sn[k.slice(_pfx.length)]=_nv;
       });
-      payload.data.staffAssignments=_sa;
       payload.data.shiftNotes=_sn;
     }catch(_ex){}
     return payload;
@@ -26002,7 +25545,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       // the guide's slice of the shift-level staff assignments and notes (they
       // live outside guideDetails, keyed gid|si|origIdx|date|roleKey|num)
       var sa={}, sn={}, pfx=String(g)+'|';
-      try{ Object.keys(scheduleAssignments).forEach(function(k){ if(k.indexOf(pfx)===0) sa[k.slice(pfx.length)]=scheduleAssignments[k]; }); }catch(e){}
       try{ Object.keys(scheduleShiftNotes).forEach(function(k){ if(k.indexOf(pfx)===0&&scheduleShiftNotes[k]) sn[k.slice(pfx.length)]=1; }); }catch(e){}
       try{ return JSON.parse(JSON.stringify({name:meta.name, det:det, sa:sa, sn:sn})); }catch(e){ return {name:meta.name, det:{}, sa:{}, sn:{}}; }
     }
@@ -26581,7 +26123,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     // this guide's slice of them rides along and a restore can never leave them stranded.
     function snapStr(gid){
       var k=String(gid), g=_guide(k), sa={}, sn={}, pfx=k+'|';
-      try{ Object.keys(scheduleAssignments).forEach(function(x){ if(x.indexOf(pfx)===0) sa[x]=scheduleAssignments[x]; }); }catch(e){}
       try{ Object.keys(scheduleShiftNotes).forEach(function(x){ if(x.indexOf(pfx)===0) sn[x]=scheduleShiftNotes[x]; }); }catch(e){}
       try{ return JSON.stringify({det:(guideDetails[k]||{}), name:(g?g.name:null), sa:sa, sn:sn}); }catch(e){ return null; }
     }
@@ -26596,8 +26137,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
       var g=_guide(k); if(g&&s.name!=null) g.name=s.name;
       var pfx=k+'|';
       try{
-        Object.keys(scheduleAssignments).forEach(function(x){ if(x.indexOf(pfx)===0) delete scheduleAssignments[x]; });
-        Object.keys(s.sa||{}).forEach(function(x){ scheduleAssignments[x]=s.sa[x]; });
       }catch(e){}
       try{
         Object.keys(scheduleShiftNotes).forEach(function(x){ if(x.indexOf(pfx)===0) delete scheduleShiftNotes[x]; });
@@ -33977,635 +33516,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     });
   }
 
-  function showPeopleDetail(s){
-    var det = getStaffDetail(s.id);
-    // Pre-populate fullName from staff list if not already saved
-    if(!det.fullName){ setStaffDetail(s.id,'fullName',s.n); det=getStaffDetail(s.id); }
-    var _tempDet = null; // temp buffer during edit
-    var absIdx = STAFF.findIndex(function(x){return x.n===s.n;});
-    var avatarBg = AVATAR_COLORS[absIdx % AVATAR_COLORS.length];
-    var isEditing = false;
-    var emailError = false;
-
-    function v(key){ return det[key] || ''; }
-
-    function buildCard(){
-      emailError = false;
-      var $wrap = $('<div>').css({maxWidth:'560px',padding:'16px'});
-
-      // ── Header ──
-      var $hdr = $('<div class="d-flex align-items-center gap-3 mb-3">');
-      var $av = $('<div class="staff-avatar flex-shrink-0">').css({
-        width:'46px',height:'46px',fontSize:'17px',background:avatarBg,
-        borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
-        color:'#fff',fontWeight:'700',boxShadow:'0 2px 8px rgba(0,0,0,.18)',flexShrink:'0'
-      }).text(initials(s.n));
-      var $info = $('<div class="flex-grow-1 min-width-0">').append(
-        $('<div class="fw-semibold text-dark lh-sm" style="font-size:14px;">').text(v('fullName')||s.n),
-        $('<div class="text-muted" style="font-size:11px;margin-top:1px;">').html('ID&nbsp;<strong>'+s.id+'</strong>')
-      );
-      var $btn = $('<button class="btn btn-sm flex-shrink-0" style="font-size:11px;padding:3px 10px;">').addClass(isEditing?'btn-success':'btn-outline-secondary')
-        .text(isEditing?'✓ Save':'Edit');
-      $btn.on('click',function(){
-        if(isEditing){
-          // Validate email before saving
-          var emailVal = $wrap.find('[data-key="email"]').val();
-          if(emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)){
-            $wrap.find('[data-key="email"]').addClass('is-invalid').focus();
-            $wrap.find('.email-feedback').show();
-            return;
-          }
-          // Write text field inputs to _tempDet first
-          $wrap.find('[data-key]').each(function(){if(_tempDet!==null){_tempDet[$(this).attr('data-key')]=$(this).val();}});
-          // Commit entire _tempDet to staffDetails
-          if(_tempDet){
-            Object.keys(_tempDet).forEach(function(k){ setStaffDetail(s.id,k,_tempDet[k]); });
-            det = getStaffDetail(s.id);
-            _tempDet = null;
-          }
-          isEditing=false;
-          // If fullName changed, update STAFF source array + all block/avail references
-          var _det=getStaffDetail(s.id);
-          var _newName=(_det.fullName||'').trim()||s.n;
-          if(_newName !== s.n){
-            var _staffIdx=STAFF.findIndex(function(x){return x.id===s.id;});
-            if(_staffIdx>=0){
-              var _oldName=STAFF[_staffIdx].n;
-              STAFF[_staffIdx].n=_newName;
-              // Update all schedule blocks
-              blocks.forEach(function(b){if(b.coachId===s.id)b.coach=_newName;});
-              // Update all availability blocks
-              availBlocks.forEach(function(b){if(b.coachId===s.id)b.coach=_newName;});
-              // Refresh staff search combos so modals use updated name
-              refreshStaffCombos();
-              // Update s reference for the rest of this function
-              s={id:s.id,n:_newName,h:s.h};
-            }
-          }
-          // Re-render everything so new name appears in all views
-          refreshView(false);
-        } else {
-          isEditing=true;
-          // Deep copy current values into temp buffer
-          _tempDet = JSON.parse(JSON.stringify(det));
-        }
-        det=getStaffDetail(s.id);
-        $('#people-panel').empty().append(buildCard());
-      });
-      // Active/Inactive toggle — always interactive
-      var isActive = (function(){ var a=v('active'); return a===''||a==='true'||a===undefined||a===null; })();
-      var _toggleId='staff-toggle-'+s.id;
-      var $statusWrap=$('<div class="staff-status-toggle ms-1">');
-      var $toggle=$('<input type="checkbox" class="staff-active-chk">').prop('checked',isActive).attr('id',_toggleId).prop('disabled',!isEditing).css(!isEditing?{'pointer-events':'none','opacity':'0.85'}:{});
-      var $statusLbl=$('<label class="staff-status-label">').attr('for',_toggleId).text(isActive?'Active':'Inactive').addClass(isActive?'active-label':'inactive-label');
-      $toggle.on('change',function(){
-        var active=$(this).prop('checked');
-        if(isEditing&&_tempDet){_tempDet.active=active?'true':'false';}
-        $statusLbl.text(active?'Active':'Inactive').removeClass('active-label inactive-label').addClass(active?'active-label':'inactive-label');
-      });
-      $statusWrap.append($toggle,$statusLbl);
-      $hdr.append($av,$info,$statusWrap,$btn);
-      $wrap.append($hdr);
-
-      // ── Field helpers ──
-      function label(txt){
-        return $('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:3px;">').text(txt);
-      }
-      function viewVal(key){
-        var val=v(key);
-        return $('<div style="font-size:12.5px;color:'+(val?'#212529':'#adb5bd')+';min-height:20px;">').text(val||'');
-      }
-      function textInput(key,placeholder){
-        var $i=$('<input type="text" class="form-control form-control-sm" style="font-size:12px;">').attr({'data-key':key,'placeholder':placeholder||''}).val(v(key));
-        return $i;
-      }
-      function phoneInput(key){
-        var $i=textInput(key,'(###) ###-####');
-        phoneMask($i[0]);
-        return $i;
-      }
-      function stateSelect(key){
-        var $s=$('<select class="form-select form-select-sm" data-key="'+key+'" style="font-size:12px;">');
-        $s.append($('<option value="">').text('State'));
-        US_STATES.forEach(function(st){$s.append($('<option>').val(st).text(st).prop('selected',v(key)===st));});
-        return $s;
-      }
-
-      // ── General Card ──
-      var $card=$('<div class="card border-0 shadow-sm rounded-2 mb-2">');
-      var $hd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
-      $hd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#0d6efd;">').text('General'));
-      var $body=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
-
-      function cell(labelTxt,keyOrEl,readOnly,span){
-        var $c=$('<div>').css(span?{gridColumn:'1 / -1'}:{});
-        $c.append(label(labelTxt));
-        if(readOnly) $c.append(viewVal(typeof keyOrEl==='string'?keyOrEl:''));
-        else if(!isEditing) $c.append(viewVal(typeof keyOrEl==='string'?keyOrEl:''));
-        else $c.append(typeof keyOrEl==='string'?textInput(keyOrEl):keyOrEl);
-        return $c;
-      }
-
-      // Row 1: Full Name | ADP ID
-      $body.append(cell('Full Name','fullName',false), cell('ADP ID','adpId',false));
-      // Row 2: Phone | Email
-      var $phoneCell=$('<div>').append(label('Phone')).append(isEditing?phoneInput('phone'):viewVal('phone'));
-      var $emailCell=$('<div>').append(label('Email'));
-      if(isEditing){
-        var $emailInp=textInput('email','');
-        var $fb=$('<div class="invalid-feedback email-feedback" style="display:none;font-size:10px;">').text('Please enter a valid email address.');
-        $emailInp.on('input',function(){
-          var ev=$(this).val();
-          if(ev && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ev)){
-            $(this).addClass('is-invalid');$fb.show();
-          } else {
-            $(this).removeClass('is-invalid');$fb.hide();
-          }
-        });
-        $emailCell.append($emailInp,$fb);
-      } else { $emailCell.append(viewVal('email')); }
-      $body.append($phoneCell,$emailCell);
-      // Row 3: Address (full width)
-      $body.append(cell('Address','address',false,true));
-      // Row 4: City | State | Zip
-      var $cityCell=$('<div>').append(label('City')).append(isEditing?textInput('city'):viewVal('city'));
-      var $stateCell=$('<div>').append(label('State')).append(isEditing?stateSelect('state'):viewVal('state'));
-      var $zipCell=$('<div>').append(label('Zip Code')).append(isEditing?textInput('zip','#####'):viewVal('zip'));
-      // City/State/Zip row as a sub-grid (3 cols)
-      var $addrRow=$('<div style="grid-column:1 / -1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px 12px;">').append($cityCell,$stateCell,$zipCell);
-      $body.append($addrRow);
-
-      $card.append($hd,$body);
-      $wrap.append($card);
-
-      // ── Emergency Card ──
-      var $emg=$('<div class="card border-0 shadow-sm rounded-2 mb-2">');
-      var $emgHd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;">');
-      $emgHd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#dc3545;">').text('Emergency'));
-      var $emgBody=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
-      var $enCell=$('<div>').append(label('Contact Name')).append(isEditing?textInput('emergencyName'):viewVal('emergencyName'));
-      var $epCell=$('<div>').append(label('Contact Phone')).append(isEditing?phoneInput('emergencyPhone'):viewVal('emergencyPhone'));
-      $emgBody.append($enCell,$epCell);
-      $emg.append($emgHd,$emgBody);
-      $wrap.append($emg);
-
-      // ── Qualifications & Skills Card ──
-      var $qual=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:visible;">');
-      var $qualHd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
-      $qualHd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#198754;">').text('Qualifications & Skills'));
-      var $qualBody=$('<div class="px-3 py-2">');
-      $qualBody.append($('<div class="text-uppercase fw-semibold text-muted mb-2" style="font-size:9.5px;letter-spacing:.06em;">').text('Coaching Specialties'));
-      // Multi-select specialty widget
-      // selectedSpecs: [{name, level}]
-      var SPEC_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert", "Master"];
-      var LEVEL_COLORS = {"Beginner": {"bg": "#f5f5f5", "color": "#757575", "border": "#e0e0e0"}, "Intermediate": {"bg": "#e8f5e9", "color": "#388e3c", "border": "#c8e6c9"}, "Advanced": {"bg": "#c8e6c9", "color": "#2e7d32", "border": "#a5d6a7"}, "Expert": {"bg": "#a5d6a7", "color": "#1b5e20", "border": "#81c784"}, "Master": {"bg": "#2e7d32", "color": "#ffffff", "border": "#1b5e20"}};
-      var selectedSpecs = (function(){
-        var raw = (_tempDet&&_tempDet.specialties!==undefined)?_tempDet.specialties:v('specialties');
-        if(!raw) return [];
-        try{
-          var parsed=JSON.parse(raw);
-          // Migrate old string array format
-          if(parsed.length && typeof parsed[0]==='string') return parsed.map(function(n){return {name:n,level:'Advanced'};});
-          return parsed;
-        }catch(e){return [];}
-      })();
-
-      function saveSpecs(){ if(isEditing&&_tempDet){_tempDet.specialties=JSON.stringify(selectedSpecs);} }
-
-      var $tags=$('<div class="spec-tags d-flex flex-column gap-1 mb-2">');
-      function renderTags(){
-        $tags.empty();
-        if(!selectedSpecs.length){
-          if(!isEditing) return;
-          $tags.append($('<span style="font-size:12px;color:#adb5bd;">').text('No specialties added yet'));
-          return;
-        }
-        selectedSpecs.forEach(function(sp, idx){
-          var lc = LEVEL_COLORS[sp.level] || LEVEL_COLORS['Beginner'];
-          var $tag=$('<span class="d-inline-flex align-items-center rounded-pill" style="align-self:flex-start;background:'+lc.bg+';color:'+lc.color+';border:1px solid '+lc.border+';font-size:11px;font-weight:500;padding:3px 8px 3px 12px;gap:6px;">');
-          $tag.append($('<span>').text(sp.name));
-          // Level — edit: dropdown; view: plain text
-          if(isEditing){
-            var $lvlSel=$('<select style="border:none;background:transparent;color:'+lc.color+';font-size:10px;font-weight:700;cursor:pointer;padding:0 2px;outline:none;appearance:auto;">');
-            SPEC_LEVELS.forEach(function(lvl){$lvlSel.append($('<option>').val(lvl).text(lvl).prop('selected',sp.level===lvl));});
-            (function(i){$lvlSel.on('change',function(){selectedSpecs[i].level=$(this).val();saveSpecs();renderTags();});})(idx);
-            $tag.append($lvlSel);
-          } else {
-            $tag.append($('<span style="font-size:10px;font-weight:700;opacity:0.75;pointer-events:none;">').text(sp.level));
-          }
-          // Remove button
-          var $rm=$('<button type="button" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:'+lc.color+';font-size:14px;opacity:0.7;">').text('×');
-          (function(i){
-            $rm.on('click',function(){
-              selectedSpecs.splice(i,1);
-              saveSpecs();
-              renderTags();
-            });
-          })(idx);
-          if(isEditing) $tag.append($rm);
-          $tags.append($tag);
-        });
-      }
-      renderTags();
-
-      // Search input
-      var $inp=$('<input type="text" class="form-control form-control-sm mb-1" placeholder="'+(isEditing?'Search or add a specialty…':'')+'" style="font-size:12px;">').prop('disabled',!isEditing).css(!isEditing?{'pointer-events':'none','background':'#f8f9fa','border-color':'transparent'}:{});
-      var $dd=$('<div class="list-group" style="max-height:200px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:9999;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
-      var $ddWrap=$('<div style="position:relative;z-index:100;'+(isEditing?'':' display:none;')+'">').append($inp,$dd);
-
-      function buildDropdown(query){
-        $dd.empty();
-        var q=(query||'').toLowerCase().trim();
-        var cats={};
-        Object.keys(SPECIALTIES_DATA).forEach(function(cat){
-          SPECIALTIES_DATA[cat].forEach(function(sp){
-            var alreadyAdded=selectedSpecs.some(function(x){return x.name===sp;});
-            if(!alreadyAdded && (!q || cat.toLowerCase().includes(q) || sp.toLowerCase().includes(q))){
-              if(!cats[cat]) cats[cat]=[];
-              cats[cat].push(sp);
-            }
-          });
-        });
-        Object.keys(cats).forEach(function(cat){
-          $dd.append($('<div>').css({fontSize:'9px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.07em',padding:'6px 12px 3px',color:'#6c757d',background:'#f8f9fa',borderBottom:'1px solid #e9ecef'}).text(cat));
-          cats[cat].forEach(function(sp){
-            var $item=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px',borderRadius:'0'}).text(sp);
-            $item.on('mousedown',function(e){
-              e.preventDefault();
-              cancelHide();
-              selectedSpecs.push({name:sp,level:'Advanced'});
-              saveSpecs(); renderTags(); $inp.val(''); $dd.empty().hide(); $inp.focus();
-            });
-            $dd.append($item);
-          });
-        });
-        // Custom add
-        var q2=($inp.val()||'').trim();
-        var allFlat=Object.values(SPECIALTIES_DATA).reduce(function(a,b){return a.concat(b);});
-        if(q2 && allFlat.map(function(x){return x.toLowerCase();}).indexOf(q2.toLowerCase())===-1
-              && !selectedSpecs.some(function(x){return x.name.toLowerCase()===q2.toLowerCase();})){
-          var $add=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px',color:'#198754',fontWeight:'600'}).text('+ Add "'+q2+'"');
-          $add.on('mousedown',function(e){
-            e.preventDefault();
-            cancelHide();
-            selectedSpecs.push({name:q2,level:'Advanced'});
-            saveSpecs(); renderTags(); $inp.val(''); $dd.empty().hide(); $inp.focus();
-          });
-          $dd.prepend($add);
-        }
-        $dd.toggle($dd.children().length>0);
-      }
-
-      var _ddHideTimer=null;
-      function cancelHide(){ if(_ddHideTimer){clearTimeout(_ddHideTimer);_ddHideTimer=null;} }
-      function scheduleHide(){ _ddHideTimer=setTimeout(function(){ $dd.hide(); },200); }
-      $inp.on('input',function(){ cancelHide(); buildDropdown($(this).val()); });
-      $inp.on('focus',function(){ cancelHide(); $specWrap.css('z-index','20'); buildDropdown($(this).val()||''); });
-      $inp.on('blur',function(){ scheduleHide(); setTimeout(function(){$specWrap.css('z-index','2');},250); });
-
-      var $specWrap=$('<div class="spec-wrap" style="position:relative;z-index:2;">').append($tags);
-      if(isEditing) $specWrap.append($ddWrap);
-      if(isEditing||selectedSpecs.length) $qualBody.append($specWrap);
-      // ── Languages sub-section ──
-      var LANGUAGES_LIST = ["English", "Spanish", "Chinese \u2014 Mandarin/Cantonese", "Vietnamese", "Korean", "Tagalog \u2014 Filipino", "Armenian", "Persian \u2014 Farsi", "Arabic", "Japanese", "Russian", "Hindi", "Hebrew"];
-      var PROF_LEVELS = ["Basic", "Conversational", "Professional Working", "Fluent", "Native / Bilingual"];
-      var PROF_COLORS = {"Basic": {"bg": "#f5f5f5", "color": "#757575", "border": "#e0e0e0"}, "Conversational": {"bg": "#e8f5e9", "color": "#388e3c", "border": "#c8e6c9"}, "Professional Working": {"bg": "#c8e6c9", "color": "#2e7d32", "border": "#a5d6a7"}, "Fluent": {"bg": "#a5d6a7", "color": "#1b5e20", "border": "#81c784"}, "Native / Bilingual": {"bg": "#2e7d32", "color": "#ffffff", "border": "#1b5e20"}};
-
-      $qualBody.append($('<div class="text-uppercase fw-semibold text-muted mb-2" style="font-size:9.5px;letter-spacing:.06em;border-top:1px solid #e9ecef;padding-top:12px;margin-top:8px;">').text('Languages'));
-
-      var selectedLangs = (function(){
-        var raw = v('languages');
-        if(!raw) return [];
-        try{
-          var p=JSON.parse(raw);
-          if(p.length && typeof p[0]==='string') return p.map(function(n){return {name:n,level:'Native / Bilingual'};});
-          return p;
-        }catch(e){return [];}
-      })();
-
-      function saveLangs(){ if(isEditing&&_tempDet){_tempDet.languages=JSON.stringify(selectedLangs);} }
-
-      var $langTags=$('<div class="spec-tags d-flex flex-column gap-1 mb-2">');
-      function renderLangTags(){
-        $langTags.empty();
-        if(!selectedLangs.length){
-          if(!isEditing) return;
-          $langTags.append($('<span style="font-size:12px;color:#adb5bd;">').text('No languages added yet'));
-          return;
-        }
-        selectedLangs.forEach(function(lang, idx){
-          var lc = PROF_COLORS[lang.level] || PROF_COLORS['Basic'];
-          var $tag=$('<span class="d-inline-flex align-items-center rounded-pill" style="align-self:flex-start;background:'+lc.bg+';color:'+lc.color+';border:1px solid '+lc.border+';font-size:11px;font-weight:500;padding:3px 8px 3px 12px;gap:6px;">');
-          $tag.append($('<span>').text(lang.name));
-          if(isEditing){
-            var $lvlSel=$('<select style="border:none;background:transparent;color:'+lc.color+';font-size:10px;font-weight:700;cursor:pointer;padding:0 2px;outline:none;appearance:auto;">');
-            PROF_LEVELS.forEach(function(lvl){$lvlSel.append($('<option>').val(lvl).text(lvl).prop('selected',lang.level===lvl));});
-            (function(i){$lvlSel.on('change',function(){selectedLangs[i].level=$(this).val();saveLangs();renderLangTags();});})(idx);
-            $tag.append($lvlSel);
-          } else {
-            $tag.append($('<span style="font-size:10px;font-weight:700;opacity:0.75;margin-left:2px;">').text(lang.level));
-          }
-          var $rm=$('<button type="button" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:'+lc.color+';font-size:14px;opacity:0.7;">').text('×');
-          (function(i){
-            $rm.on('click',function(){selectedLangs.splice(i,1);saveLangs();renderLangTags();});
-          })(idx);
-          if(isEditing) $tag.append($rm);
-          $langTags.append($tag);
-        });
-      }
-      renderLangTags();
-
-      var $langInp=$('<input type="text" class="form-control form-control-sm mb-1" placeholder="'+(isEditing?'Search or add a language…':'')+'" style="font-size:12px;">').prop('disabled',!isEditing).css(!isEditing?{'pointer-events':'none','background':'#f8f9fa','border-color':'transparent'}:{});
-      var $langDd=$('<div class="list-group" style="max-height:180px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:9999;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
-      var $langDdWrap=$('<div style="position:relative;z-index:9999;">').append($langInp,$langDd);
-
-      function buildLangDropdown(query){
-        $langDd.empty();
-        var q=(query||'').toLowerCase().trim();
-        var filtered=LANGUAGES_LIST.filter(function(lang){
-          return (!q||lang.toLowerCase().includes(q)) && !selectedLangs.some(function(x){return x.name===lang;});
-        });
-        filtered.forEach(function(lang){
-          var $item=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px'}).text(lang);
-          $item.on('mousedown',function(e){
-            e.preventDefault();
-            cancelLangHide();
-            selectedLangs.push({name:lang,level:'Native / Bilingual'});
-            saveLangs(); renderLangTags(); $langInp.val(''); $langDd.empty().hide(); $langInp.focus();
-          });
-          $langDd.append($item);
-        });
-        var q2=($langInp.val()||'').trim();
-        if(q2 && !LANGUAGES_LIST.some(function(l){return l.toLowerCase()===q2.toLowerCase();})
-              && !selectedLangs.some(function(x){return x.name.toLowerCase()===q2.toLowerCase();})){
-          var $add=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px',color:'#198754',fontWeight:'600'}).text('+ Add "'+q2+'"');
-          $add.on('mousedown',function(e){
-            e.preventDefault();
-            cancelLangHide();
-            selectedLangs.push({name:q2,level:'Native / Bilingual'});
-            saveLangs(); renderLangTags(); $langInp.val(''); $langDd.empty().hide(); $langInp.focus();
-          });
-          $langDd.prepend($add);
-        }
-        $langDd.toggle($langDd.children().length>0);
-      }
-
-      var _langHideTimer=null;
-      function cancelLangHide(){ if(_langHideTimer){clearTimeout(_langHideTimer);_langHideTimer=null;} }
-      $langInp.on('input',function(){ cancelLangHide(); buildLangDropdown($(this).val()); });
-      $langInp.on('focus',function(){ cancelLangHide(); $langWrap.css('z-index','20'); buildLangDropdown($(this).val()||''); });
-      $langInp.on('blur',function(){ _langHideTimer=setTimeout(function(){$langDd.hide();$langWrap.css('z-index','2');},200); });
-
-      var $langWrap=$('<div class="spec-wrap" style="position:relative;z-index:2;">').append($langTags);
-      if(isEditing) $langWrap.append($langDdWrap);
-      if(isEditing||selectedLangs.length) $qualBody.append($langWrap);
-
-      // ── First Aid / CPR Certifications sub-section ──
-      var CERTS_DATA = {"CPR Certifications": ["Adult CPR", "Child CPR", "Infant CPR", "Adult & Pediatric CPR", "Hands-Only CPR", "CPR/AED", "Basic CPR", "Professional Rescuer CPR"], "First Aid Certifications": ["Basic First Aid", "Standard First Aid", "Pediatric First Aid", "Adult First Aid", "Child & Infant First Aid", "Emergency First Aid", "Wilderness First Aid", "Advanced First Aid"], "AED Certifications": ["AED \u2014 Automated External Defibrillator", "CPR/AED for Adults", "CPR/AED for Adults and Children", "CPR/AED/First Aid"], "Combined Certifications": ["Adult and Pediatric First Aid/CPR/AED", "First Aid/CPR/AED", "Pediatric First Aid/CPR/AED", "Basic Life Support \u2014 BLS", "BLS for Healthcare Providers", "Heartsaver First Aid CPR AED", "Lifeguard CPR/AED/First Aid"], "Water Safety / Aquatics": ["Lifeguard Certification", "Waterfront Lifeguard Certification", "Water Safety Instructor \u2014 WSI", "Basic Water Rescue", "Administering Emergency Oxygen", "Safety Training for Swim Coaches"], "Childcare / School Programs": ["Pediatric CPR", "Pediatric First Aid", "Childcare First Aid", "Childcare CPR/AED", "EMSA Pediatric First Aid/CPR", "School Staff First Aid/CPR/AED"], "Emergency Response": ["Emergency Medical Response \u2014 EMR", "Emergency Oxygen Administration", "Bloodborne Pathogens Training", "Stop the Bleed", "Concussion Safety Training", "Epinephrine Auto-Injector Training", "Asthma Inhaler Training", "Seizure First Aid"]};
-
-      $qualBody.append($('<div class="text-uppercase fw-semibold text-muted mb-2" style="font-size:9.5px;letter-spacing:.06em;border-top:1px solid #e9ecef;padding-top:12px;margin-top:8px;">').text('First Aid / CPR Certifications'));
-
-      var selectedCerts = (function(){
-        var raw=(_tempDet&&_tempDet.certifications!==undefined)?_tempDet.certifications:v('certifications'); if(!raw) return [];
-        try{
-          var p=JSON.parse(raw);
-          // Migrate old string array
-          if(p.length && typeof p[0]==='string') return p.map(function(n){return {name:n,expires:''};});
-          return p;
-        }catch(e){return [];}
-      })();
-      function saveCerts(){ if(isEditing&&_tempDet){_tempDet.certifications=JSON.stringify(selectedCerts);} }
-
-      var today = new Date(); today.setHours(0,0,0,0);
-      function isExpired(expires){
-        if(!expires) return false;
-        var d=new Date(expires+'T00:00:00'); return d<today;
-      }
-      function expiresSoon(expires){
-        if(!expires) return false;
-        var d=new Date(expires+'T00:00:00');
-        var soon=new Date(today); soon.setDate(soon.getDate()+30);
-        return d>=today && d<=soon;
-      }
-
-      var $certTags=$('<div class="d-flex flex-column gap-2 mb-2">');
-      function renderCertTags(){
-        $certTags.empty();
-        if(!selectedCerts.length){
-          if(!isEditing) return;
-          $certTags.append($('<span style="font-size:12px;color:#adb5bd;">').text('No certifications added yet'));
-          return;
-        }
-        selectedCerts.forEach(function(cert,idx){
-          var expired=isExpired(cert.expires);
-          var soon=expiresSoon(cert.expires);
-          var bg   = expired?'#ffebee' : soon?'#fff8e1' : '#fff8e1';
-          var col  = expired?'#c62828' : soon?'#e65100' : '#f57f17';
-          var bord = expired?'#ef9a9a' : soon?'#ffcc80' : '#ffe082';
-
-          var $row=$('<div class="d-inline-flex align-items-center rounded-pill gap-2" style="align-self:flex-start;background:'+bg+';border:1px solid '+bord+';padding:4px 8px 4px 12px;">');
-
-          var $name=$('<span style="font-size:11px;font-weight:600;color:'+col+';white-space:nowrap;">').text(cert.name);
-          var $sep=$('<span style="font-size:10px;color:'+col+';opacity:0.5;">').text('·');
-          var $lbl=$('<span style="font-size:10px;color:'+col+';opacity:0.8;white-space:nowrap;">').text('Exp:');
-          var $dateInp;
-          if(isEditing){
-            $dateInp=mkDatePicker(cert.expires||'',function(v){
-              selectedCerts[idx].expires=v; saveCerts(); renderCertTags();
-            },{width:'100px',inputCss:{fontSize:'10px',padding:'1px 6px',borderColor:col,background:'rgba(0,0,0,.04)'}});
-          } else {
-            $dateInp=$('<span>').css({fontSize:'10px',color:col,padding:'0 4px'}).text(cert.expires||'');
-          }
-          (function(i){
-            $dateInp.on('change',function(){
-              selectedCerts[i].expires=$(this).val();
-              saveCerts(); renderCertTags();
-            });
-          })(idx);
-          $row.append($name,$sep,$lbl,$dateInp);
-          if(expired){
-            $row.append($('<span style="font-size:9px;font-weight:700;color:#c62828;background:#ffcdd2;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em;">').text('Expired'));
-          } else if(soon){
-            $row.append($('<span style="font-size:9px;font-weight:700;color:#e65100;background:#fff3e0;border-radius:3px;padding:1px 5px;text-transform:uppercase;letter-spacing:.04em;">').text('Expiring soon'));
-          }
-          var $rm=$('<button type="button" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:'+col+';font-size:14px;opacity:0.7;">').text('×');
-          (function(i){$rm.on('click',function(){selectedCerts.splice(i,1);saveCerts();renderCertTags();});})(idx);
-          if(isEditing)$row.append($rm);
-          $certTags.append($row);
-        });
-      }
-      renderCertTags();
-
-      var $certInp=$('<input type="text" class="form-control form-control-sm mb-1" placeholder="'+(isEditing?'Search or add a certification…':'')+'" style="font-size:12px;">').prop('disabled',!isEditing).css(!isEditing?{'pointer-events':'none','background':'#f8f9fa','border-color':'transparent'}:{});
-      var $certDd=$('<div class="list-group" style="max-height:200px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:200;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
-      var $certDdWrap=$('<div style="position:relative;z-index:100;'+(isEditing?'':' display:none;')+'">').append($certInp,$certDd);
-
-      function buildCertDropdown(query){
-        $certDd.empty();
-        var q=(query||'').toLowerCase().trim();
-        var cats={};
-        Object.keys(CERTS_DATA).forEach(function(cat){
-          CERTS_DATA[cat].forEach(function(cert){
-            var alreadyAdded=selectedCerts.some(function(x){return x.name===cert;});
-            if(!alreadyAdded && (!q||cat.toLowerCase().includes(q)||cert.toLowerCase().includes(q))){
-              if(!cats[cat]) cats[cat]=[];
-              cats[cat].push(cert);
-            }
-          });
-        });
-        Object.keys(cats).forEach(function(cat){
-          $certDd.append($('<div>').css({fontSize:'9px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.07em',padding:'6px 12px 3px',color:'#6c757d',background:'#f8f9fa',borderBottom:'1px solid #e9ecef'}).text(cat));
-          cats[cat].forEach(function(cert){
-            var $item=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px'}).text(cert);
-            $item.on('mousedown',function(e){
-              e.preventDefault(); cancelCertHide();
-              selectedCerts.push({name:cert,expires:''}); saveCerts(); renderCertTags(); $certInp.val(''); $certDd.empty().hide(); $certInp.focus();
-            });
-            $certDd.append($item);
-          });
-        });
-        var q2=($certInp.val()||'').trim();
-        var allFlat=Object.values(CERTS_DATA).reduce(function(a,b){return a.concat(b);});
-        if(q2 && !allFlat.some(function(x){return x.toLowerCase()===q2.toLowerCase();}) && !selectedCerts.some(function(x){return x.name.toLowerCase()===q2.toLowerCase();})){
-          var $add=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px',color:'#198754',fontWeight:'600'}).text('+ Add "'+q2+'"');
-          $add.on('mousedown',function(e){
-            e.preventDefault(); cancelCertHide();
-            selectedCerts.push({name:q2,expires:''}); saveCerts(); renderCertTags(); $certInp.val(''); $certDd.empty().hide(); $certInp.focus();
-          });
-          $certDd.prepend($add);
-        }
-        $certDd.toggle($certDd.children().length>0);
-      }
-
-      var _certHideTimer=null;
-      function cancelCertHide(){ if(_certHideTimer){clearTimeout(_certHideTimer);_certHideTimer=null;} }
-      var $certWrap=$('<div style="position:relative;z-index:1;">').append($certTags);
-      if(isEditing) $certWrap.append($certDdWrap);
-      $certInp.on('input',function(){ cancelCertHide(); buildCertDropdown($(this).val()); });
-      $certInp.on('focus',function(){ cancelCertHide(); $certWrap.css('z-index','20'); buildCertDropdown($(this).val()||''); });
-      $certInp.on('blur',function(){ _certHideTimer=setTimeout(function(){$certDd.hide();$certWrap.css('z-index','1');},200); });
-      if(isEditing||selectedCerts.length) $qualBody.append($certWrap);
-
-      $qual.append($qualHd,$qualBody);
-      $wrap.append($qual);
-
-      // ── Travel Preferences Card ──
-      var $travel=$('<div class="card border-0 shadow-sm rounded-2 mb-2" style="overflow:visible;">');
-      var $travelHd=$('<div class="px-3 py-2 d-flex align-items-center gap-2" style="background:#f8f9fb;border-bottom:1px solid #e9ecef;border-radius:calc(.375rem - 1px) calc(.375rem - 1px) 0 0;">');
-      $travelHd.append($('<span class="rounded-pill fw-semibold" style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;color:#fff;background:#b0508f;">').text('Travel Preferences'));
-      var $travelBody=$('<div class="px-3 py-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;">');
-
-      var _maxTravelVal=(_tempDet&&_tempDet.maxTravel!==undefined)?_tempDet.maxTravel:v('maxTravel');
-      var $distCell=$('<div>');
-      $distCell.append($('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;margin-bottom:'+((!isEditing&&!v('maxTravel'))?'0':'3px')+';">').text('Max Travel Distance'));
-      if(!isEditing){
-        var _tv=v('maxTravel')||'';
-        if(_tv) $distCell.append($('<div style="font-size:12.5px;color:#212529;">').text(_tv));
-      } else {
-        var $distSel=$('<select class="form-select form-select-sm" data-key="maxTravel" style="font-size:12px;max-width:160px;">');
-        $distSel.append($('<option value="">').text('Select…'));
-        ['5 miles','10 miles','20 miles','30 miles','30+ miles'].forEach(function(opt){
-          $distSel.append($('<option>').val(opt).text(opt).prop('selected',(_tempDet?_tempDet.maxTravel:v('maxTravel'))===opt));
-        });
-        $distSel.on('change',function(){ if(_tempDet){_tempDet.maxTravel=$(this).val();} });
-        $distCell.append($distSel);
-      }
-      $travelBody.append($distCell);
-
-      // ── Preferred Districts ──
-      $travelBody.append($('<div style="grid-column:1 / -1;border-top:1px solid #e9ecef;margin-top:'+(isEditing?'4px':'2px')+';padding-top:'+(isEditing?'8px':'4px')+';">'));
-      var $districtLabel=$('<div class="text-uppercase fw-semibold text-muted" style="font-size:9.5px;letter-spacing:.06em;grid-column:1 / -1;margin-bottom:'+(isEditing?'8px':'2px')+';">').text('Preferred Districts');
-
-      var selectedDistricts=(function(){
-        var raw=(_tempDet&&_tempDet.districts!==undefined)?_tempDet.districts:v('districts');if(!raw)return[];
-        try{return JSON.parse(raw);}catch(e){return[];}
-      })();
-      function saveDistricts(){setStaffDetail(s.id,'districts',JSON.stringify(selectedDistricts));}
-
-      var $districtTags=$('<div class="d-flex flex-column gap-1 mb-2">');
-      function renderDistrictTags(){
-        $districtTags.empty();
-        if(!selectedDistricts.length){
-          if(!isEditing) return;
-          $districtTags.append($('<span style="font-size:12px;color:#adb5bd;">').text('No districts selected yet'));
-          return;
-        }
-        selectedDistricts.forEach(function(d,idx){
-          var $tag=$('<span class="d-inline-flex align-items-center rounded-pill" style="align-self:flex-start;background:#e8f4fd;color:#0a6ebd;border:1px solid #b8dff5;font-size:11px;font-weight:500;padding:3px 8px 3px 12px;gap:6px;">');
-          $tag.append($('<span class="fw-semibold">').text(d.abbr));
-          $tag.append($('<span style="opacity:.7;">').text('·'));
-          $tag.append($('<span>').text(d.name));
-          var $rm=$('<button type="button" style="background:none;border:none;padding:0 0 0 2px;line-height:1;cursor:pointer;color:#0a6ebd;font-size:14px;opacity:0.7;">').text('×');
-          (function(i){$rm.on('click',function(){selectedDistricts.splice(i,1);saveDistricts();renderDistrictTags();});})(idx);
-          if(isEditing)$tag.append($rm);
-          $districtTags.append($tag);
-        });
-      }
-      renderDistrictTags();
-
-      var $districtInp=$('<input type="text" class="form-control form-control-sm mb-1" placeholder="'+(isEditing?'Search by district name or abbreviation…':'')+'" style="font-size:12px;">').prop('disabled',!isEditing).css(!isEditing?{'pointer-events':'none','background':'#f8f9fa','border-color':'transparent'}:{});
-      var $districtDd=$('<div class="list-group" style="max-height:200px;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:200;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);">');
-      var $districtDdWrap=$('<div style="position:relative;z-index:100;'+(isEditing?'':' display:none;')+'">').append($districtInp,$districtDd);
-
-      function buildDistrictDropdown(query){
-        $districtDd.empty();
-        var q=(query||'').toLowerCase().trim();
-        Object.keys(DISTRICTS_DATA).forEach(function(county){
-          var items=DISTRICTS_DATA[county].filter(function(d){
-            // Already-selected test keyed on CDS: two districts can share a name, and one that
-            // shares a name with a selection is still a DIFFERENT district.
-            return !selectedDistricts.some(function(x){ return x.cds?String(x.cds)===String(d.cds):x.name===d.name; }) &&
-                   (!q||d.name.toLowerCase().includes(q)||(d.abbr||'').toLowerCase().includes(q)||county.toLowerCase().includes(q)||String(d.cds||'').indexOf(q)>=0);
-          });
-          if(!items.length) return;
-          $districtDd.append($('<div>').css({fontSize:'9px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.07em',padding:'6px 12px 3px',color:'#6c757d',background:'#f8f9fa',borderBottom:'1px solid #e9ecef'}).text(county));
-          items.forEach(function(d){
-            var $item=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px'});
-            $item.append($('<span class="fw-semibold me-1">').text(d.abbr));
-            $item.append($('<span class="text-muted" style="font-size:11px;">').text('— '+d.name));
-            $item.on('mousedown',function(e){
-              e.preventDefault();cancelDistrictHide();
-              selectedDistricts.push({cds:d.cds,name:d.name,abbr:d.abbr,county:d.county,type:d.type,nces:d.nces,state:d.state});
-              saveDistricts();renderDistrictTags();$districtInp.val('');$districtDd.empty().hide();$districtInp.focus();
-            });
-            $districtDd.append($item);
-          });
-        });
-        // Custom add
-        var q2=($districtInp.val()||'').trim();
-        var allNames=Object.values(DISTRICTS_DATA).reduce(function(a,b){return a.concat(b);},[]).map(function(x){return x.name.toLowerCase();});
-        if(q2&&!allNames.includes(q2.toLowerCase())&&!selectedDistricts.some(function(x){return x.name.toLowerCase()===q2.toLowerCase();})){
-          var $add=$('<button type="button">').addClass('list-group-item list-group-item-action border-0').css({fontSize:'12px',padding:'5px 16px',color:'#198754',fontWeight:'600'}).text('+ Add "'+q2+'"');
-          $add.on('mousedown',function(e){
-            e.preventDefault();cancelDistrictHide();
-            // Free-typed district: no CDS, and deliberately not invented — it is user-entered,
-            // not a reference-data record, and must stay distinguishable from one.
-            selectedDistricts.push({cds:'',name:q2,abbr:q2,custom:true});
-            saveDistricts();renderDistrictTags();$districtInp.val('');$districtDd.empty().hide();$districtInp.focus();
-          });
-          $districtDd.prepend($add);
-        }
-        $districtDd.toggle($districtDd.children().length>0);
-      }
-
-      var _districtHideTimer=null;
-      function cancelDistrictHide(){if(_districtHideTimer){clearTimeout(_districtHideTimer);_districtHideTimer=null;}}
-      var $districtWrap=$('<div style="position:relative;z-index:1;grid-column:1 / -1;">').append($districtLabel,$districtTags);
-      if(isEditing) $districtWrap.append($districtDdWrap);
-      $districtInp.on('input',function(){cancelDistrictHide();buildDistrictDropdown($(this).val());});
-      $districtInp.on('focus',function(){cancelDistrictHide();$districtWrap.css('z-index','20');buildDistrictDropdown($(this).val()||'');});
-      $districtInp.on('blur',function(){_districtHideTimer=setTimeout(function(){$districtDd.hide();$districtWrap.css('z-index','1');},200);});
-      $travelBody.append($districtWrap);
-      $travel.append($travelHd,$travelBody);
-      $wrap.append($travel);
-
-      return $wrap;
-    }
-
-    $('#people-panel').empty().append(buildCard());
-  }
-
-
   // ── Admin mode ────────────────────────────────────────────────────────────
   // Left column: compact Users / Groups / Permissions categories (guide-list
   // selected styling). Right panel: minimal placeholder per category — the
@@ -34993,6 +33903,8 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     $p.append($wrap);
   }
   function setPageMode(m){
+    if(m==='people'||m==='staff_schedule') m='schedule';   // (Oct 2026) the Staff section and Staff Schedule were removed
+
     // Remember the outgoing mode's current selection so each mode family can restore its last item on return.
     if(selectedGuideId) lastGuideId = selectedGuideId;
     if(selectedPersonId) lastPersonId = selectedPersonId;
@@ -35209,7 +34121,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
   $('#btn-availability').on('click',function(){if(pageMode!=='availability') setPageMode('availability');});
   $('#btn-workspace').on('click',function(){if(pageMode!=='workspace') setPageMode('workspace');});
   $('#btn-planning').on('click',function(){if(pageMode!=='planning') setPageMode('planning');});
-  $('#btn-people').on('click',function(){if(pageMode!=='people') setPageMode('people');});
   $('#btn-admin').on('click',function(){ if(pageMode!=='admin') setPageMode('admin'); });
   try{ window._pgAdmin={users:ADMIN_USERS}; }catch(e){}   // debug/test seam, mirrors window._pgHist
   // User menu: placeholder identity until auth exists; Sign Out is inert for now.
@@ -35223,7 +34134,6 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
   $('#user-signout').on('click',function(e){ e.stopPropagation(); $('#user-menu-dd').hide(); /* placeholder: real sign-out arrives with multi-user login */ });
   $('#user-signout').on('mouseenter',function(){ $(this).css('background','#f1f3f5'); }).on('mouseleave',function(){ $(this).css('background',''); });
   $(document).on('click.usermenu',function(){ $('#user-menu-dd').hide(); });
-  $('#btn-staff-schedule').on('click',function(){if(pageMode!=='staff_schedule') setPageMode('staff_schedule');});
 
   
 });
