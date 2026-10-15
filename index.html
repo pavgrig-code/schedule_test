@@ -5229,6 +5229,13 @@ $(function(){
    _PG_ICONS.trash='<svg data-icon="trash" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.8 4.3h10.4" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/><path d="M6.2 4.3V3.2c0-.5.4-.9.9-.9h1.8c.5 0 .9.4.9.9v1.1" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/><path d="M4.3 4.3l.6 8.1c.04.6.5 1 1.1 1h4c.6 0 1.06-.4 1.1-1l.6-8.1" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.6 6.6v4.2M9.4 6.6v4.2" stroke="#5a6472" stroke-width="1.1" stroke-linecap="round"/></svg>';
   // Fill a menu-icon span with an SVG string (data-icon...) or a plain glyph, whichever was passed.
   function _pgSetMenuIcon($span, icon){ if(typeof icon==='string' && icon.charAt(0)==='<') $span.html(icon); else $span.text(icon); return $span; }
+  // (Oct 2026) Give an EXISTING overflow-menu item the standard guide-menu icon: the same 16px box, opacity, 8px gap and alignment as
+  // _buildGuideMenuItem, filled by _pgSetMenuIcon from _PG_ICONS. Labels, clicks and logic are untouched; idempotent.
+  function _pgMenuIconize($it, icon){
+    if(!$it || !$it.length || $it.children('.pg-mi-ico').length) return $it;
+    var $ico=_pgSetMenuIcon($('<span class="pg-mi-ico" aria-hidden="true">').css({width:'16px',height:'16px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'12px',opacity:'0.85',flexShrink:'0'}), icon);
+    return $it.css({display:'flex',alignItems:'center',gap:'8px'}).prepend($ico);
+  }
   function _buildGuideMenuItem(icon,label,opt){
     opt=opt||{};
     var $it=$('<button type="button">').css({
@@ -11980,7 +11987,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 var srcBrk=dRef.brk; // Billable/Non-Billable setting on the source cell
                 var typeStr=isE?'end time':'start time';
                 var $item=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
-                  .text('Copy across '+dayLbl+' (vertically)')
+                  .text('Copy across '+dayLbl+' (vertically)').each(function(){ _pgMenuIconize($(this), _PG_ICONS.copy); })
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
@@ -12016,7 +12023,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   return _wkd;
                 })();
                 var $item2=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
-                  .text('Copy to '+roleLbl+' on weekdays (horizontally)')
+                  .text('Copy to '+roleLbl+' on weekdays (horizontally)').each(function(){ _pgMenuIconize($(this), _PG_ICONS.copy); })
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
@@ -12038,7 +12045,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                   });
                 // Option 3: Copy to all roles — targets based on source day
                 var $item3=$('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'})
-                  .text('Copy to all on weekdays')
+                  .text('Copy to all on weekdays').each(function(){ _pgMenuIconize($(this), _PG_ICONS.copy); })
                   .on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');})
                   .on('click',function(ev){
                     ev.stopPropagation(); closeStMenu();
@@ -12687,7 +12694,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                         if(dk==='sun')  return ['mon','tue','wed','thu','fri','sun'];
                         return ['mon','tue','wed','thu','fri'];
                       })();
-                      function mI(lb,cb){ return $('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
+                      function mI(lb,cb){ return _pgMenuIconize($('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb), _PG_ICONS.copy).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ev.stopPropagation();closeMn();cb();}); }
                       function doR(){ updU($tbU); try{ _pgSchoolShRefreshOpen(); }catch(_e){} setTimeout(function(){ var $cs=$('#cal-section-'+g.id); if($cs.length&&$cs[0]._updateHours) $cs[0]._updateHours(); },0); }
                       var _c=getCountsFn();
                       $stMn.append(mI('Copy across '+dLbl+' (vertically)',function(){ var _fld=isE?'End Time':'Start Time'; try{ _pgUndo.begin(g.id); }catch(_u){} ROLES.forEach(function(r2){ if(!shData[r2.key]||!shData[r2.key][dk]) return; if(isE) shData[r2.key][dk].end=cv; else shData[r2.key][dk].start=cv; if(srcBrkU) shData[r2.key][dk].brk=JSON.parse(JSON.stringify(srcBrkU)); else delete shData[r2.key][dk].brk; if(_p[r2.key]&&_p[r2.key][dk]){var $pp=_p[r2.key][dk][isE?'end':'start'];if($pp)$pp.find('input').val(dv);} }); doR(); try{ _pgHist.begin(g.id); _pgHist.evt(g.id,{kind:'edit',action:'Copied '+_fld+' across '+dLbl,desc:''}); }catch(_u){} try{ _pgUndo.offer(g.id,{text:_fld+' copied across '+dLbl+'.'}); }catch(_u){} }));
@@ -17329,7 +17336,7 @@ _pgRefreshList=renderGuideList; // expose for showGuideDetail
                 $('body').append($secMn);
                 var _secUid='shvm-'+Math.random().toString(36).slice(2);
                 function _secMnClose(){ $secMn.hide(); $(document).off('click.'+_secUid); }
-                function _secMI(lb,cb){ return $('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ ev.stopPropagation(); _secMnClose(); cb(); }); }
+                function _secMI(lb,cb){ return _pgMenuIconize($('<div>').css({padding:'4px 12px',cursor:'pointer',borderRadius:'4px',color:'#212529',fontSize:'12px',whiteSpace:'nowrap'}).text(lb), _PG_ICONS.copy).on('mouseenter',function(){$(this).css('background','#f1f3f4');}).on('mouseleave',function(){$(this).css('background','');}).on('click',function(ev){ ev.stopPropagation(); _secMnClose(); cb(); }); }
                 function buildCircles(){
                   $wrap.find('.sf-shv-sec-wk').remove();
                   pal=_circPal('rot',g.id,cCalId);
@@ -27453,6 +27460,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
     function item(label, fn){
       var $i=$('<div>').css({padding:'5px 12px', cursor:'pointer', whiteSpace:'nowrap',
         overflow:'hidden', textOverflow:'ellipsis', display:'flex', alignItems:'center', gap:'6px'});
+      _pgMenuIconize($i, _PG_ICONS.copy);
       $i.on('mouseenter',function(){ $(this).css('background','#f2f6fb'); })
         .on('mouseleave',function(){ $(this).css('background',''); });
       var _done=false;
@@ -29855,7 +29863,7 @@ var $gRowAmt=$('<td>').css({border:'1px solid #dee2e6',padding:'3px 8px',color:'
         var rows=calendarRows||[];
         var n=rows.length;
         var $item=$('<div>').css({padding:'6px 10px',cursor:'pointer',whiteSpace:'nowrap',borderRadius:'4px'})
-          .text('Copy to '+colLabel+' in all programs ('+n+')')
+          .text('Copy to '+colLabel+' in all programs ('+n+')').each(function(){ _pgMenuIconize($(this), _PG_ICONS.copy); })
           .on('mouseenter',function(){$(this).css('background','#f0f6ff');})
           .on('mouseleave',function(){$(this).css('background','');})
           .on('click',function(ev){
